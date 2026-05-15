@@ -10,6 +10,9 @@ concurrency:
   group: deploy-bsvgo-cms
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     name: Verify
@@ -44,13 +47,15 @@ jobs:
           APP_DIR: ${{ secrets.APP_DIR }}
           APP_BRANCH: ${{ vars.APP_BRANCH || 'main' }}
           PM2_APP_NAME: ${{ vars.PM2_APP_NAME || 'bsvgo-cms' }}
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
           fingerprint: ${{ secrets.VPS_SSH_FINGERPRINT }}
-          envs: APP_DIR,APP_BRANCH,PM2_APP_NAME
+          envs: APP_DIR,APP_BRANCH,PM2_APP_NAME,GH_REPOSITORY,GH_TOKEN
           script_stop: true
           script: |
             set -euo pipefail
@@ -60,11 +65,23 @@ jobs:
               exit 1
             fi
 
+            if [ -z "${GH_TOKEN:-}" ]; then
+              echo "GITHUB_TOKEN is required"
+              exit 1
+            fi
+
             cd "$APP_DIR"
 
+            cleanup_git_remote() {
+              git remote set-url origin "https://github.com/${GH_REPOSITORY}.git" >/dev/null 2>&1 || true
+            }
+            trap cleanup_git_remote EXIT
+
+            git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPOSITORY}.git"
             git fetch origin "$APP_BRANCH"
             git checkout "$APP_BRANCH"
             git pull --ff-only origin "$APP_BRANCH"
+            cleanup_git_remote
 
             npm ci
             npm run db:migrate

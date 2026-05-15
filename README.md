@@ -97,7 +97,7 @@ npm install -g pm2
 Clone the repository and create the production `.env` directly on the VPS:
 
 ```bash
-git clone git@github.com:YOUR_ORG/YOUR_REPO.git /var/www/bsvgo-cms
+git clone https://github.com/YOUR_ORG/YOUR_REPO.git /var/www/bsvgo-cms
 cd /var/www/bsvgo-cms
 npm ci
 cp .env.example .env
@@ -121,7 +121,7 @@ pm2 save
 GitHub Actions deployment is included in `.github/workflows/deploy.yml`. It runs `npm ci` and `npm run typecheck` in GitHub Actions, then connects to the VPS by SSH and runs:
 
 ```bash
-git fetch
+git fetch using the workflow GITHUB_TOKEN
 git pull --ff-only
 npm ci
 npm run db:migrate
@@ -144,14 +144,16 @@ Optional GitHub repository variables:
 - `APP_BRANCH`: branch to deploy, defaults to `main`
 - `PM2_APP_NAME`: PM2 process name, defaults to `bsvgo-cms`
 
-The SSH user needs permission to read and write `APP_DIR`, pull the Git repository, install npm dependencies, run migrations against the database in `.env`, and manage the PM2 process.
+The workflow temporarily switches the VPS repository remote to an HTTPS URL with the workflow `GITHUB_TOKEN`, pulls the target branch, then restores the remote to plain HTTPS. The VPS does not need a GitHub SSH deploy key for normal deployments.
+
+The SSH user needs permission to read and write `APP_DIR`, install npm dependencies, run migrations against the database in `.env`, and manage the PM2 process.
 
 Recommended first-time server setup:
 
 ```bash
 sudo mkdir -p /var/www/bsvgo-cms
 sudo chown -R "$USER":"$USER" /var/www/bsvgo-cms
-git clone git@github.com:YOUR_ORG/YOUR_REPO.git /var/www/bsvgo-cms
+git clone https://github.com/YOUR_ORG/YOUR_REPO.git /var/www/bsvgo-cms
 cd /var/www/bsvgo-cms
 npm ci
 npm run db:migrate
@@ -162,6 +164,13 @@ pm2 save
 ```
 
 After that, pushes to `main` or manual `workflow_dispatch` runs will deploy automatically.
+
+If the VPS currently has an SSH remote and deploy fails with `git@github.com: Permission denied (publickey)`, change it once:
+
+```bash
+cd /var/www/bsvgo-cms
+git remote set-url origin https://github.com/YOUR_ORG/YOUR_REPO.git
+```
 
 ## Media
 
