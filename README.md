@@ -90,11 +90,13 @@ This project deploys without Docker. The app can run as a standalone Node proces
 Install prerequisites on the VPS:
 
 ```bash
-# Node.js 22 is recommended for this project.
+# Node.js 22+ is recommended for this project. Node.js 24 is supported.
 npm install -g pm2
 ```
 
-Clone the repository and create the production `.env` directly on the VPS:
+For GitHub Actions deployment, the server does not need an existing `bsvgo-cms` directory. The workflow creates `APP_DIR`, clones the repository, and writes `.env` during the first deployment.
+
+If deploying manually, clone the repository and create the production `.env` directly on the VPS:
 
 ```bash
 git clone https://github.com/YOUR_ORG/YOUR_REPO.git /var/www/bsvgo-cms
@@ -103,7 +105,7 @@ npm ci
 cp .env.example .env
 ```
 
-Edit `.env` with the real PostgreSQL connection and secrets. Do not store production secrets in GitHub Actions unless the server needs them for a first-time bootstrap.
+Edit `.env` with the real PostgreSQL connection and secrets.
 
 Manual deploy flow:
 
@@ -118,11 +120,14 @@ pm2 save
 
 ### GitHub Actions Deployment
 
-GitHub Actions deployment is included in `.github/workflows/deploy.yml`. It runs `npm ci` and `npm run typecheck` in GitHub Actions, then connects to the VPS by SSH and runs:
+GitHub Actions deployment is included in `.github/workflows/deploy.yml`. It builds the app in GitHub Actions, then connects to the VPS by SSH and runs:
 
 ```bash
+mkdir -p APP_DIR parent directory
+git clone on first deploy, otherwise:
 git fetch using the workflow GITHUB_TOKEN
 git pull --ff-only
+create .env on first deploy
 npm ci
 npm run db:migrate
 npm run build
@@ -132,12 +137,18 @@ pm2 save
 
 Configure these GitHub repository secrets:
 
-- `VPS_HOST`
-- `VPS_USER`
-- `VPS_SSH_KEY`: private key used by Actions to SSH into the VPS
+- `SERVER_IP`
+- `SERVER_USER`
+- `SSH_PRIVATE_KEY`: private key used by Actions to SSH into the VPS
 - `VPS_PORT`: optional, defaults to `22`
 - `VPS_SSH_FINGERPRINT`: optional but recommended host key fingerprint for SSH verification
 - `APP_DIR`: absolute path to the checked-out app on the VPS, for example `/var/www/bsvgo-cms`
+- `DATABASE_URL`
+- `SESSION_SECRET`
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD`
+- `ADMIN_NAME`
+- `NEXT_PUBLIC_SITE_URL`: optional
 
 Optional GitHub repository variables:
 
@@ -149,22 +160,14 @@ The workflow temporarily switches the VPS repository remote to an HTTPS URL with
 
 The SSH user needs permission to read and write `APP_DIR`, install npm dependencies, run migrations against the database in `.env`, and manage the PM2 process.
 
-Recommended first-time server setup:
+Recommended first-time server setup before running Actions:
 
 ```bash
 sudo mkdir -p /var/www/bsvgo-cms
 sudo chown -R "$USER":"$USER" /var/www/bsvgo-cms
-git clone https://github.com/YOUR_ORG/YOUR_REPO.git /var/www/bsvgo-cms
-cd /var/www/bsvgo-cms
-npm ci
-npm run db:migrate
-npm run db:seed
-npm run build
-PORT=3100 HOSTNAME=0.0.0.0 pm2 start npm --name bsvgo-cms -- start
-pm2 save
 ```
 
-After that, pushes to `main` or manual `workflow_dispatch` runs will deploy automatically.
+After that, pushes to `main` or manual `workflow_dispatch` runs will initialize and deploy automatically.
 
 If the VPS currently has an SSH remote and deploy fails with `git@github.com: Permission denied (publickey)`, change it once:
 

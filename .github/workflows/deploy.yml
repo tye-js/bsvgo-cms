@@ -59,14 +59,19 @@ jobs:
           APP_PORT: ${{ vars.APP_PORT || '3100' }}
           GH_REPOSITORY: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
-          NPM_VERSION: ${{ env.NPM_VERSION }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          ADMIN_NAME: ${{ secrets.ADMIN_NAME }}
+          NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
           fingerprint: ${{ secrets.VPS_SSH_FINGERPRINT }}
-          envs: APP_DIR,APP_BRANCH,PM2_APP_NAME,APP_PORT,GH_REPOSITORY,GH_TOKEN,NPM_VERSION
+          envs: APP_DIR,APP_BRANCH,PM2_APP_NAME,APP_PORT,GH_REPOSITORY,GH_TOKEN,DATABASE_URL,SESSION_SECRET,ADMIN_EMAIL,ADMIN_PASSWORD,ADMIN_NAME,NEXT_PUBLIC_SITE_URL
           script_stop: true
           script: |
             set -euo pipefail
@@ -79,6 +84,19 @@ jobs:
             if [ -z "${GH_TOKEN:-}" ]; then
               echo "GITHUB_TOKEN is required"
               exit 1
+            fi
+
+            if [ -z "${DATABASE_URL:-}" ] || [ -z "${SESSION_SECRET:-}" ] || [ -z "${ADMIN_PASSWORD:-}" ]; then
+              echo "DATABASE_URL, SESSION_SECRET, and ADMIN_PASSWORD secrets are required"
+              exit 1
+            fi
+
+            mkdir -p "$(dirname "$APP_DIR")"
+
+            if [ ! -d "$APP_DIR/.git" ]; then
+              rm -rf "$APP_DIR"
+              git clone --branch "$APP_BRANCH" "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPOSITORY}.git" "$APP_DIR"
+              git -C "$APP_DIR" remote set-url origin "https://github.com/${GH_REPOSITORY}.git"
             fi
 
             cd "$APP_DIR"
@@ -94,7 +112,20 @@ jobs:
             git pull --ff-only origin "$APP_BRANCH"
             cleanup_git_remote
 
-            npm install -g "npm@${NPM_VERSION}"
+            if [ ! -f .env ]; then
+              {
+                printf 'DATABASE_URL=%s\n' "$DATABASE_URL"
+                printf 'SESSION_SECRET=%s\n' "$SESSION_SECRET"
+                printf 'ADMIN_EMAIL=%s\n' "${ADMIN_EMAIL:-admin@bsvgo.com}"
+                printf 'ADMIN_PASSWORD=%s\n' "${ADMIN_PASSWORD:-}"
+                printf 'ADMIN_NAME=%s\n' "${ADMIN_NAME:-BSVgo Admin}"
+                if [ -n "${NEXT_PUBLIC_SITE_URL:-}" ]; then
+                  printf 'NEXT_PUBLIC_SITE_URL=%s\n' "$NEXT_PUBLIC_SITE_URL"
+                fi
+              } > .env
+              chmod 600 .env
+            fi
+
             node --version
             npm --version
 
