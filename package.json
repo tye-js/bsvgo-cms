@@ -1,0 +1,45 @@
+{
+  "name": "bsvgo-cms",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node --env-file=.env --import tsx scripts/migrate-admin.ts",
+    "db:push": "node --env-file=.env ./node_modules/.bin/drizzle-kit push",
+    "db:studio": "node --env-file=.env ./node_modules/.bin/drizzle-kit studio",
+    "db:seed": "node --env-file=.env --import tsx scripts/seed.ts",
+    "admin:verify": "node --env-file=.env --import tsx scripts/verify-admin.ts"
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "^4.1.18",
+    "argon2": "^0.44.0",
+    "clsx": "^2.1.1",
+    "drizzle-orm": "^0.45.0",
+    "lucide-react": "^0.561.0",
+    "next": "^16.2.0",
+    "postgres": "^3.4.7",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "zod": "^4.2.1"
+  },
+  "overrides": {
+    "postcss": "^8.5.14"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "drizzle-kit": "^0.31.8",
+    "eslint": "^9.39.0",
+    "eslint-config-next": "^16.2.0",
+    "tailwindcss": "^4.1.18",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}

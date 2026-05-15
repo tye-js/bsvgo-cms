@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1778611500000,
+      "tag": "0000_bsvgo_cms_admin_compat",
+      "breakpoints": true
+    }
+  ]
+}

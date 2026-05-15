@@ -1,1 +1,168 @@
-# bsvgo-cms
+# BSVgo CMS
+
+Independent admin system for managing BSVgo blog content. It is a Next.js App Router project that writes to PostgreSQL through Drizzle and stays decoupled from the public blog frontend.
+
+## Stack
+
+- Next.js App Router, React, TypeScript
+- Tailwind CSS
+- PostgreSQL with Drizzle schema and migrations
+- Database-backed sessions with httpOnly cookies
+- Argon2id password hashing
+
+## Local Setup
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Create `.env` from `.env.example` and set `DATABASE_URL`, `SESSION_SECRET`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD`.
+
+3. Run the compatibility migration against the PostgreSQL database in `.env`:
+
+```bash
+npm run db:migrate
+```
+
+This project is designed to attach to the existing BSVgo database. The migration only adds admin-required columns and tables when missing; it does not rebuild the public blog schema.
+
+4. Seed the initial admin and fixed categories:
+
+```bash
+npm run db:seed
+```
+
+5. Start development:
+
+```bash
+npm run dev
+```
+
+Open `http://localhost:3000/login` and sign in with the seeded admin account.
+
+## Commands
+
+```bash
+npm run dev        # start local Next.js dev server
+npm run build      # production build
+npm run start      # start production server
+npm run typecheck  # TypeScript check
+npm run db:migrate
+npm run db:seed
+npm run admin:verify
+npm run db:studio
+```
+
+## Data Model
+
+Core tables:
+
+- `users`: admin/editor accounts with Argon2id password hashes
+- `sessions`: hashed session tokens and expiration
+- `posts`: article metadata, status, slug, SEO, publishing, ordering, featured and pinned flags
+- `post_translations`: English and optional Chinese title, excerpt, body
+- `categories`: fixed primary categories
+- `category_translations`: English and Chinese category copy
+- `tags`: tag metadata and SEO
+- `tag_translations`: English and optional Chinese tag copy
+- `post_tags`: many-to-many post/tag bindings
+
+English is the primary article language. Chinese content is optional but linked to the same `posts` record.
+
+For the existing BSVgo schema, article SEO fields and reading minutes live on `post_translations`, while post-level publishing fields live on `posts`.
+
+## Security Notes
+
+- Admin routes are protected by server-side `requireUser()`.
+- Passwords are never stored in plain text.
+- Sessions are stored in PostgreSQL and exposed only through httpOnly cookies.
+- Server actions validate form input with Zod.
+- Drizzle query builders are used for database access.
+- Delete actions require browser confirmation and soft-delete content where appropriate.
+- Sensitive environment variables are read only on the server.
+
+## VPS Deployment
+
+This project deploys without Docker. The app can run as a standalone Node process or under PM2.
+
+Install prerequisites on the VPS:
+
+```bash
+# Node.js 22 is recommended for this project.
+npm install -g pm2
+```
+
+Clone the repository and create the production `.env` directly on the VPS:
+
+```bash
+git clone git@github.com:YOUR_ORG/YOUR_REPO.git /var/www/bsvgo-cms
+cd /var/www/bsvgo-cms
+npm ci
+cp .env.example .env
+```
+
+Edit `.env` with the real PostgreSQL connection and secrets. Do not store production secrets in GitHub Actions unless the server needs them for a first-time bootstrap.
+
+Manual deploy flow:
+
+```bash
+git pull --ff-only origin main
+npm ci
+npm run db:migrate
+npm run build
+pm2 reload bsvgo-cms --update-env || pm2 start npm --name bsvgo-cms -- start
+pm2 save
+```
+
+### GitHub Actions Deployment
+
+GitHub Actions deployment is included in `.github/workflows/deploy.yml`. It runs `npm ci` and `npm run typecheck` in GitHub Actions, then connects to the VPS by SSH and runs:
+
+```bash
+git fetch
+git pull --ff-only
+npm ci
+npm run db:migrate
+npm run build
+pm2 reload bsvgo-cms --update-env || pm2 start npm --name bsvgo-cms -- start
+pm2 save
+```
+
+Configure these GitHub repository secrets:
+
+- `VPS_HOST`
+- `VPS_USER`
+- `VPS_SSH_KEY`: private key used by Actions to SSH into the VPS
+- `VPS_PORT`: optional, defaults to `22`
+- `VPS_SSH_FINGERPRINT`: optional but recommended host key fingerprint for SSH verification
+- `APP_DIR`: absolute path to the checked-out app on the VPS, for example `/var/www/bsvgo-cms`
+
+Optional GitHub repository variables:
+
+- `APP_BRANCH`: branch to deploy, defaults to `main`
+- `PM2_APP_NAME`: PM2 process name, defaults to `bsvgo-cms`
+
+The SSH user needs permission to read and write `APP_DIR`, pull the Git repository, install npm dependencies, run migrations against the database in `.env`, and manage the PM2 process.
+
+Recommended first-time server setup:
+
+```bash
+sudo mkdir -p /var/www/bsvgo-cms
+sudo chown -R "$USER":"$USER" /var/www/bsvgo-cms
+git clone git@github.com:YOUR_ORG/YOUR_REPO.git /var/www/bsvgo-cms
+cd /var/www/bsvgo-cms
+npm ci
+npm run db:migrate
+npm run db:seed
+npm run build
+pm2 start npm --name bsvgo-cms -- start
+pm2 save
+```
+
+After that, pushes to `main` or manual `workflow_dispatch` runs will deploy automatically.
+
+## Media
+
+Version 1 stores image URLs for cover images and Markdown body images. Upload can be added later with either local server storage or object storage, including file type and size limits.

@@ -1,0 +1,79 @@
+name: Deploy BSVgo CMS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-bsvgo-cms
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: verify
+    environment: production
+
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          APP_DIR: ${{ secrets.APP_DIR }}
+          APP_BRANCH: ${{ vars.APP_BRANCH || 'main' }}
+          PM2_APP_NAME: ${{ vars.PM2_APP_NAME || 'bsvgo-cms' }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          fingerprint: ${{ secrets.VPS_SSH_FINGERPRINT }}
+          envs: APP_DIR,APP_BRANCH,PM2_APP_NAME
+          script_stop: true
+          script: |
+            set -euo pipefail
+
+            if [ -z "${APP_DIR:-}" ]; then
+              echo "APP_DIR secret is required"
+              exit 1
+            fi
+
+            cd "$APP_DIR"
+
+            git fetch origin "$APP_BRANCH"
+            git checkout "$APP_BRANCH"
+            git pull --ff-only origin "$APP_BRANCH"
+
+            npm ci
+            npm run db:migrate
+            npm run build
+
+            if pm2 describe "$PM2_APP_NAME" >/dev/null 2>&1; then
+              pm2 reload "$PM2_APP_NAME" --update-env
+            else
+              pm2 start npm --name "$PM2_APP_NAME" -- start
+            fi
+
+            pm2 save
