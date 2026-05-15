@@ -6,6 +6,13 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  NPM_VERSION: 11.4.2
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -16,8 +23,16 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "24"
+          node-version: "22"
           cache: npm
+
+      - name: Pin npm
+        run: npm install -g "npm@${NPM_VERSION}"
+
+      - name: Print runtime versions
+        run: |
+          node --version
+          npm --version
 
       - name: Install dependencies
         run: npm ci
@@ -44,13 +59,14 @@ jobs:
           APP_PORT: ${{ vars.APP_PORT || '3100' }}
           GH_REPOSITORY: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
+          NPM_VERSION: ${{ env.NPM_VERSION }}
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
           fingerprint: ${{ secrets.VPS_SSH_FINGERPRINT }}
-          envs: APP_DIR,APP_BRANCH,PM2_APP_NAME,APP_PORT,GH_REPOSITORY,GH_TOKEN
+          envs: APP_DIR,APP_BRANCH,PM2_APP_NAME,APP_PORT,GH_REPOSITORY,GH_TOKEN,NPM_VERSION
           script_stop: true
           script: |
             set -euo pipefail
@@ -77,6 +93,10 @@ jobs:
             git checkout "$APP_BRANCH"
             git pull --ff-only origin "$APP_BRANCH"
             cleanup_git_remote
+
+            npm install -g "npm@${NPM_VERSION}"
+            node --version
+            npm --version
 
             npm ci
             npm run db:migrate
