@@ -13,6 +13,9 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   verify:
     name: Verify
@@ -47,6 +50,7 @@ jobs:
           APP_DIR: ${{ secrets.APP_DIR }}
           APP_BRANCH: ${{ vars.APP_BRANCH || 'main' }}
           PM2_APP_NAME: ${{ vars.PM2_APP_NAME || 'bsvgo-cms' }}
+          APP_PORT: ${{ vars.APP_PORT || '3100' }}
           GH_REPOSITORY: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
         with:
@@ -55,7 +59,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
           fingerprint: ${{ secrets.VPS_SSH_FINGERPRINT }}
-          envs: APP_DIR,APP_BRANCH,PM2_APP_NAME,GH_REPOSITORY,GH_TOKEN
+          envs: APP_DIR,APP_BRANCH,PM2_APP_NAME,APP_PORT,GH_REPOSITORY,GH_TOKEN
           script_stop: true
           script: |
             set -euo pipefail
@@ -86,6 +90,9 @@ jobs:
             npm ci
             npm run db:migrate
             npm run build
+
+            export PORT="$APP_PORT"
+            export HOSTNAME="0.0.0.0"
 
             if pm2 describe "$PM2_APP_NAME" >/dev/null 2>&1; then
               pm2 reload "$PM2_APP_NAME" --update-env

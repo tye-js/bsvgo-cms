@@ -112,7 +112,7 @@ git pull --ff-only origin main
 npm ci
 npm run db:migrate
 npm run build
-pm2 reload bsvgo-cms --update-env || pm2 start npm --name bsvgo-cms -- start
+PORT=3100 HOSTNAME=0.0.0.0 pm2 reload bsvgo-cms --update-env || PORT=3100 HOSTNAME=0.0.0.0 pm2 start npm --name bsvgo-cms -- start
 pm2 save
 ```
 
@@ -126,7 +126,7 @@ git pull --ff-only
 npm ci
 npm run db:migrate
 npm run build
-pm2 reload bsvgo-cms --update-env || pm2 start npm --name bsvgo-cms -- start
+PORT=3100 HOSTNAME=0.0.0.0 pm2 reload bsvgo-cms --update-env || PORT=3100 HOSTNAME=0.0.0.0 pm2 start npm --name bsvgo-cms -- start
 pm2 save
 ```
 
@@ -143,6 +143,7 @@ Optional GitHub repository variables:
 
 - `APP_BRANCH`: branch to deploy, defaults to `main`
 - `PM2_APP_NAME`: PM2 process name, defaults to `bsvgo-cms`
+- `APP_PORT`: app port, defaults to `3100`
 
 The workflow temporarily switches the VPS repository remote to an HTTPS URL with the workflow `GITHUB_TOKEN`, pulls the target branch, then restores the remote to plain HTTPS. The VPS does not need a GitHub SSH deploy key for normal deployments.
 
@@ -159,7 +160,7 @@ npm ci
 npm run db:migrate
 npm run db:seed
 npm run build
-pm2 start npm --name bsvgo-cms -- start
+PORT=3100 HOSTNAME=0.0.0.0 pm2 start npm --name bsvgo-cms -- start
 pm2 save
 ```
 

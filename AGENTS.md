@@ -1,0 +1,142 @@
+# AGENTS.md
+
+Guidance for coding agents working in this repository.
+
+## Project Purpose
+
+BSVgo CMS is an independent admin app for managing BSVgo blog content. It is not the public blog frontend.
+
+Keep the admin app decoupled from the frontend:
+
+- Admin writes validated content to PostgreSQL.
+- Frontend reads and renders database content.
+- Do not add public blog pages or visitor-facing routes here.
+- Do not change existing public blog behavior from this repository.
+
+## Stack
+
+- Next.js App Router
+- React and TypeScript
+- Tailwind CSS
+- PostgreSQL
+- Drizzle ORM for schema, migrations, and database access
+- Database-backed auth sessions with httpOnly cookies
+- Argon2id password hashing
+
+## Commands
+
+Use these commands for normal work:
+
+```bash
+npm run dev
+npm run typecheck
+npm run build
+npm run db:migrate
+npm run db:seed
+npm run admin:verify
+```
+
+Use `npm ci` in CI and deployment environments. Use `npm install` locally when dependencies intentionally change.
+
+## Environment
+
+Required server-side environment variables:
+
+- `DATABASE_URL`
+- `SESSION_SECRET`
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD`
+- `ADMIN_NAME`
+
+Do not expose these values to client components. Keep production `.env` files out of git.
+
+## Database Rules
+
+The database may already contain BSVgo blog data. Treat migrations as compatibility migrations:
+
+- Prefer additive, non-destructive migrations.
+- Do not drop or rewrite existing public blog tables.
+- Do not assume an empty database.
+- Use Drizzle schema and migrations, not ad hoc production SQL, unless a one-off repair is explicitly requested.
+- Preserve existing IDs and slugs.
+
+Core tables include:
+
+- `users`
+- `sessions`
+- `posts`
+- `post_translations`
+- `categories`
+- `category_translations`
+- `tags`
+- `tag_translations`
+- `post_tags`
+
+English content is primary. Chinese content is optional and must stay linked to the same `posts` record.
+
+## Auth And Security
+
+- Protect all admin routes.
+- Store passwords with Argon2id only.
+- Store session tokens hashed in PostgreSQL.
+- Use server actions and Zod validation for form writes.
+- Use Drizzle query builders to avoid SQL injection.
+- Keep delete actions confirmed and soft-delete where the existing behavior expects it.
+- Do not log secrets, passwords, session tokens, or full database URLs.
+
+## UI Direction
+
+This is a content management tool, not a marketing site.
+
+- Keep the UI clean, professional, dense, and readable.
+- Use left navigation, top user area, tables, filters, pagination, forms, and status badges.
+- Avoid bright, saturated colors.
+- Avoid large pure-black areas.
+- Keep desktop editing ergonomic; mobile should remain usable.
+- Use Markdown editing for article bodies.
+
+## Deployment
+
+Deployment is non-Docker.
+
+GitHub Actions deploys over SSH to a self-hosted VPS, then runs:
+
+```bash
+npm ci
+npm run db:migrate
+npm run build
+pm2 reload bsvgo-cms --update-env
+```
+
+The app should run on port `3100` in production unless explicitly changed:
+
+```bash
+PORT=3100 HOSTNAME=0.0.0.0 npm run start
+```
+
+The workflow supports:
+
+- `APP_BRANCH`, default `main`
+- `PM2_APP_NAME`, default `bsvgo-cms`
+- `APP_PORT`, default `3100`
+
+## Editing Guidelines
+
+- Follow existing file structure and patterns.
+- Keep changes scoped to the requested behavior.
+- Do not introduce Docker unless explicitly requested.
+- Do not revert unrelated local changes.
+- Run `npm run typecheck` after code changes.
+- Run `npm run build` for deployment, routing, server action, or Next.js config changes when feasible.
+
+## Important Paths
+
+- `src/app`: App Router pages and layouts
+- `src/components/admin`: shared admin UI components
+- `src/components/forms`: form components and submit controls
+- `src/server/auth`: auth and session logic
+- `src/server/content`: content queries and server actions
+- `src/server/db`: Drizzle client and schema
+- `drizzle`: migrations
+- `scripts`: migration, seed, and verification scripts
+- `.github/workflows/deploy.yml`: VPS deployment workflow
