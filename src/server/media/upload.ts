@@ -32,12 +32,22 @@ function uploadRoot() {
   );
 }
 
-function mediaBaseUrl() {
-  return process.env.MEDIA_PUBLIC_BASE_URL?.trim() || "/uploads";
+function mediaBaseUrl(publicOrigin?: string) {
+  const configuredBase = process.env.MEDIA_PUBLIC_BASE_URL?.trim() || "/uploads";
+
+  if (/^https?:\/\//i.test(configuredBase)) {
+    return configuredBase;
+  }
+
+  if (configuredBase.startsWith("/") && publicOrigin) {
+    return new URL(configuredBase, publicOrigin).toString();
+  }
+
+  return configuredBase;
 }
 
-function publicUrl(storageKey: string) {
-  const base = mediaBaseUrl().replace(/\/$/, "");
+function publicUrl(storageKey: string, publicOrigin?: string) {
+  const base = mediaBaseUrl(publicOrigin).replace(/\/$/, "");
   return `${base}/${storageKey}`;
 }
 
@@ -93,12 +103,14 @@ export async function saveUploadedCoverImage({
   file,
   altText,
   caption,
-  userId
+  userId,
+  publicOrigin
 }: {
   file: File;
   altText: string;
   caption?: string;
   userId: string;
+  publicOrigin?: string;
 }) {
   const extension = ALLOWED_MIME_TYPES.get(file.type);
   if (!extension) {
@@ -127,7 +139,7 @@ export async function saveUploadedCoverImage({
   await writeFile(targetPath, buffer, { flag: "wx" });
 
   const imageSize = await readImageSize(buffer, file.type);
-  const url = publicUrl(storageKey);
+  const url = publicUrl(storageKey, publicOrigin);
 
   const [asset] = await db
     .insert(mediaAssets)

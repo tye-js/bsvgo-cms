@@ -71,6 +71,18 @@ export const userSchema = z.object({
 
 export const aiSettingsSchema = z.object({
   apiKey: z.string().trim().optional(),
+  apiBaseUrl: z
+    .string()
+    .trim()
+    .refine((value) => {
+      if (!value) return true;
+      try {
+        const url = new URL(value);
+        return url.protocol === "http:" || url.protocol === "https:";
+      } catch {
+        return false;
+      }
+    }, "Enter a valid API base URL"),
   model: z.string().trim().min(1, "Model is required").max(120),
   timeoutMs: z.coerce
     .number()

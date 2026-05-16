@@ -22,6 +22,7 @@ export async function updateAiSettingsAction(
   const user = await requireRole(["admin"]);
   const parsed = aiSettingsSchema.safeParse({
     apiKey: stringValue(formData, "apiKey"),
+    apiBaseUrl: stringValue(formData, "apiBaseUrl"),
     model: stringValue(formData, "model"),
     timeoutMs: stringValue(formData, "timeoutMs")
   });
@@ -32,6 +33,7 @@ export async function updateAiSettingsAction(
 
   await saveAiSettings({
     apiKey: parsed.data.apiKey,
+    apiBaseUrl: parsed.data.apiBaseUrl,
     model: parsed.data.model,
     timeoutMs: parsed.data.timeoutMs,
     userId: user.id

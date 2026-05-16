@@ -32,6 +32,7 @@ export default async function SettingsPage() {
           action={updateAiSettingsAction}
           hasApiKey={settings.ai.hasApiKey}
           apiKeyPreview={settings.ai.apiKeyPreview}
+          apiBaseUrl={settings.ai.apiBaseUrl}
           model={settings.ai.model}
           timeoutMs={settings.ai.timeoutMs}
         />

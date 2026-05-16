@@ -8,10 +8,12 @@ import { appSettings } from "@/server/db/schema";
 
 export const AI_SETTING_KEYS = {
   apiKey: "ai.openai.api_key",
+  apiBaseUrl: "ai.openai.api_base_url",
   model: "ai.openai.model",
   timeoutMs: "ai.openai.timeout_ms"
 } as const;
 
+export const DEFAULT_AI_API_BASE_URL = "https://api.openai.com/v1";
 export const DEFAULT_AI_MODEL = "gpt-5.3-codex";
 export const DEFAULT_AI_TIMEOUT_MS = 60000;
 
@@ -35,17 +37,21 @@ export async function getAiSettingsForGeneration() {
   const apiKey = decryptIfNeeded(byKey.get(AI_SETTING_KEYS.apiKey)).trim();
 
   if (!apiKey) {
-    throw new Error("AI OpenAI API key is not configured.");
+    throw new Error("AI API key is not configured.");
   }
 
   const model =
     decryptIfNeeded(byKey.get(AI_SETTING_KEYS.model)).trim() || DEFAULT_AI_MODEL;
+  const apiBaseUrl =
+    decryptIfNeeded(byKey.get(AI_SETTING_KEYS.apiBaseUrl)).trim() ||
+    DEFAULT_AI_API_BASE_URL;
   const timeoutValue = Number(
     decryptIfNeeded(byKey.get(AI_SETTING_KEYS.timeoutMs)).trim()
   );
 
   return {
     apiKey,
+    apiBaseUrl,
     model,
     timeoutMs:
       Number.isFinite(timeoutValue) && timeoutValue > 0
@@ -60,6 +66,9 @@ export async function getSettingsPageData() {
   const apiKey = decryptIfNeeded(byKey.get(AI_SETTING_KEYS.apiKey)).trim();
   const model =
     decryptIfNeeded(byKey.get(AI_SETTING_KEYS.model)).trim() || DEFAULT_AI_MODEL;
+  const apiBaseUrl =
+    decryptIfNeeded(byKey.get(AI_SETTING_KEYS.apiBaseUrl)).trim() ||
+    DEFAULT_AI_API_BASE_URL;
   const timeoutValue =
     decryptIfNeeded(byKey.get(AI_SETTING_KEYS.timeoutMs)).trim() ||
     String(DEFAULT_AI_TIMEOUT_MS);
@@ -68,6 +77,7 @@ export async function getSettingsPageData() {
     ai: {
       hasApiKey: apiKey.length > 0,
       apiKeyPreview: apiKey ? `${apiKey.slice(0, 7)}...${apiKey.slice(-4)}` : "",
+      apiBaseUrl,
       model,
       timeoutMs: timeoutValue
     }
@@ -76,11 +86,13 @@ export async function getSettingsPageData() {
 
 export async function saveAiSettings({
   apiKey,
+  apiBaseUrl,
   model,
   timeoutMs,
   userId
 }: {
   apiKey?: string;
+  apiBaseUrl?: string;
   model: string;
   timeoutMs: number;
   userId: string;
@@ -92,6 +104,11 @@ export async function saveAiSettings({
     value: string;
     encrypted: boolean;
   }> = [
+    {
+      key: AI_SETTING_KEYS.apiBaseUrl,
+      value: apiBaseUrl?.trim() || DEFAULT_AI_API_BASE_URL,
+      encrypted: false
+    },
     {
       key: AI_SETTING_KEYS.model,
       value: model,

@@ -87,10 +87,10 @@ function friendlyAiError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
 
   if (
-    message.includes("AI OpenAI API key is not configured") ||
+    message.includes("AI API key is not configured") ||
     message.includes("app_settings")
   ) {
-    return "AI is not configured. Open Settings and save the OpenAI API key before creating a post.";
+    return "AI is not configured. Open Settings and save the AI API key before creating a post.";
   }
 
   if (message.includes("timed out")) {

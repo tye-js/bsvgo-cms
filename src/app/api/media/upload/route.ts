@@ -9,6 +9,23 @@ function formText(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
 
+function requestOrigin(request: Request) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (siteUrl) {
+    return siteUrl;
+  }
+
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost || request.headers.get("host");
+  if (!host) {
+    return undefined;
+  }
+
+  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const protocol = forwardedProto || new URL(request.url).protocol.replace(/:$/, "");
+  return `${protocol}://${host}`;
+}
+
 export async function POST(request: Request) {
   const user = await requireUser();
   const formData = await request.formData();
@@ -32,7 +49,8 @@ export async function POST(request: Request) {
       file,
       altText,
       caption,
-      userId: user.id
+      userId: user.id,
+      publicOrigin: requestOrigin(request)
     });
 
     return NextResponse.json(asset);

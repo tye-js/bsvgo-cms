@@ -14,6 +14,7 @@ export function AiSettingsForm({
   action,
   hasApiKey,
   apiKeyPreview,
+  apiBaseUrl,
   model,
   timeoutMs
 }: {
@@ -23,6 +24,7 @@ export function AiSettingsForm({
   ) => Promise<ActionState>;
   hasApiKey: boolean;
   apiKeyPreview: string;
+  apiBaseUrl: string;
   model: string;
   timeoutMs: string;
 }) {
@@ -49,7 +51,7 @@ export function AiSettingsForm({
       </div>
 
       <Field
-        label="OpenAI API key"
+        label="API key"
         hint="Leave blank to keep the existing key. The full key is encrypted server-side and never displayed."
       >
         <input
@@ -58,6 +60,19 @@ export function AiSettingsForm({
           autoComplete="off"
           className={inputClassName}
           placeholder={hasApiKey ? "Keep existing key" : "sk-..."}
+        />
+      </Field>
+
+      <Field
+        label="API base URL"
+        hint="Use an OpenAI-compatible /v1 endpoint. Leave the default for the official OpenAI API."
+      >
+        <input
+          name="apiBaseUrl"
+          type="url"
+          defaultValue={apiBaseUrl}
+          className={inputClassName}
+          placeholder="https://api.openai.com/v1"
         />
       </Field>
 

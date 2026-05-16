@@ -16,7 +16,14 @@ type EnglishPostOutput = {
   seoDescription: string;
 };
 
-const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
+function responsesUrl(apiBaseUrl: string) {
+  const normalized = apiBaseUrl.trim().replace(/\/+$/, "");
+  return normalized.endsWith("/responses") ? normalized : `${normalized}/responses`;
+}
+
+function providerLabel(apiBaseUrl: string) {
+  return apiBaseUrl.includes("api.openai.com") ? "OpenAI" : "AI provider";
+}
 
 function outputText(payload: unknown) {
   const response = payload as {
@@ -44,7 +51,7 @@ function clean(value: unknown, maxLength?: number) {
 function parseEnglishPost(payload: unknown): EnglishPostOutput {
   const text = outputText(payload);
   if (!text) {
-    throw new Error("OpenAI did not return generated English content.");
+    throw new Error("AI provider did not return generated English content.");
   }
 
   const parsed = JSON.parse(text) as Partial<EnglishPostOutput>;
@@ -57,7 +64,7 @@ function parseEnglishPost(payload: unknown): EnglishPostOutput {
   };
 
   if (!output.title || !output.content) {
-    throw new Error("OpenAI returned incomplete English content.");
+    throw new Error("AI provider returned incomplete English content.");
   }
 
   return output;
@@ -66,12 +73,12 @@ function parseEnglishPost(payload: unknown): EnglishPostOutput {
 export async function generateEnglishPost(
   input: EnglishPostInput
 ): Promise<EnglishPostOutput> {
-  const { apiKey, model, timeoutMs } = await getAiSettingsForGeneration();
+  const { apiKey, apiBaseUrl, model, timeoutMs } = await getAiSettingsForGeneration();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(OPENAI_RESPONSES_URL, {
+    const response = await fetch(responsesUrl(apiBaseUrl), {
       method: "POST",
       signal: controller.signal,
       headers: {
@@ -153,13 +160,15 @@ export async function generateEnglishPost(
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`OpenAI request failed: ${response.status} ${errorText}`);
+      throw new Error(
+        `${providerLabel(apiBaseUrl)} request failed: ${response.status} ${errorText}`
+      );
     }
 
     return parseEnglishPost(await response.json());
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error("OpenAI generation timed out. Please try again.");
+      throw new Error(`${providerLabel(apiBaseUrl)} generation timed out. Please try again.`);
     }
     throw error;
   } finally {
