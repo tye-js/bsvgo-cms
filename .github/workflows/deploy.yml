@@ -50,6 +50,31 @@ jobs:
     environment: production
 
     steps:
+      - name: Check deploy SSH config
+        env:
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          missing=0
+          for name in SERVER_IP SERVER_USER SSH_PRIVATE_KEY; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing required secret: ${name}"
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+          if ! printf '%s\n' "$SSH_PRIVATE_KEY" | grep -q -- '-----BEGIN .*PRIVATE KEY-----'; then
+            echo "::error::SSH_PRIVATE_KEY must contain a private key, including BEGIN/END lines. Do not use the public .pub key here."
+            exit 1
+          fi
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.2
         env:
@@ -72,7 +97,6 @@ jobs:
           port: ${{ secrets.VPS_PORT || 22 }}
           fingerprint: ${{ secrets.VPS_SSH_FINGERPRINT }}
           envs: APP_DIR,APP_BRANCH,PM2_APP_NAME,APP_PORT,GH_REPOSITORY,GH_TOKEN,DATABASE_URL,SESSION_SECRET,ADMIN_EMAIL,ADMIN_PASSWORD,ADMIN_NAME,NEXT_PUBLIC_SITE_URL
-          script_stop: true
           script: |
             set -euo pipefail
 
