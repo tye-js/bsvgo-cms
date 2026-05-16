@@ -7,6 +7,7 @@ import {
   getPostForEdit,
   getRelatedPostsForPost
 } from "@/server/content/queries";
+import { getMediaAssetOptions } from "@/server/media/service";
 
 export default async function EditPostPage({
   params
@@ -14,10 +15,11 @@ export default async function EditPostPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [post, options, related] = await Promise.all([
+  const [post, options, related, mediaAssets] = await Promise.all([
     getPostForEdit(id),
     getPostEditorOptions(),
-    getRelatedPostsForPost(id)
+    getRelatedPostsForPost(id),
+    getMediaAssetOptions()
   ]);
 
   if (!post) notFound();
@@ -48,6 +50,7 @@ export default async function EditPostPage({
         action={update}
         categories={options.categories}
         tags={options.tags}
+        mediaAssets={mediaAssets}
         post={post}
         submitLabel="Save changes"
       />

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import {
   FileText,
   FolderTree,
+  Image,
   LayoutDashboard,
   LogOut,
   Settings,
@@ -19,6 +20,7 @@ export const dynamic = "force-dynamic";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/posts", label: "Posts", icon: FileText },
+  { href: "/media", label: "Media", icon: Image },
   { href: "/categories", label: "Categories", icon: FolderTree },
   { href: "/tags", label: "Tags", icon: Tags },
   { href: "/users", label: "Admins", icon: Users },

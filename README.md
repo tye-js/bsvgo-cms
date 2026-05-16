@@ -40,7 +40,7 @@ npm run db:seed
 npm run dev
 ```
 
-Open `http://localhost:3000/login` and sign in with the seeded admin account.
+Open `http://localhost:3000/login` and sign in with the seeded admin account. Then open Settings and save the OpenAI API key/model used for English generation.
 
 ## Commands
 
@@ -63,15 +63,17 @@ Core tables:
 - `sessions`: hashed session tokens and expiration
 - `posts`: article metadata, status, slug, SEO, publishing, ordering, featured and pinned flags
 - `post_translations`: English and optional Chinese title, excerpt, body
+- `media_assets`: managed image URLs used for required post covers
+- `app_settings`: database-backed operational settings such as encrypted AI API key
 - `categories`: fixed primary categories
 - `category_translations`: English and Chinese category copy
 - `tags`: tag metadata and SEO
 - `tag_translations`: English and optional Chinese tag copy
 - `post_tags`: many-to-many post/tag bindings
 
-English is the primary article language. Chinese content is optional but linked to the same `posts` record.
+English remains the primary language for the public blog, while new CMS posts are created from a Chinese source draft. The CMS generates the linked English translation with the configured OpenAI Codex model and stores both languages on the same `posts` record.
 
-For the existing BSVgo schema, article SEO fields and reading minutes live on `post_translations`, while post-level publishing fields live on `posts`.
+For the existing BSVgo schema, article SEO fields and reading minutes live on `post_translations`, while post-level publishing fields live on `posts`. Cover image URLs are still mirrored to `posts.cover_image` for frontend compatibility and are also linked to `media_assets`.
 
 ## Security Notes
 
@@ -82,6 +84,7 @@ For the existing BSVgo schema, article SEO fields and reading minutes live on `p
 - Drizzle query builders are used for database access.
 - Delete actions require browser confirmation and soft-delete content where appropriate.
 - Sensitive environment variables are read only on the server.
+- AI API keys are configured in Settings, encrypted with server-side key material, and never displayed in full.
 
 ## VPS Deployment
 
@@ -106,6 +109,14 @@ cp .env.example .env
 ```
 
 Edit `.env` with the real PostgreSQL connection and secrets.
+
+For production uploads, keep files outside the git checkout:
+
+```bash
+UPLOAD_DIR=/var/www/bsvgo-cms-uploads
+MEDIA_PUBLIC_BASE_URL=https://cms.bsvgo.com/uploads
+MAX_UPLOAD_SIZE_MB=5
+```
 
 Manual deploy flow:
 
@@ -156,6 +167,8 @@ Optional GitHub repository variables:
 - `PM2_APP_NAME`: PM2 process name, defaults to `bsvgo-cms`
 - `APP_PORT`: app port, defaults to `3100`
 
+AI generation is configured inside the CMS Settings page after deployment, not in GitHub Secrets.
+
 The workflow temporarily switches the VPS repository remote to an HTTPS URL with the workflow `GITHUB_TOKEN`, pulls the target branch, then restores the remote to plain HTTPS. The VPS does not need a GitHub SSH deploy key for normal deployments.
 
 The SSH user needs permission to read and write `APP_DIR`, install npm dependencies, run migrations against the database in `.env`, and manage the PM2 process.
@@ -176,6 +189,27 @@ cd /var/www/bsvgo-cms
 git remote set-url origin https://github.com/YOUR_ORG/YOUR_REPO.git
 ```
 
+## AI Settings
+
+Open Settings as an admin and configure:
+
+- OpenAI API key
+- Model, default `gpt-5.3-codex`
+- Timeout, default `60000` ms
+
+The API key is stored encrypted in PostgreSQL. Leaving the key field blank keeps the existing key.
+
 ## Media
 
-Version 1 stores image URLs for cover images and Markdown body images. Upload can be added later with either local server storage or object storage, including file type and size limits.
+Post cover images are optional. When a post has no cover, the CMS displays `/images/post-cover-placeholder.svg` and saves `posts.cover_image` as an empty string. Uploaded or selected covers are stored in `media_assets`, linked through `posts.cover_image_id`, and mirrored to `posts.cover_image` for the existing frontend.
+
+Uploads accept JPEG, PNG, WebP, and AVIF. Development defaults to `public/uploads`; production should use a persistent directory and Nginx alias:
+
+```nginx
+location /uploads/ {
+    alias /var/www/bsvgo-cms-uploads/;
+    access_log off;
+    expires 30d;
+    add_header Cache-Control "public, max-age=2592000";
+}
+```

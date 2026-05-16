@@ -6,10 +6,12 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import {
   categorySchema,
+  newPostSchema,
   postSchema,
   tagSchema,
   userSchema
 } from "@/lib/validators";
+import { generateEnglishPost } from "@/server/ai/openai";
 import { requireRole, requireUser } from "@/server/auth/session";
 import { hashPassword } from "@/server/auth/password";
 import { db } from "@/server/db";
@@ -24,6 +26,7 @@ import {
   users,
   type Locale
 } from "@/server/db/schema";
+import { upsertMediaAssetFromUrlWithClient } from "@/server/media/service";
 
 type ActionState = {
   error?: string;
@@ -80,6 +83,23 @@ function friendlyDatabaseError(error: unknown) {
   return "Saving failed. Please try again.";
 }
 
+function friendlyAiError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (
+    message.includes("AI OpenAI API key is not configured") ||
+    message.includes("app_settings")
+  ) {
+    return "AI is not configured. Open Settings and save the OpenAI API key before creating a post.";
+  }
+
+  if (message.includes("timed out")) {
+    return "English generation timed out. Please try again.";
+  }
+
+  return "English generation failed. Please check the AI configuration and try again.";
+}
+
 function stringValue(formData: FormData, key: string) {
   return String(formData.get(key) ?? "");
 }
@@ -94,6 +114,7 @@ function postDataFromForm(formData: FormData) {
     categoryId: stringValue(formData, "categoryId"),
     status: stringValue(formData, "status"),
     coverImageUrl: stringValue(formData, "coverImageUrl"),
+    coverImageAlt: stringValue(formData, "coverImageAlt"),
     seoTitle: stringValue(formData, "seoTitle"),
     seoDescription: stringValue(formData, "seoDescription"),
     publishedAt: stringValue(formData, "publishedAt"),
@@ -188,18 +209,46 @@ export async function createPostAction(
   formData: FormData
 ): Promise<ActionState> {
   const user = await requireUser();
-  const parsed = postSchema.safeParse(postDataFromForm(formData));
+  const parsed = newPostSchema.safeParse(postDataFromForm(formData));
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid post data" };
   }
 
-  const data = parsed.data;
+  const zhData = parsed.data;
+  const english = await generateEnglishPost({
+    title: zhData.zhTitle,
+    excerpt: zhData.zhExcerpt,
+    content: zhData.zhContent
+  }).catch((error) => ({ error: friendlyAiError(error) }));
+
+  if ("error" in english) {
+    return english;
+  }
+
+  const data = {
+    ...zhData,
+    enTitle: english.title,
+    enExcerpt: english.excerpt,
+    enContent: english.content,
+    seoTitle: english.seoTitle || zhData.seoTitle,
+    seoDescription: english.seoDescription || zhData.seoDescription
+  };
 
   let createdId: string;
 
   try {
     const [created] = await db.transaction(async (tx) => {
       await tx.execute(POST_WRITE_TIMEOUT);
+      const coverImageUrl = toRequiredText(data.coverImageUrl);
+      const coverImageText = data.enTitle || data.zhTitle || data.slug;
+      const coverImageId = coverImageUrl
+        ? await upsertMediaAssetFromUrlWithClient(tx, {
+            url: coverImageUrl,
+            altText: data.coverImageAlt || coverImageText,
+            caption: coverImageText,
+            userId: user.id
+          })
+        : null;
 
       const [post] = await tx
         .insert(posts)
@@ -208,7 +257,8 @@ export async function createPostAction(
           categoryId: data.categoryId,
           authorId: user.id,
           status: data.status,
-          coverImage: toRequiredText(data.coverImageUrl),
+          coverImage: coverImageUrl,
+          coverImageId,
           publishedAt: publishedAtValue(data.publishedAt, data.status),
           featured: data.featured,
           pinned: data.pinned,
@@ -255,7 +305,7 @@ export async function updatePostAction(
   _previousState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireUser();
+  const user = await requireUser();
   const parsed = postSchema.safeParse(postDataFromForm(formData));
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid post data" };
@@ -266,6 +316,16 @@ export async function updatePostAction(
   try {
     await db.transaction(async (tx) => {
       await tx.execute(POST_WRITE_TIMEOUT);
+      const coverImageUrl = toRequiredText(data.coverImageUrl);
+      const coverImageText = data.enTitle || data.zhTitle || data.slug;
+      const coverImageId = coverImageUrl
+        ? await upsertMediaAssetFromUrlWithClient(tx, {
+            url: coverImageUrl,
+            altText: data.coverImageAlt || coverImageText,
+            caption: coverImageText,
+            userId: user.id
+          })
+        : null;
 
       await tx
         .update(posts)
@@ -273,7 +333,8 @@ export async function updatePostAction(
           slug: data.slug,
           categoryId: data.categoryId,
           status: data.status,
-          coverImage: toRequiredText(data.coverImageUrl),
+          coverImage: coverImageUrl,
+          coverImageId,
           publishedAt: publishedAtValue(data.publishedAt, data.status),
           featured: data.featured,
           pinned: data.pinned,

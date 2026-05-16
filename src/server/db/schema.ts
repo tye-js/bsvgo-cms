@@ -40,6 +40,17 @@ export const users = pgTable(
   })
 );
 
+export const appSettings = pgTable("app_settings", {
+  key: varchar("key", { length: 120 }).primaryKey(),
+  value: text("value").notNull(),
+  encrypted: boolean("encrypted").notNull().default(false),
+  updatedBy: uuid("updated_by").references(() => users.id, {
+    onDelete: "set null"
+  }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+
 export const sessions = pgTable(
   "sessions",
   {
@@ -138,6 +149,36 @@ export const tagTranslations = pgTable(
   })
 );
 
+export const mediaAssets = pgTable(
+  "media_assets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    url: text("url").notNull(),
+    altText: varchar("alt_text", { length: 255 }).notNull().default(""),
+    caption: text("caption").notNull().default(""),
+    storageProvider: varchar("storage_provider", { length: 40 })
+      .notNull()
+      .default("external_url"),
+    storageKey: text("storage_key"),
+    originalFilename: varchar("original_filename", { length: 255 }),
+    checksum: varchar("checksum", { length: 128 }),
+    mimeType: varchar("mime_type", { length: 120 }),
+    width: integer("width"),
+    height: integer("height"),
+    fileSize: integer("file_size"),
+    createdBy: uuid("created_by").references(() => users.id, {
+      onDelete: "set null"
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    deletedAt: timestamp("deleted_at")
+  },
+  (table) => ({
+    urlIdx: uniqueIndex("media_assets_url_unique").on(table.url),
+    createdAtIdx: index("media_assets_created_at_idx").on(table.createdAt)
+  })
+);
+
 export const posts = pgTable(
   "posts",
   {
@@ -148,6 +189,9 @@ export const posts = pgTable(
       .references(() => categories.id, { onDelete: "restrict" }),
     featured: boolean("featured").notNull().default(false),
     coverImage: text("cover_image").notNull().default(""),
+    coverImageId: uuid("cover_image_id").references(() => mediaAssets.id, {
+      onDelete: "set null"
+    }),
     publishedAt: timestamp("published_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -162,7 +206,8 @@ export const posts = pgTable(
   (table) => ({
     slugIdx: uniqueIndex("posts_slug_unique").on(table.slug),
     categoryIdx: index("posts_category_idx").on(table.categoryId),
-    statusIdx: index("posts_status_idx").on(table.status)
+    statusIdx: index("posts_status_idx").on(table.status),
+    coverImageIdx: index("posts_cover_image_idx").on(table.coverImageId)
   })
 );
 
@@ -211,7 +256,8 @@ export const postTags = pgTable(
 
 export const usersRelations = relations(users, ({ many }) => ({
   sessions: many(sessions),
-  posts: many(posts)
+  posts: many(posts),
+  mediaAssets: many(mediaAssets)
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -257,8 +303,20 @@ export const postsRelations = relations(posts, ({ one, many }) => ({
     fields: [posts.authorId],
     references: [users.id]
   }),
+  coverAsset: one(mediaAssets, {
+    fields: [posts.coverImageId],
+    references: [mediaAssets.id]
+  }),
   translations: many(postTranslations),
   postTags: many(postTags)
+}));
+
+export const mediaAssetsRelations = relations(mediaAssets, ({ one, many }) => ({
+  createdByUser: one(users, {
+    fields: [mediaAssets.createdBy],
+    references: [users.id]
+  }),
+  posts: many(posts)
 }));
 
 export const postTranslationsRelations = relations(postTranslations, ({ one }) => ({

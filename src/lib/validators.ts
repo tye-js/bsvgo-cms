@@ -16,7 +16,8 @@ export const postSchema = z.object({
   slug: slugSchema,
   categoryId: z.string().uuid("Choose a category"),
   status: z.enum(["draft", "published", "archived"]),
-  coverImageUrl: z.string().trim().url("Enter a valid URL").or(z.literal("")),
+  coverImageUrl: z.string().trim().url("Enter a valid cover image URL").or(z.literal("")),
+  coverImageAlt: z.string().trim().max(255).optional(),
   seoTitle: z.string().trim().max(255).optional(),
   seoDescription: z.string().trim().optional(),
   publishedAt: z.string().optional(),
@@ -31,6 +32,15 @@ export const postSchema = z.object({
   zhTitle: z.string().trim().max(255).optional(),
   zhExcerpt: z.string().trim().optional(),
   zhContent: z.string().trim().optional()
+});
+
+export const newPostSchema = postSchema.extend({
+  enTitle: z.string().trim().optional(),
+  enExcerpt: z.string().trim().optional(),
+  enContent: z.string().trim().optional(),
+  zhTitle: z.string().trim().min(1, "Chinese title is required").max(255),
+  zhExcerpt: z.string().trim().optional(),
+  zhContent: z.string().trim().min(1, "Chinese content is required")
 });
 
 export const categorySchema = z.object({
@@ -57,4 +67,20 @@ export const userSchema = z.object({
   name: z.string().trim().min(1).max(160),
   password: z.string().min(10, "Password must be at least 10 characters"),
   role: z.enum(["admin", "editor"])
+});
+
+export const aiSettingsSchema = z.object({
+  apiKey: z.string().trim().optional(),
+  model: z.string().trim().min(1, "Model is required").max(120),
+  timeoutMs: z.coerce
+    .number()
+    .int()
+    .min(5000, "Timeout must be at least 5000 ms")
+    .max(180000, "Timeout must be no more than 180000 ms")
+});
+
+export const mediaAssetSchema = z.object({
+  url: z.string().trim().url("Enter a valid image URL"),
+  altText: z.string().trim().max(255).optional(),
+  caption: z.string().trim().optional()
 });

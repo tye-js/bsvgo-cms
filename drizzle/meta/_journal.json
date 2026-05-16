@@ -8,6 +8,20 @@
       "when": 1778611500000,
       "tag": "0000_bsvgo_cms_admin_compat",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1778825700000,
+      "tag": "0001_settings_and_media",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778860800000,
+      "tag": "0002_media_upload_metadata",
+      "breakpoints": true
     }
   ]
 }

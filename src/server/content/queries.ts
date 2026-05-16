@@ -6,6 +6,7 @@ import { db } from "@/server/db";
 import {
   categories,
   categoryTranslations,
+  mediaAssets,
   postTags,
   postTranslations,
   posts,
@@ -185,10 +186,19 @@ export async function getPostForEdit(id: string) {
     .from(postTags)
     .where(eq(postTags.postId, id));
 
+  const [coverAsset] = post.coverImageId
+    ? await db
+        .select({ altText: mediaAssets.altText })
+        .from(mediaAssets)
+        .where(eq(mediaAssets.id, post.coverImageId))
+        .limit(1)
+    : [];
+
   return {
     ...post,
     status: post.status as PostStatus,
     coverImageUrl: post.coverImage,
+    coverImageAlt: coverAsset?.altText ?? "",
     seoTitle:
       translations.find((translation) => translation.locale === "en")?.seoTitle ??
       "",
