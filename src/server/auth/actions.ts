@@ -13,6 +13,35 @@ export type LoginState = {
   error?: string;
 };
 
+function getErrorCode(error: unknown) {
+  const candidates = [
+    error,
+    typeof error === "object" && error ? (error as { cause?: unknown }).cause : null
+  ];
+
+  for (const candidate of candidates) {
+    if (
+      typeof candidate === "object" &&
+      candidate &&
+      "code" in candidate &&
+      typeof (candidate as { code?: unknown }).code === "string"
+    ) {
+      return (candidate as { code: string }).code;
+    }
+  }
+
+  return "unknown";
+}
+
+function loginUnavailable(error: unknown): LoginState {
+  console.error(
+    `Login failed because auth storage is unavailable: ${getErrorCode(error)}`
+  );
+  return {
+    error: "Unable to sign in right now. Check database configuration and try again."
+  };
+}
+
 export async function loginAction(
   _previousState: LoginState,
   formData: FormData
@@ -26,27 +55,32 @@ export async function loginAction(
     return { error: parsed.error.issues[0]?.message ?? "Invalid login details" };
   }
 
-  const [user] = await db
-    .select({
-      id: users.id,
-      email: users.email,
-      password: users.password,
-      deletedAt: users.deletedAt
-    })
-    .from(users)
-    .where(eq(sql`lower(${users.email})`, parsed.data.email.toLowerCase()))
-    .limit(1);
+  try {
+    const [user] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        password: users.password,
+        deletedAt: users.deletedAt
+      })
+      .from(users)
+      .where(eq(sql`lower(${users.email})`, parsed.data.email.toLowerCase()))
+      .limit(1);
 
-  if (!user || user.deletedAt) {
-    return { error: "Invalid email or password" };
+    if (!user || user.deletedAt) {
+      return { error: "Invalid email or password" };
+    }
+
+    const isValid = await verifyPassword(user.password, parsed.data.password);
+    if (!isValid) {
+      return { error: "Invalid email or password" };
+    }
+
+    await createSession(user.id);
+  } catch (error) {
+    return loginUnavailable(error);
   }
 
-  const isValid = await verifyPassword(user.password, parsed.data.password);
-  if (!isValid) {
-    return { error: "Invalid email or password" };
-  }
-
-  await createSession(user.id);
   redirect("/dashboard");
 }
 

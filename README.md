@@ -40,7 +40,7 @@ npm run db:seed
 npm run dev
 ```
 
-Open `http://localhost:3000/login` and sign in with the seeded admin account. Then open Settings and save the OpenAI API key/model used for English generation.
+Open `http://localhost:3100/login` and sign in with the seeded admin account. Then open Settings and save the OpenAI API key/model used for English generation.
 
 ## Commands
 
@@ -110,7 +110,7 @@ cp .env.example .env
 
 Edit `.env` with the real PostgreSQL connection and secrets.
 
-For production uploads, keep files outside the git checkout:
+For production uploads, keep files outside the git checkout and use an absolute public media URL so saved image records include the domain prefix:
 
 ```bash
 UPLOAD_DIR=/var/www/bsvgo-cms-uploads
@@ -166,6 +166,9 @@ Optional GitHub repository variables:
 - `APP_BRANCH`: branch to deploy, defaults to `main`
 - `PM2_APP_NAME`: PM2 process name, defaults to `bsvgo-cms`
 - `APP_PORT`: app port, defaults to `3100`
+- `UPLOAD_DIR`: persistent upload directory on the VPS, for example `/var/www/bsvgo-cms-uploads`
+- `MEDIA_PUBLIC_BASE_URL`: public upload URL, for example `https://cms.bsvgo.com/uploads`
+- `MAX_UPLOAD_SIZE_MB`: upload size limit in MB, defaults to `5`
 
 AI generation is configured inside the CMS Settings page after deployment, not in GitHub Secrets.
 

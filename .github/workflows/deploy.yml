@@ -90,13 +90,16 @@ jobs:
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           ADMIN_NAME: ${{ secrets.ADMIN_NAME }}
           NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
+          UPLOAD_DIR: ${{ vars.UPLOAD_DIR || '' }}
+          MEDIA_PUBLIC_BASE_URL: ${{ vars.MEDIA_PUBLIC_BASE_URL || '' }}
+          MAX_UPLOAD_SIZE_MB: ${{ vars.MAX_UPLOAD_SIZE_MB || '' }}
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
           fingerprint: ${{ secrets.VPS_SSH_FINGERPRINT }}
-          envs: APP_DIR,APP_BRANCH,PM2_APP_NAME,APP_PORT,GH_REPOSITORY,GH_TOKEN,DATABASE_URL,SESSION_SECRET,ADMIN_EMAIL,ADMIN_PASSWORD,ADMIN_NAME,NEXT_PUBLIC_SITE_URL
+          envs: APP_DIR,APP_BRANCH,PM2_APP_NAME,APP_PORT,GH_REPOSITORY,GH_TOKEN,DATABASE_URL,SESSION_SECRET,ADMIN_EMAIL,ADMIN_PASSWORD,ADMIN_NAME,NEXT_PUBLIC_SITE_URL,UPLOAD_DIR,MEDIA_PUBLIC_BASE_URL,MAX_UPLOAD_SIZE_MB
           script: |
             set -euo pipefail
 
@@ -149,6 +152,30 @@ jobs:
               } > .env
               chmod 600 .env
             fi
+
+            set_env_var() {
+              key="$1"
+              value="$2"
+
+              if [ -z "$value" ]; then
+                return 0
+              fi
+
+              tmp_file="$(mktemp)"
+              if grep -q "^${key}=" .env; then
+                awk -v key="$key" -v value="$value" 'BEGIN { prefix = key "=" } index($0, prefix) == 1 { print prefix value; next } { print }' .env > "$tmp_file"
+                cat "$tmp_file" > .env
+              else
+                printf '%s=%s\n' "$key" "$value" >> .env
+              fi
+              rm -f "$tmp_file"
+            }
+
+            set_env_var "UPLOAD_DIR" "${UPLOAD_DIR:-}"
+            set_env_var "MEDIA_PUBLIC_BASE_URL" "${MEDIA_PUBLIC_BASE_URL:-}"
+            set_env_var "MAX_UPLOAD_SIZE_MB" "${MAX_UPLOAD_SIZE_MB:-}"
+            set_env_var "NEXT_PUBLIC_SITE_URL" "${NEXT_PUBLIC_SITE_URL:-}"
+            chmod 600 .env
 
             node --version
             npm --version

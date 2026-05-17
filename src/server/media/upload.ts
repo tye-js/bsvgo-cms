@@ -32,6 +32,24 @@ function uploadRoot() {
   );
 }
 
+function normalizePublicOrigin(origin?: string) {
+  const trimmedOrigin = origin?.trim();
+  if (!trimmedOrigin) {
+    return undefined;
+  }
+
+  try {
+    const url = new URL(trimmedOrigin);
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      return url.origin;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+}
+
 function mediaBaseUrl(publicOrigin?: string) {
   const configuredBase = process.env.MEDIA_PUBLIC_BASE_URL?.trim() || "/uploads";
 
@@ -39,11 +57,24 @@ function mediaBaseUrl(publicOrigin?: string) {
     return configuredBase;
   }
 
-  if (configuredBase.startsWith("/") && publicOrigin) {
-    return new URL(configuredBase, publicOrigin).toString();
+  const origin =
+    normalizePublicOrigin(publicOrigin) ??
+    normalizePublicOrigin(process.env.NEXT_PUBLIC_SITE_URL);
+
+  if (origin) {
+    const basePath = configuredBase.startsWith("/")
+      ? configuredBase
+      : `/${configuredBase}`;
+    return new URL(basePath, origin).toString();
   }
 
-  return configuredBase;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "Set MEDIA_PUBLIC_BASE_URL to an absolute URL or configure NEXT_PUBLIC_SITE_URL before uploading images."
+    );
+  }
+
+  return configuredBase.startsWith("/") ? configuredBase : `/${configuredBase}`;
 }
 
 function publicUrl(storageKey: string, publicOrigin?: string) {
