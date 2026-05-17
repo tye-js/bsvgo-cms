@@ -70,7 +70,7 @@ function mediaBaseUrl(publicOrigin?: string) {
 
   if (process.env.NODE_ENV === "production") {
     throw new Error(
-      "Set MEDIA_PUBLIC_BASE_URL to an absolute URL or configure NEXT_PUBLIC_SITE_URL before uploading images."
+      "请将 MEDIA_PUBLIC_BASE_URL 设置为绝对 URL，或先配置 NEXT_PUBLIC_SITE_URL 后再上传图片。"
     );
   }
 
@@ -145,16 +145,16 @@ export async function saveUploadedCoverImage({
 }) {
   const extension = ALLOWED_MIME_TYPES.get(file.type);
   if (!extension) {
-    throw new Error("Only JPEG, PNG, WebP, and AVIF images are allowed.");
+    throw new Error("仅支持 JPEG、PNG、WebP 和 AVIF 图片。");
   }
 
   if (file.size <= 0) {
-    throw new Error("Choose an image file to upload.");
+    throw new Error("请选择要上传的图片文件。");
   }
 
   if (file.size > maxUploadBytes()) {
     throw new Error(
-      `Image must be ${Math.floor(maxUploadBytes() / 1024 / 1024)}MB or smaller.`
+      `图片大小不能超过 ${Math.floor(maxUploadBytes() / 1024 / 1024)}MB。`
     );
   }
 

@@ -36,7 +36,7 @@ export function MarkdownEditor({
             onClick={() => setMode("write")}
           >
             <FileText size={14} />
-            Write
+            编辑
           </button>
           <button
             type="button"
@@ -47,7 +47,7 @@ export function MarkdownEditor({
             onClick={() => setMode("preview")}
           >
             <Eye size={14} />
-            Preview
+            预览
           </button>
         </div>
       </div>
@@ -58,7 +58,7 @@ export function MarkdownEditor({
           value={value}
           onChange={(event) => setValue(event.target.value)}
           className={cn(textareaClassName, "min-h-[360px] font-mono leading-6")}
-          placeholder="Write Markdown content..."
+          placeholder="请输入 Markdown 内容..."
         />
       ) : (
         <>
@@ -67,7 +67,7 @@ export function MarkdownEditor({
             {value.trim() ? (
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown>
             ) : (
-              <p className="text-sm text-slate-500">No content to preview.</p>
+              <p className="text-sm text-slate-500">暂无内容可预览。</p>
             )}
           </div>
         </>

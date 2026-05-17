@@ -48,9 +48,9 @@ export function TagForm({
     <form action={formAction} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-5">
-          <h2 className="font-semibold text-slate-950">Tag details</h2>
+          <h2 className="font-semibold text-slate-950">标签详情</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Tags drive filtering and automatic article recommendations.
+            标签用于筛选和自动推荐相关文章。
           </p>
         </div>
         {state.error ? (
@@ -69,7 +69,7 @@ export function TagForm({
             />
           </Field>
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="English name">
+            <Field label="英文名称">
               <input
                 name="enName"
                 defaultValue={en?.name ?? ""}
@@ -77,18 +77,18 @@ export function TagForm({
                 className={inputClassName}
               />
             </Field>
-            <Field label="Chinese name">
+            <Field label="中文名称">
               <input name="zhName" defaultValue={zh?.name ?? ""} className={inputClassName} />
             </Field>
           </div>
-          <Field label="English description">
+          <Field label="英文描述">
             <textarea
               name="enDescription"
               defaultValue={en?.description ?? ""}
               className={textareaClassName}
             />
           </Field>
-          <Field label="Chinese description">
+          <Field label="中文描述">
             <textarea
               name="zhDescription"
               defaultValue={zh?.description ?? ""}
@@ -102,14 +102,14 @@ export function TagForm({
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="mb-4 font-semibold text-slate-950">SEO</h2>
           <div className="grid gap-4">
-            <Field label="SEO title">
+            <Field label="SEO 标题">
               <input
                 name="seoTitle"
                 defaultValue={tag?.seoTitle ?? ""}
                 className={inputClassName}
               />
             </Field>
-            <Field label="SEO description">
+            <Field label="SEO 描述">
               <textarea
                 name="seoDescription"
                 defaultValue={tag?.seoDescription ?? ""}
@@ -121,7 +121,7 @@ export function TagForm({
         <div className="sticky bottom-4 flex gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
           <SubmitButton className="flex-1">{submitLabel}</SubmitButton>
           <a href="/tags" className={buttonClassName("secondary")}>
-            Cancel
+            取消
           </a>
         </div>
       </aside>

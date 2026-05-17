@@ -67,7 +67,7 @@ function friendlyDatabaseError(error: unknown) {
     message.includes("duplicate key value") ||
     constraints.some((constraint) => constraint.includes("slug"))
   ) {
-    return "A record with the same slug already exists. Use a unique slug and try again.";
+    return "已存在相同 slug 的记录。请使用唯一 slug 后重试。";
   }
 
   if (
@@ -77,10 +77,10 @@ function friendlyDatabaseError(error: unknown) {
     message.includes("timeout exceeded") ||
     message.includes("Connection terminated")
   ) {
-    return "Saving timed out. Check the database connection and try again.";
+    return "保存超时。请检查数据库连接后重试。";
   }
 
-  return "Saving failed. Please try again.";
+  return "保存失败，请重试。";
 }
 
 function friendlyAiError(error: unknown) {
@@ -90,14 +90,14 @@ function friendlyAiError(error: unknown) {
     message.includes("AI API key is not configured") ||
     message.includes("app_settings")
   ) {
-    return "AI is not configured. Open Settings and save the AI API key before creating a post.";
+    return "AI 尚未配置。请先到设置页保存 AI API Key，再创建文章。";
   }
 
   if (message.includes("timed out")) {
-    return "English generation timed out. Please try again.";
+    return "英文生成超时，请重试。";
   }
 
-  return "English generation failed. Please check the AI configuration and try again.";
+  return "英文生成失败。请检查 AI 配置后重试。";
 }
 
 function stringValue(formData: FormData, key: string) {
@@ -211,7 +211,7 @@ export async function createPostAction(
   const user = await requireUser();
   const parsed = newPostSchema.safeParse(postDataFromForm(formData));
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid post data" };
+    return { error: parsed.error.issues[0]?.message ?? "文章数据无效" };
   }
 
   const zhData = parsed.data;
@@ -308,7 +308,7 @@ export async function updatePostAction(
   const user = await requireUser();
   const parsed = postSchema.safeParse(postDataFromForm(formData));
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid post data" };
+    return { error: parsed.error.issues[0]?.message ?? "文章数据无效" };
   }
 
   const data = parsed.data;
@@ -421,7 +421,7 @@ export async function updateCategoryAction(
   });
 
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid category data" };
+    return { error: parsed.error.issues[0]?.message ?? "分类数据无效" };
   }
 
   const data = parsed.data;
@@ -483,7 +483,7 @@ export async function createTagAction(
   });
 
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid tag data" };
+    return { error: parsed.error.issues[0]?.message ?? "标签数据无效" };
   }
 
   const data = parsed.data;
@@ -539,7 +539,7 @@ export async function updateTagAction(
   });
 
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid tag data" };
+    return { error: parsed.error.issues[0]?.message ?? "标签数据无效" };
   }
 
   const data = parsed.data;
@@ -626,7 +626,7 @@ export async function createUserAction(
   });
 
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid user data" };
+    return { error: parsed.error.issues[0]?.message ?? "用户数据无效" };
   }
 
   await db.insert(users).values({

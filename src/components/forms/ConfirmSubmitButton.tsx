@@ -28,7 +28,7 @@ export function ConfirmSubmitButton({
         }
       }}
     >
-      {pending ? "Working..." : children}
+      {pending ? "处理中..." : children}
     </button>
   );
 }

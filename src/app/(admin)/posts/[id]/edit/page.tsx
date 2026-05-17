@@ -31,18 +31,18 @@ export default async function EditPostPage({
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
-            Edit post
+            编辑文章
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Update content, publishing state, SEO fields, and automatic recommendation inputs.
+            更新正文、发布状态、SEO 字段和自动推荐依据。
           </p>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
-          <p className="font-medium text-slate-950">Automatic recommendations</p>
+          <p className="font-medium text-slate-950">自动相关推荐</p>
           <p className="mt-1">
             {related.length
               ? related.map((item) => item.title).join(", ")
-              : "No related published posts yet."}
+              : "暂无相关已发布文章。"}
           </p>
         </div>
       </div>
@@ -52,7 +52,7 @@ export default async function EditPostPage({
         tags={options.tags}
         mediaAssets={mediaAssets}
         post={post}
-        submitLabel="Save changes"
+        submitLabel="保存修改"
       />
     </div>
   );

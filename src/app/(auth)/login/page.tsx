@@ -22,7 +22,7 @@ export default async function LoginPage() {
             BSVgo CMS
           </h1>
           <p className="mt-2 text-sm text-slate-500">
-            Sign in to manage posts, taxonomy, and publishing status.
+            登录后管理文章、分类标签和发布状态。
           </p>
         </div>
         <LoginForm />

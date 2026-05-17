@@ -3,15 +3,15 @@ import { FileText, FolderTree, Tags, Clock } from "lucide-react";
 
 import { Badge } from "@/components/admin/Badge";
 import { ButtonLink } from "@/components/admin/Button";
-import { formatDate } from "@/lib/utils";
+import { formatDate, postStatusLabel } from "@/lib/utils";
 import { getDashboardStats } from "@/server/content/queries";
 
 const statCards = [
-  { label: "Total posts", key: "posts", icon: FileText },
-  { label: "Published", key: "published", icon: Clock },
-  { label: "Drafts", key: "drafts", icon: FileText },
-  { label: "Categories", key: "categories", icon: FolderTree },
-  { label: "Tags", key: "tags", icon: Tags }
+  { label: "文章总数", key: "posts", icon: FileText },
+  { label: "已发布", key: "published", icon: Clock },
+  { label: "草稿", key: "drafts", icon: FileText },
+  { label: "分类", key: "categories", icon: FolderTree },
+  { label: "标签", key: "tags", icon: Tags }
 ] as const;
 
 export default async function DashboardPage() {
@@ -22,14 +22,14 @@ export default async function DashboardPage() {
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
-            Dashboard
+            概览
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Publishing status, taxonomy coverage, and recent editorial updates.
+            查看发布状态、分类标签覆盖和最近编辑动态。
           </p>
         </div>
         <ButtonLink href="/posts/new" variant="primary">
-          New post
+          新建文章
         </ButtonLink>
       </div>
 
@@ -56,21 +56,21 @@ export default async function DashboardPage() {
       <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div>
-            <h2 className="font-semibold text-slate-950">Recently updated</h2>
+            <h2 className="font-semibold text-slate-950">最近更新</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Latest post edits across all statuses.
+              所有状态下最近编辑过的文章。
             </p>
           </div>
-          <ButtonLink href="/posts">View posts</ButtonLink>
+          <ButtonLink href="/posts">查看文章</ButtonLink>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[680px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-5 py-3 font-medium">Title</th>
+                <th className="px-5 py-3 font-medium">标题</th>
                 <th className="px-5 py-3 font-medium">Slug</th>
-                <th className="px-5 py-3 font-medium">Status</th>
-                <th className="px-5 py-3 font-medium">Updated</th>
+                <th className="px-5 py-3 font-medium">状态</th>
+                <th className="px-5 py-3 font-medium">更新时间</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -83,7 +83,7 @@ export default async function DashboardPage() {
                   </td>
                   <td className="px-5 py-3 text-slate-500">{post.slug}</td>
                   <td className="px-5 py-3">
-                    <Badge tone={post.status}>{post.status}</Badge>
+                    <Badge tone={post.status}>{postStatusLabel(post.status)}</Badge>
                   </td>
                   <td className="px-5 py-3 text-slate-500">
                     {formatDate(post.updatedAt)}
@@ -93,7 +93,7 @@ export default async function DashboardPage() {
               {stats.recentPosts.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-5 py-8 text-center text-slate-500">
-                    No posts yet.
+                    暂无文章。
                   </td>
                 </tr>
               ) : null}

@@ -20,13 +20,13 @@ export default async function TagsPage({
     <div className="grid gap-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Tags</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">标签</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Manage multilingual tags used for filtering and related-post recommendations.
+            管理用于筛选和相关文章推荐的多语言标签。
           </p>
         </div>
         <ButtonLink href="/tags/new" variant="primary">
-          New tag
+          新建标签
         </ButtonLink>
       </div>
 
@@ -40,11 +40,11 @@ export default async function TagsPage({
             name="q"
             defaultValue={params.q ?? ""}
             className={`${inputClassName} w-full pl-10`}
-            placeholder="Search name or slug"
+            placeholder="搜索名称或 slug"
           />
         </label>
         <button type="submit" className={buttonClassName("secondary")}>
-          Filter
+          筛选
         </button>
       </form>
 
@@ -53,12 +53,12 @@ export default async function TagsPage({
           <table className="w-full min-w-[820px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-5 py-3 font-medium">English</th>
-                <th className="px-5 py-3 font-medium">Chinese</th>
+                <th className="px-5 py-3 font-medium">英文</th>
+                <th className="px-5 py-3 font-medium">中文</th>
                 <th className="px-5 py-3 font-medium">Slug</th>
-                <th className="px-5 py-3 font-medium">Posts</th>
-                <th className="px-5 py-3 font-medium">Updated</th>
-                <th className="px-5 py-3 font-medium">Actions</th>
+                <th className="px-5 py-3 font-medium">文章数</th>
+                <th className="px-5 py-3 font-medium">更新时间</th>
+                <th className="px-5 py-3 font-medium">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -77,15 +77,15 @@ export default async function TagsPage({
                         href={`/tags/${tag.id}/edit`}
                         className={buttonClassName("secondary", "min-h-8 px-2")}
                       >
-                        Edit
+                        编辑
                       </Link>
                       <form action={deleteTagAction}>
                         <input type="hidden" name="id" value={tag.id} />
                         <ConfirmSubmitButton
-                          message="Delete this tag? It will be detached from posts."
+                          message="确定删除这个标签吗？它会从相关文章中解绑。"
                           className="min-h-8 px-2"
                         >
-                          Delete
+                          删除
                         </ConfirmSubmitButton>
                       </form>
                     </div>
@@ -95,7 +95,7 @@ export default async function TagsPage({
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
-                    No tags found.
+                    未找到标签。
                   </td>
                 </tr>
               ) : null}

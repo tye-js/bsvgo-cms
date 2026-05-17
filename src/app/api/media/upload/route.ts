@@ -34,12 +34,12 @@ export async function POST(request: Request) {
   const caption = formText(formData, "caption");
 
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Choose an image file." }, { status: 400 });
+    return NextResponse.json({ error: "请选择图片文件。" }, { status: 400 });
   }
 
   if (altText.length > 255) {
     return NextResponse.json(
-      { error: "Alt text must be 255 characters or fewer." },
+      { error: "替代文本不能超过 255 个字符。" },
       { status: 400 }
     );
   }
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          error instanceof Error ? error.message : "Image upload failed."
+          error instanceof Error ? error.message : "图片上传失败。"
       },
       { status: 400 }
     );

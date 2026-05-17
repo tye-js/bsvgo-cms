@@ -11,10 +11,10 @@ export default async function CategoriesPage() {
     <div className="grid gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
-          Categories
+          分类
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          Main categories are fixed for BSVgo; editors can update multilingual labels, descriptions, and SEO metadata.
+          BSVgo 的主分类固定，编辑可维护多语言名称、描述和 SEO 信息。
         </p>
       </div>
 
@@ -23,12 +23,12 @@ export default async function CategoriesPage() {
           <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-5 py-3 font-medium">English</th>
-                <th className="px-5 py-3 font-medium">Chinese</th>
+                <th className="px-5 py-3 font-medium">英文</th>
+                <th className="px-5 py-3 font-medium">中文</th>
                 <th className="px-5 py-3 font-medium">Slug</th>
-                <th className="px-5 py-3 font-medium">SEO title</th>
-                <th className="px-5 py-3 font-medium">Updated</th>
-                <th className="px-5 py-3 font-medium">Actions</th>
+                <th className="px-5 py-3 font-medium">SEO 标题</th>
+                <th className="px-5 py-3 font-medium">更新时间</th>
+                <th className="px-5 py-3 font-medium">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -50,7 +50,7 @@ export default async function CategoriesPage() {
                       href={`/categories/${category.id}/edit`}
                       className={buttonClassName("secondary", "min-h-8 px-2")}
                     >
-                      Edit
+                      编辑
                     </Link>
                   </td>
                 </tr>

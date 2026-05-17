@@ -38,7 +38,7 @@ function loginUnavailable(error: unknown): LoginState {
     `Login failed because auth storage is unavailable: ${getErrorCode(error)}`
   );
   return {
-    error: "Unable to sign in right now. Check database configuration and try again."
+    error: "当前无法登录。请检查数据库配置后重试。"
   };
 }
 
@@ -52,7 +52,7 @@ export async function loginAction(
   });
 
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid login details" };
+    return { error: parsed.error.issues[0]?.message ?? "登录信息无效" };
   }
 
   try {
@@ -68,12 +68,12 @@ export async function loginAction(
       .limit(1);
 
     if (!user || user.deletedAt) {
-      return { error: "Invalid email or password" };
+      return { error: "邮箱或密码错误" };
     }
 
     const isValid = await verifyPassword(user.password, parsed.data.password);
     if (!isValid) {
-      return { error: "Invalid email or password" };
+      return { error: "邮箱或密码错误" };
     }
 
     await createSession(user.id);

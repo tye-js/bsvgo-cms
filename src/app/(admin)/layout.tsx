@@ -13,18 +13,18 @@ import {
 
 import { logoutAction } from "@/server/auth/actions";
 import { requireUser } from "@/server/auth/session";
-import { getInitials } from "@/lib/utils";
+import { getInitials, roleLabel } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/posts", label: "Posts", icon: FileText },
-  { href: "/media", label: "Media", icon: Image },
-  { href: "/categories", label: "Categories", icon: FolderTree },
-  { href: "/tags", label: "Tags", icon: Tags },
-  { href: "/users", label: "Admins", icon: Users },
-  { href: "/settings", label: "Settings", icon: Settings }
+  { href: "/dashboard", label: "概览", icon: LayoutDashboard },
+  { href: "/posts", label: "文章", icon: FileText },
+  { href: "/media", label: "媒体库", icon: Image },
+  { href: "/categories", label: "分类", icon: FolderTree },
+  { href: "/tags", label: "标签", icon: Tags },
+  { href: "/users", label: "管理员", icon: Users },
+  { href: "/settings", label: "设置", icon: Settings }
 ];
 
 export default async function AdminLayout({
@@ -45,7 +45,7 @@ export default async function AdminLayout({
           </div>
           <div>
             <p className="text-sm font-semibold text-slate-950">BSVgo CMS</p>
-            <p className="text-xs text-slate-500">Content operations</p>
+            <p className="text-xs text-slate-500">内容管理后台</p>
           </div>
         </div>
         <nav className="grid gap-1 p-3">
@@ -68,13 +68,13 @@ export default async function AdminLayout({
         <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200 bg-white/92 px-5 backdrop-blur">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">
-              Admin workspace
+              管理工作台
             </p>
           </div>
           <div className="flex items-center gap-3">
             <div className="hidden text-right sm:block">
               <p className="text-sm font-medium text-slate-900">{user.name}</p>
-              <p className="text-xs text-slate-500">{user.role}</p>
+              <p className="text-xs text-slate-500">{roleLabel(user.role)}</p>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700">
               {getInitials(user.name)}
@@ -83,7 +83,7 @@ export default async function AdminLayout({
               <button
                 type="submit"
                 className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
-                title="Sign out"
+                title="退出登录"
               >
                 <LogOut size={18} />
               </button>

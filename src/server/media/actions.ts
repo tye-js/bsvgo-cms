@@ -30,7 +30,7 @@ export async function createMediaAssetAction(
   });
 
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid media asset" };
+    return { error: parsed.error.issues[0]?.message ?? "媒体资源无效" };
   }
 
   await upsertMediaAssetFromUrl({

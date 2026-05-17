@@ -10,9 +10,9 @@ export default async function SettingsPage() {
   return (
     <div className="grid gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Settings</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-950">设置</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Operational configuration for AI generation, database access, and media policy.
+          管理 AI 生成、数据库访问和媒体策略等运行配置。
         </p>
       </div>
 
@@ -22,9 +22,9 @@ export default async function SettingsPage() {
             <Bot size={20} />
           </div>
           <div>
-            <h2 className="font-semibold text-slate-950">AI English generation</h2>
+            <h2 className="font-semibold text-slate-950">AI 英文生成</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Used when creating a post from a Chinese source draft. Only admins can change this configuration.
+              用于从中文草稿创建文章时生成英文内容。仅管理员可以修改此配置。
             </p>
           </div>
         </div>
@@ -41,23 +41,23 @@ export default async function SettingsPage() {
       <section className="grid gap-4 lg:grid-cols-3">
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <Database className="mb-4 text-slate-500" size={22} />
-          <h2 className="font-semibold text-slate-950">Database</h2>
+          <h2 className="font-semibold text-slate-950">数据库</h2>
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            Content is stored in PostgreSQL through Drizzle schema and migrations.
+            内容通过 Drizzle schema 和迁移存储在 PostgreSQL 中。
           </p>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <ShieldCheck className="mb-4 text-slate-500" size={22} />
-          <h2 className="font-semibold text-slate-950">Authentication</h2>
+          <h2 className="font-semibold text-slate-950">认证</h2>
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            Sessions are database-backed and password hashes use Argon2id.
+            会话存储在数据库中，密码哈希使用 Argon2id。
           </p>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <Image className="mb-4 text-slate-500" size={22} />
-          <h2 className="font-semibold text-slate-950">Media</h2>
+          <h2 className="font-semibold text-slate-950">媒体</h2>
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            Cover images are stored as managed URL assets. Upload can be added later with local storage or object storage policies.
+            封面图片以受管理的 URL 资源保存，可结合本地存储或对象存储策略使用。
           </p>
         </div>
       </section>

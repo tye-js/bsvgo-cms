@@ -46,9 +46,9 @@ export function CategoryForm({
     <form action={formAction} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-5">
-          <h2 className="font-semibold text-slate-950">Category content</h2>
+          <h2 className="font-semibold text-slate-950">分类内容</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Main categories are fixed; descriptions and SEO fields remain editable.
+            主分类本身固定，描述和 SEO 字段可编辑。
           </p>
         </div>
         {state.error ? (
@@ -58,7 +58,7 @@ export function CategoryForm({
         ) : null}
         <div className="grid gap-5">
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="English name">
+            <Field label="英文名称">
               <input
                 name="enName"
                 defaultValue={en?.name ?? ""}
@@ -66,7 +66,7 @@ export function CategoryForm({
                 className={inputClassName}
               />
             </Field>
-            <Field label="Chinese name">
+            <Field label="中文名称">
               <input
                 name="zhName"
                 defaultValue={zh?.name ?? ""}
@@ -75,14 +75,14 @@ export function CategoryForm({
               />
             </Field>
           </div>
-          <Field label="English description">
+          <Field label="英文描述">
             <textarea
               name="enDescription"
               defaultValue={en?.description ?? ""}
               className={textareaClassName}
             />
           </Field>
-          <Field label="Chinese description">
+          <Field label="中文描述">
             <textarea
               name="zhDescription"
               defaultValue={zh?.description ?? ""}
@@ -99,14 +99,14 @@ export function CategoryForm({
             <Field label="Slug">
               <input value={category.slug} readOnly className={`${inputClassName} bg-slate-50`} />
             </Field>
-            <Field label="SEO title">
+            <Field label="SEO 标题">
               <input
                 name="seoTitle"
                 defaultValue={category.seoTitle ?? ""}
                 className={inputClassName}
               />
             </Field>
-            <Field label="SEO description">
+            <Field label="SEO 描述">
               <textarea
                 name="seoDescription"
                 defaultValue={category.seoDescription ?? ""}
@@ -116,9 +116,9 @@ export function CategoryForm({
           </div>
         </section>
         <div className="sticky bottom-4 flex gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-          <SubmitButton className="flex-1">Save category</SubmitButton>
+          <SubmitButton className="flex-1">保存分类</SubmitButton>
           <a href="/categories" className={buttonClassName("secondary")}>
-            Cancel
+            取消
           </a>
         </div>
       </aside>

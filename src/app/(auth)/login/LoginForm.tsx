@@ -15,7 +15,7 @@ export function LoginForm() {
   return (
     <form action={formAction} className="grid gap-4">
       <label className="grid gap-2 text-sm font-medium text-slate-700">
-        Email
+        邮箱
         <span className="relative">
           <Mail
             size={17}
@@ -33,7 +33,7 @@ export function LoginForm() {
         </span>
       </label>
       <label className="grid gap-2 text-sm font-medium text-slate-700">
-        Password
+        密码
         <span className="relative">
           <Lock
             size={17}
@@ -45,7 +45,7 @@ export function LoginForm() {
             autoComplete="current-password"
             required
             className={`${inputClassName} w-full pl-10`}
-            placeholder="Admin password"
+            placeholder="管理员密码"
           />
         </span>
       </label>
@@ -59,7 +59,7 @@ export function LoginForm() {
         disabled={pending}
         className={buttonClassName("primary", "w-full")}
       >
-        {pending ? "Signing in..." : "Sign in"}
+        {pending ? "登录中..." : "登录"}
       </button>
     </form>
   );

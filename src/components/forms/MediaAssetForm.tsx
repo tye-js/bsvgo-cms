@@ -47,7 +47,7 @@ export function MediaAssetForm({
       };
 
       if (!response.ok || !payload.url) {
-        setUploadError(payload.error ?? "Image upload failed.");
+        setUploadError(payload.error ?? "图片上传失败。");
         return;
       }
 
@@ -60,9 +60,9 @@ export function MediaAssetForm({
     <form action={formAction} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-5">
-          <h2 className="font-semibold text-slate-950">Image details</h2>
+          <h2 className="font-semibold text-slate-950">图片详情</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Store a reusable image URL for article covers. Upload storage can be added later.
+            保存可复用的图片 URL，用于文章封面选择。
           </p>
         </div>
         {state.error ? (
@@ -85,10 +85,10 @@ export function MediaAssetForm({
               className={buttonClassName("secondary")}
               onClick={() => fileInputRef.current?.click()}
             >
-              {isPending ? "Uploading..." : "Upload local image"}
+              {isPending ? "上传中..." : "上传本地图片"}
             </button>
             <p className="mt-2 text-xs text-slate-500">
-              Upload JPEG, PNG, WebP, or AVIF. The generated URL is filled below.
+              支持上传 JPEG、PNG、WebP 或 AVIF，生成的 URL 会自动填入下方。
             </p>
             {uploadError ? (
               <p className="mt-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
@@ -97,7 +97,7 @@ export function MediaAssetForm({
             ) : null}
           </div>
 
-          <Field label="Image URL">
+          <Field label="图片 URL">
             <input
               name="url"
               type="url"
@@ -108,17 +108,17 @@ export function MediaAssetForm({
               placeholder="https://..."
             />
           </Field>
-          <Field label="Alt text">
+          <Field label="替代文本">
             <input
               name="altText"
               value={altText}
               onChange={(event) => setAltText(event.target.value)}
               maxLength={255}
               className={inputClassName}
-              placeholder="Describe the image for accessibility and SEO"
+              placeholder="描述图片内容，便于无障碍访问和 SEO"
             />
           </Field>
-          <Field label="Caption">
+          <Field label="图片说明">
             <textarea
               name="caption"
               value={caption}
@@ -131,15 +131,15 @@ export function MediaAssetForm({
 
       <aside className="grid content-start gap-4">
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-2 font-semibold text-slate-950">Storage policy</h2>
+          <h2 className="mb-2 font-semibold text-slate-950">存储策略</h2>
           <p className="text-sm leading-6 text-slate-500">
-            Current version stores external image URLs in PostgreSQL and links posts through a media asset record.
+            当前版本会把图片 URL 保存到 PostgreSQL，并通过媒体资源记录关联文章。
           </p>
         </section>
         <div className="sticky bottom-4 flex gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-          <SubmitButton className="flex-1">Save image</SubmitButton>
+          <SubmitButton className="flex-1">保存图片</SubmitButton>
           <a href="/media" className={buttonClassName("secondary")}>
-            Cancel
+            取消
           </a>
         </div>
       </aside>

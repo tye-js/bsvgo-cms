@@ -28,7 +28,7 @@ export async function updateAiSettingsAction(
   });
 
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid AI settings" };
+    return { error: parsed.error.issues[0]?.message ?? "AI 设置无效" };
   }
 
   await saveAiSettings({
@@ -40,5 +40,5 @@ export async function updateAiSettingsAction(
   });
 
   revalidatePath("/settings");
-  return { success: "AI settings saved." };
+  return { success: "AI 设置已保存。" };
 }

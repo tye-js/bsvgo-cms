@@ -28,8 +28,8 @@ function usePendingTimeout(pending: boolean, timeoutMs: number) {
 
 export function SubmitButton({
   children,
-  pendingLabel = "Saving...",
-  timeoutLabel = "Save timed out",
+  pendingLabel = "保存中...",
+  timeoutLabel = "保存超时",
   timeoutMs = DEFAULT_TIMEOUT_MS,
   variant = "primary",
   className
@@ -53,7 +53,7 @@ export function SubmitButton({
 
 export function SubmitTimeoutNotice({
   timeoutMs = DEFAULT_TIMEOUT_MS,
-  message = "Saving is taking longer than expected. The request will fail automatically if the server cannot finish soon. Wait for the error before submitting again."
+  message = "保存时间比预期更久。如果服务器无法及时完成，请等待错误提示后再重新提交。"
 }: {
   timeoutMs?: number;
   message?: string;

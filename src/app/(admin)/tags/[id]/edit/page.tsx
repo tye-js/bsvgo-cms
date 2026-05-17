@@ -16,12 +16,12 @@ export default async function EditTagPage({
   return (
     <div className="grid gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Edit tag</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-950">编辑标签</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Update tag metadata used by the blog frontend and recommendation query.
+          更新用于前台筛选和推荐查询的标签元信息。
         </p>
       </div>
-      <TagForm tag={tag} action={updateTagAction.bind(null, id)} submitLabel="Save tag" />
+      <TagForm tag={tag} action={updateTagAction.bind(null, id)} submitLabel="保存标签" />
     </div>
   );
 }

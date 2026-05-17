@@ -81,7 +81,7 @@ export function CoverImageField({
       const payload = (await response.json()) as UploadResponse;
 
       if (!response.ok) {
-        setError(payload.error ?? "Image upload failed.");
+        setError(payload.error ?? "图片上传失败。");
         return;
       }
 
@@ -97,7 +97,7 @@ export function CoverImageField({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={previewUrl}
-          alt={hasCover ? altText || "Post cover" : "Post cover placeholder"}
+          alt={hasCover ? altText || "文章封面" : "文章封面占位图"}
           className={cn(
             "aspect-[16/9] w-full object-cover",
             !hasCover && previewUrl === POST_COVER_PLACEHOLDER_URL ? "opacity-90" : ""
@@ -105,7 +105,7 @@ export function CoverImageField({
         />
         <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-white px-3 py-2">
           <p className="text-xs text-slate-500">
-            {hasCover ? "Custom cover selected" : "Using placeholder cover"}
+            {hasCover ? "已选择自定义封面" : "正在使用占位封面"}
           </p>
           <button
             type="button"
@@ -113,7 +113,7 @@ export function CoverImageField({
             onClick={clearCover}
           >
             <Trash2 size={14} />
-            Clear
+            清除
           </button>
         </div>
       </div>
@@ -121,7 +121,7 @@ export function CoverImageField({
       <input type="hidden" name="coverImageUrl" value={url} />
       <input type="hidden" name="coverImageAlt" value={altText} />
 
-      <Field label="Cover image URL" hint="Optional. Empty posts use the placeholder image.">
+      <Field label="封面图片 URL" hint="可选。留空时文章会使用占位图。">
         <input
           type="url"
           value={url}
@@ -131,7 +131,7 @@ export function CoverImageField({
         />
       </Field>
 
-      <Field label="Alt text" hint="Optional when no custom cover is selected.">
+      <Field label="替代文本" hint="未选择自定义封面时可留空。">
         <input
           value={altText}
           onChange={(event) => setAltText(event.target.value)}
@@ -140,7 +140,7 @@ export function CoverImageField({
         />
       </Field>
 
-      <Field label="Caption">
+      <Field label="图片说明">
         <textarea
           value={caption}
           onChange={(event) => setCaption(event.target.value)}
@@ -149,13 +149,13 @@ export function CoverImageField({
       </Field>
 
       {mediaAssets.length ? (
-        <Field label="Choose from media">
+        <Field label="从媒体库选择">
           <select
             className={inputClassName}
             value=""
             onChange={(event) => chooseAsset(event.target.value)}
           >
-            <option value="">Select an existing image</option>
+            <option value="">选择已有图片</option>
             {mediaAssets.map((asset) => (
               <option key={asset.id} value={asset.id}>
                 {asset.altText || asset.url}
@@ -180,7 +180,7 @@ export function CoverImageField({
           onClick={() => fileInputRef.current?.click()}
         >
           <ImagePlus size={16} />
-          {isPending ? "Uploading..." : "Upload cover"}
+          {isPending ? "上传中..." : "上传封面"}
         </button>
         {error ? (
           <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
