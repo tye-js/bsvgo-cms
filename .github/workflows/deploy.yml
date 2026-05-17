@@ -134,6 +134,7 @@ jobs:
             trap cleanup_git_remote EXIT
 
             git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPOSITORY}.git"
+            git restore --source=HEAD -- next-env.d.ts
             git fetch origin "$APP_BRANCH"
             git checkout "$APP_BRANCH"
             git pull --ff-only origin "$APP_BRANCH"
