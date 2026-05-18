@@ -10,7 +10,8 @@ export const AI_SETTING_KEYS = {
   apiKey: "ai.openai.api_key",
   apiBaseUrl: "ai.openai.api_base_url",
   model: "ai.openai.model",
-  timeoutMs: "ai.openai.timeout_ms"
+  timeoutMs: "ai.openai.timeout_ms",
+  writingStyle: "ai.openai.writing_style"
 } as const;
 
 export const HOMEPAGE_SEO_SETTING_KEYS = {
@@ -43,6 +44,8 @@ const LEGACY_HOMEPAGE_SEO_SETTING_KEYS = {
 export const DEFAULT_AI_API_BASE_URL = "https://api.openai.com/v1";
 export const DEFAULT_AI_MODEL = "gpt-5.3-codex";
 export const DEFAULT_AI_TIMEOUT_MS = 60000;
+export const DEFAULT_AI_WRITING_STYLE =
+  "面向 BSVgo 技术读者，语言清晰、克制、可信。优先使用结构化小标题和短段落，保留关键事实、数据、链接和代码，不夸大、不营销腔。中文正文自然专业，必要时补充背景但不添加未经素材支持的事实。";
 
 type SettingRow = typeof appSettings.$inferSelect;
 
@@ -85,11 +88,15 @@ export async function getAiSettingsForGeneration() {
   const timeoutValue = Number(
     decryptIfNeeded(byKey.get(AI_SETTING_KEYS.timeoutMs)).trim()
   );
+  const writingStyle =
+    decryptIfNeeded(byKey.get(AI_SETTING_KEYS.writingStyle)).trim() ||
+    DEFAULT_AI_WRITING_STYLE;
 
   return {
     apiKey,
     apiBaseUrl,
     model,
+    writingStyle,
     timeoutMs:
       Number.isFinite(timeoutValue) && timeoutValue > 0
         ? timeoutValue
@@ -112,6 +119,9 @@ export async function getSettingsPageData() {
   const timeoutValue =
     decryptIfNeeded(byKey.get(AI_SETTING_KEYS.timeoutMs)).trim() ||
     String(DEFAULT_AI_TIMEOUT_MS);
+  const writingStyle =
+    decryptIfNeeded(byKey.get(AI_SETTING_KEYS.writingStyle)).trim() ||
+    DEFAULT_AI_WRITING_STYLE;
 
   const homepageSeo = {
     enTitle: (
@@ -159,7 +169,8 @@ export async function getSettingsPageData() {
       apiKeyPreview: apiKey ? `${apiKey.slice(0, 7)}...${apiKey.slice(-4)}` : "",
       apiBaseUrl,
       model,
-      timeoutMs: timeoutValue
+      timeoutMs: timeoutValue,
+      writingStyle
     },
     homepageSeo
   };
@@ -283,12 +294,14 @@ export async function saveAiSettings({
   apiBaseUrl,
   model,
   timeoutMs,
+  writingStyle,
   userId
 }: {
   apiKey?: string;
   apiBaseUrl?: string;
   model: string;
   timeoutMs: number;
+  writingStyle?: string;
   userId: string;
 }) {
   const now = new Date();
@@ -311,6 +324,11 @@ export async function saveAiSettings({
     {
       key: AI_SETTING_KEYS.timeoutMs,
       value: String(timeoutMs),
+      encrypted: false
+    },
+    {
+      key: AI_SETTING_KEYS.writingStyle,
+      value: writingStyle?.trim() || DEFAULT_AI_WRITING_STYLE,
       encrypted: false
     }
   ];

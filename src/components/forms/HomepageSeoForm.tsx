@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 
 import { buttonClassName } from "@/components/admin/Button";
 import { Field, inputClassName, textareaClassName } from "@/components/admin/Field";
+import { PendingFieldset } from "@/components/forms/PendingFieldset";
 import { SubmitButton } from "@/components/forms/SubmitButton";
 import type { SeoSuggestionOutput } from "@/server/ai/openai";
 
@@ -174,6 +175,7 @@ export function HomepageSeoForm({
       ) : null}
 
       <form action={saveAction} className="grid gap-5">
+        <PendingFieldset className="gap-5">
         <div className="grid gap-4 lg:grid-cols-2">
           <LocalizedHomepageSeoFields
             localeLabel="英文首页"
@@ -225,6 +227,7 @@ export function HomepageSeoForm({
         <div className="flex flex-wrap gap-2">
           <SubmitButton>保存双语首页 SEO</SubmitButton>
         </div>
+        </PendingFieldset>
       </form>
 
       <form action={generateFormAction}>

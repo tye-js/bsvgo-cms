@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 
 import { buttonClassName } from "@/components/admin/Button";
 import { Field, inputClassName, textareaClassName } from "@/components/admin/Field";
+import { PendingFieldset } from "@/components/forms/PendingFieldset";
 import { SeoSuggestionButton } from "@/components/forms/SeoSuggestionButton";
 import { SubmitButton } from "@/components/forms/SubmitButton";
 import type { Locale } from "@/server/db/schema";
@@ -29,6 +30,7 @@ type TagFormValue = {
 
 type ActionState = {
   error?: string;
+  success?: string;
 };
 
 function translation(tag: TagFormValue | undefined, locale: Locale) {
@@ -70,6 +72,7 @@ export function TagForm({
 
   return (
     <form action={formAction} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <PendingFieldset className="grid gap-6 lg:contents">
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-5">
           <h2 className="font-semibold text-slate-950">标签详情</h2>
@@ -80,6 +83,11 @@ export function TagForm({
         {state.error ? (
           <p className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {state.error}
+          </p>
+        ) : null}
+        {state.success ? (
+          <p className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+            {state.success}
           </p>
         ) : null}
         <div className="grid gap-5">
@@ -203,6 +211,7 @@ export function TagForm({
           </a>
         </div>
       </aside>
+      </PendingFieldset>
     </form>
   );
 }

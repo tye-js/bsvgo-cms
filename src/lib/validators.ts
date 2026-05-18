@@ -97,6 +97,18 @@ export const aiSettingsSchema = z.object({
     .max(180000, "超时时间不能超过 180000 毫秒")
 });
 
+export const writingStyleSchema = z.object({
+  writingStyle: z.string().trim().max(2000, "写作风格不能超过 2000 个字符").optional()
+});
+
+export const aiDraftRewriteSchema = z.object({
+  rawInput: z
+    .string()
+    .trim()
+    .min(20, "请先输入至少 20 个字符的原始素材")
+    .max(20000, "原始素材不能超过 20000 个字符")
+});
+
 export const homepageSeoSchema = z.object({
   enTitle: z.string().trim().max(255).optional(),
   enDescription: z.string().trim().max(500).optional(),

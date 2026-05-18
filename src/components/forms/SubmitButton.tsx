@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { buttonClassName } from "@/components/admin/Button";
+import { cn } from "@/lib/utils";
 
 const DEFAULT_TIMEOUT_MS = 20000;
 
@@ -46,6 +47,15 @@ export function SubmitButton({
 
   return (
     <button type="submit" disabled={pending} className={buttonClassName(variant, className)}>
+      {pending ? (
+        <span
+          aria-hidden="true"
+          className={cn(
+            "h-4 w-4 rounded-full border-2 border-current border-t-transparent",
+            "animate-spin"
+          )}
+        />
+      ) : null}
       {pending ? (timedOut ? timeoutLabel : pendingLabel) : children}
     </button>
   );

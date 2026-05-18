@@ -40,6 +40,7 @@ export default async function SettingsPage() {
           apiBaseUrl={settings.ai.apiBaseUrl}
           model={settings.ai.model}
           timeoutMs={settings.ai.timeoutMs}
+          writingStyle={settings.ai.writingStyle}
         />
       </section>
 

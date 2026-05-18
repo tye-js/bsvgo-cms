@@ -12,6 +12,7 @@ import { upsertMediaAssetFromUrl } from "@/server/media/service";
 
 type ActionState = {
   error?: string;
+  success?: string;
 };
 
 function stringValue(formData: FormData, key: string) {

@@ -1,11 +1,13 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useRef, useState, useTransition } from "react";
+import { Sparkles } from "lucide-react";
 
 import { buttonClassName } from "@/components/admin/Button";
 import { Field, inputClassName, textareaClassName } from "@/components/admin/Field";
 import { CoverImageField } from "@/components/forms/CoverImageField";
 import { MarkdownEditor } from "@/components/forms/MarkdownEditor";
+import { PendingFieldset } from "@/components/forms/PendingFieldset";
 import { SeoSuggestionButton } from "@/components/forms/SeoSuggestionButton";
 import { SubmitButton, SubmitTimeoutNotice } from "@/components/forms/SubmitButton";
 import type { Locale, PostStatus } from "@/server/db/schema";
@@ -59,6 +61,17 @@ type PostFormValue = {
 
 type ActionState = {
   error?: string;
+  success?: string;
+};
+
+type DraftRewriteResult = {
+  title: string;
+  excerpt: string;
+  content: string;
+  slug: string;
+  seoTitle: string;
+  seoDescription: string;
+  error?: string;
 };
 
 function getTranslation(post: PostFormValue | undefined, locale: Locale) {
@@ -95,6 +108,14 @@ export function PostForm({
   const en = getTranslation(post, "en");
   const zh = getTranslation(post, "zh");
   const submitTimeoutMs = generateEnglishFromChinese ? 70000 : undefined;
+  const [rawDraftInput, setRawDraftInput] = useState("");
+  const [draftRewriteError, setDraftRewriteError] = useState("");
+  const [draftRewriteSuccess, setDraftRewriteSuccess] = useState("");
+  const [isRewritingDraft, startDraftRewrite] = useTransition();
+  const [slug, setSlug] = useState(post?.slug ?? "");
+  const [zhTitle, setZhTitle] = useState(zh?.title ?? "");
+  const [zhExcerpt, setZhExcerpt] = useState(zh?.excerpt ?? "");
+  const [zhContent, setZhContent] = useState(zh?.content ?? "");
   const [enSeoTitle, setEnSeoTitle] = useState(
     post?.enSeoTitle ?? en?.seoTitle ?? ""
   );
@@ -110,17 +131,102 @@ export function PostForm({
   const formValue = (name: string) =>
     formRef.current ? String(new FormData(formRef.current).get(name) ?? "") : "";
 
+  function rewriteDraft() {
+    setDraftRewriteError("");
+    setDraftRewriteSuccess("");
+
+    startDraftRewrite(async () => {
+      const response = await fetch("/api/posts/draft/rewrite", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          rawInput: rawDraftInput
+        })
+      });
+      const payload = (await response.json()) as DraftRewriteResult;
+
+      if (!response.ok || payload.error) {
+        setDraftRewriteError(payload.error ?? "AI 改写文章失败。");
+        return;
+      }
+
+      setSlug(payload.slug);
+      setZhTitle(payload.title);
+      setZhExcerpt(payload.excerpt);
+      setZhContent(payload.content);
+      setZhSeoTitle(payload.seoTitle);
+      setZhSeoDescription(payload.seoDescription);
+      setDraftRewriteSuccess("AI 已生成中文草稿，请检查后再创建文章。");
+    });
+  }
+
   return (
     <form
       ref={formRef}
       action={formAction}
       className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]"
     >
+      <PendingFieldset className="grid gap-6 lg:contents">
       <div className="grid gap-6">
         {state.error ? (
           <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {state.error}
           </p>
+        ) : null}
+        {state.success ? (
+          <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+            {state.success}
+          </p>
+        ) : null}
+
+        {generateEnglishFromChinese ? (
+          <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-5">
+              <h2 className="font-semibold text-slate-950">AI 写作助手</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                把未整理的信息、链接、要点或聊天记录放在这里，AI 会按设置页的写作风格整理成中文草稿。
+              </p>
+            </div>
+            <div className="grid gap-4">
+              <Field label="未整理素材">
+                <textarea
+                  value={rawDraftInput}
+                  onChange={(event) => setRawDraftInput(event.target.value)}
+                  disabled={isRewritingDraft}
+                  className={`${textareaClassName} min-h-52`}
+                  placeholder="粘贴资料、灵感、链接、要点、碎片化笔记..."
+                />
+              </Field>
+              {draftRewriteError ? (
+                <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                  {draftRewriteError}
+                </p>
+              ) : null}
+              {draftRewriteSuccess ? (
+                <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                  {draftRewriteSuccess}
+                </p>
+              ) : null}
+              <button
+                type="button"
+                disabled={isRewritingDraft || rawDraftInput.trim().length < 20}
+                className={buttonClassName("secondary", "justify-self-start")}
+                onClick={rewriteDraft}
+              >
+                {isRewritingDraft ? (
+                  <span
+                    aria-hidden="true"
+                    className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                  />
+                ) : (
+                  <Sparkles size={16} />
+                )}
+                {isRewritingDraft ? "AI 正在整理..." : "用 AI 整理成中文草稿"}
+              </button>
+            </div>
+          </section>
         ) : null}
 
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -134,7 +240,8 @@ export function PostForm({
             <Field label="中文标题">
               <input
                 name="zhTitle"
-                defaultValue={zh?.title ?? ""}
+                value={zhTitle}
+                onChange={(event) => setZhTitle(event.target.value)}
                 required={generateEnglishFromChinese}
                 className={inputClassName}
               />
@@ -142,7 +249,8 @@ export function PostForm({
             <Field label="中文摘要">
               <textarea
                 name="zhExcerpt"
-                defaultValue={zh?.excerpt ?? ""}
+                value={zhExcerpt}
+                onChange={(event) => setZhExcerpt(event.target.value)}
                 className={textareaClassName}
               />
             </Field>
@@ -150,7 +258,8 @@ export function PostForm({
               name="zhContent"
               label="中文正文"
               required={generateEnglishFromChinese}
-              defaultValue={zh?.content ?? ""}
+              value={zhContent}
+              onChange={setZhContent}
             />
           </div>
         </section>
@@ -209,7 +318,8 @@ export function PostForm({
             <Field label="Slug">
               <input
                 name="slug"
-                defaultValue={post?.slug ?? ""}
+                value={slug}
+                onChange={(event) => setSlug(event.target.value)}
                 required
                 className={inputClassName}
                 placeholder="my-article-slug"
@@ -393,6 +503,14 @@ export function PostForm({
                 {state.error}
               </p>
             ) : null}
+            {state.success ? (
+              <p
+                role="status"
+                className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700"
+              >
+                {state.success}
+              </p>
+            ) : null}
             <SubmitTimeoutNotice
               timeoutMs={submitTimeoutMs}
               message={
@@ -415,6 +533,7 @@ export function PostForm({
           </a>
         </div>
       </aside>
+      </PendingFieldset>
     </form>
   );
 }

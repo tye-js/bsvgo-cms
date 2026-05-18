@@ -30,6 +30,7 @@ import { upsertMediaAssetFromUrlWithClient } from "@/server/media/service";
 
 type ActionState = {
   error?: string;
+  success?: string;
 };
 
 const POST_WRITE_TIMEOUT = sql`set local statement_timeout = '15s'`;
@@ -377,7 +378,7 @@ export async function updatePostAction(
 
   revalidatePath("/posts");
   revalidatePath(`/posts/${id}/edit`);
-  return {};
+  return { success: "文章已保存。" };
 }
 
 export async function deletePostAction(formData: FormData) {
@@ -486,7 +487,7 @@ export async function updateCategoryAction(
 
   revalidatePath("/categories");
   revalidatePath(`/categories/${id}/edit`);
-  return {};
+  return { success: "分类已保存。" };
 }
 
 export async function createTagAction(
@@ -635,7 +636,7 @@ export async function updateTagAction(
 
   revalidatePath("/tags");
   revalidatePath(`/tags/${id}/edit`);
-  return {};
+  return { success: "标签已保存。" };
 }
 
 export async function deleteTagAction(formData: FormData) {

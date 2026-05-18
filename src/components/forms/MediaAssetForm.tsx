@@ -4,10 +4,12 @@ import { useActionState, useRef, useState, useTransition } from "react";
 
 import { buttonClassName } from "@/components/admin/Button";
 import { Field, inputClassName, textareaClassName } from "@/components/admin/Field";
+import { PendingFieldset } from "@/components/forms/PendingFieldset";
 import { SubmitButton } from "@/components/forms/SubmitButton";
 
 type ActionState = {
   error?: string;
+  success?: string;
 };
 
 export function MediaAssetForm({
@@ -24,11 +26,13 @@ export function MediaAssetForm({
   const [altText, setAltText] = useState("");
   const [caption, setCaption] = useState("");
   const [uploadError, setUploadError] = useState("");
+  const [uploadSuccess, setUploadSuccess] = useState("");
   const [isPending, startTransition] = useTransition();
 
   function uploadFile(file: File | undefined) {
     if (!file) return;
     setUploadError("");
+    setUploadSuccess("");
 
     startTransition(async () => {
       const formData = new FormData();
@@ -53,11 +57,13 @@ export function MediaAssetForm({
 
       setUrl(payload.url);
       setAltText(payload.altText ?? altText);
+      setUploadSuccess("图片上传成功，URL 已自动填入。");
     });
   }
 
   return (
     <form action={formAction} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <PendingFieldset className="grid gap-6 lg:contents">
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-5">
           <h2 className="font-semibold text-slate-950">图片详情</h2>
@@ -68,6 +74,11 @@ export function MediaAssetForm({
         {state.error ? (
           <p className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
             {state.error}
+          </p>
+        ) : null}
+        {state.success ? (
+          <p className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+            {state.success}
           </p>
         ) : null}
         <div className="grid gap-5">
@@ -85,6 +96,12 @@ export function MediaAssetForm({
               className={buttonClassName("secondary")}
               onClick={() => fileInputRef.current?.click()}
             >
+              {isPending ? (
+                <span
+                  aria-hidden="true"
+                  className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                />
+              ) : null}
               {isPending ? "上传中..." : "上传本地图片"}
             </button>
             <p className="mt-2 text-xs text-slate-500">
@@ -93,6 +110,11 @@ export function MediaAssetForm({
             {uploadError ? (
               <p className="mt-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
                 {uploadError}
+              </p>
+            ) : null}
+            {uploadSuccess ? (
+              <p className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+                {uploadSuccess}
               </p>
             ) : null}
           </div>
@@ -143,6 +165,7 @@ export function MediaAssetForm({
           </a>
         </div>
       </aside>
+      </PendingFieldset>
     </form>
   );
 }

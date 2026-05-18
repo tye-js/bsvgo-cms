@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 
-import { aiSettingsSchema, homepageSeoSchema } from "@/lib/validators";
+import {
+  aiSettingsSchema,
+  homepageSeoSchema,
+  writingStyleSchema
+} from "@/lib/validators";
 import { generateSeoSuggestion } from "@/server/ai/openai";
 import { requireRole } from "@/server/auth/session";
 import {
@@ -30,9 +34,15 @@ export async function updateAiSettingsAction(
     model: stringValue(formData, "model"),
     timeoutMs: stringValue(formData, "timeoutMs")
   });
+  const parsedStyle = writingStyleSchema.safeParse({
+    writingStyle: stringValue(formData, "writingStyle")
+  });
 
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "AI 设置无效" };
+  }
+  if (!parsedStyle.success) {
+    return { error: parsedStyle.error.issues[0]?.message ?? "AI 写作风格无效" };
   }
 
   await saveAiSettings({
@@ -40,6 +50,7 @@ export async function updateAiSettingsAction(
     apiBaseUrl: parsed.data.apiBaseUrl,
     model: parsed.data.model,
     timeoutMs: parsed.data.timeoutMs,
+    writingStyle: parsedStyle.data.writingStyle,
     userId: user.id
   });
 

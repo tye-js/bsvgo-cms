@@ -2,7 +2,8 @@
 
 import { useActionState } from "react";
 
-import { Field, inputClassName } from "@/components/admin/Field";
+import { Field, inputClassName, textareaClassName } from "@/components/admin/Field";
+import { PendingFieldset } from "@/components/forms/PendingFieldset";
 import { SubmitButton } from "@/components/forms/SubmitButton";
 
 type ActionState = {
@@ -16,7 +17,8 @@ export function AiSettingsForm({
   apiKeyPreview,
   apiBaseUrl,
   model,
-  timeoutMs
+  timeoutMs,
+  writingStyle
 }: {
   action: (
     previousState: ActionState,
@@ -27,6 +29,7 @@ export function AiSettingsForm({
   apiBaseUrl: string;
   model: string;
   timeoutMs: string;
+  writingStyle: string;
 }) {
   const [state, formAction] = useActionState(action, {});
 
@@ -43,6 +46,7 @@ export function AiSettingsForm({
         </p>
       ) : null}
 
+      <PendingFieldset className="gap-5">
       <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
         API Key 状态：{" "}
         <span className="font-medium text-slate-900">
@@ -99,9 +103,23 @@ export function AiSettingsForm({
         </Field>
       </div>
 
+      <Field
+        label="AI 写作风格"
+        hint="用于「未整理素材改写成文章」和后续文章增强。建议写清楚语气、结构、受众和禁忌。"
+      >
+        <textarea
+          name="writingStyle"
+          defaultValue={writingStyle}
+          maxLength={2000}
+          className={textareaClassName}
+          placeholder="例如：面向技术读者，客观清晰，短段落，多用小标题，不夸大..."
+        />
+      </Field>
+
       <div>
         <SubmitButton>保存 AI 设置</SubmitButton>
       </div>
+      </PendingFieldset>
     </form>
   );
 }

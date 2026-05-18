@@ -41,6 +41,7 @@ export function CoverImageField({
   const [altText, setAltText] = useState(defaultAlt ?? "");
   const [caption, setCaption] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [isPending, startTransition] = useTransition();
   const previewUrl = coverImageUrl(url);
   const hasCover = Boolean(url.trim());
@@ -50,6 +51,7 @@ export function CoverImageField({
     setAltText("");
     setCaption("");
     setError("");
+    setSuccess("");
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -62,11 +64,13 @@ export function CoverImageField({
     setAltText(asset.altText);
     setCaption(asset.caption);
     setError("");
+    setSuccess("已选择媒体库图片。");
   }
 
   function uploadFile(file: File | undefined) {
     if (!file) return;
     setError("");
+    setSuccess("");
 
     startTransition(async () => {
       const formData = new FormData();
@@ -88,6 +92,7 @@ export function CoverImageField({
       setUrl(payload.url);
       setAltText(payload.altText);
       setError("");
+      setSuccess("封面上传成功，已自动填入文章。");
     });
   }
 
@@ -125,7 +130,8 @@ export function CoverImageField({
         <input
           type="url"
           value={url}
-          onChange={(event) => setUrl(event.target.value)}
+            onChange={(event) => setUrl(event.target.value)}
+          disabled={isPending}
           className={inputClassName}
           placeholder="https://..."
         />
@@ -135,6 +141,7 @@ export function CoverImageField({
         <input
           value={altText}
           onChange={(event) => setAltText(event.target.value)}
+          disabled={isPending}
           maxLength={255}
           className={inputClassName}
         />
@@ -144,6 +151,7 @@ export function CoverImageField({
         <textarea
           value={caption}
           onChange={(event) => setCaption(event.target.value)}
+          disabled={isPending}
           className={textareaClassName}
         />
       </Field>
@@ -153,6 +161,7 @@ export function CoverImageField({
           <select
             className={inputClassName}
             value=""
+            disabled={isPending}
             onChange={(event) => chooseAsset(event.target.value)}
           >
             <option value="">选择已有图片</option>
@@ -171,6 +180,7 @@ export function CoverImageField({
           type="file"
           accept="image/jpeg,image/png,image/webp,image/avif"
           className="hidden"
+          disabled={isPending}
           onChange={(event) => uploadFile(event.target.files?.[0])}
         />
         <button
@@ -180,11 +190,22 @@ export function CoverImageField({
           onClick={() => fileInputRef.current?.click()}
         >
           <ImagePlus size={16} />
+          {isPending ? (
+            <span
+              aria-hidden="true"
+              className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+            />
+          ) : null}
           {isPending ? "上传中..." : "上传封面"}
         </button>
         {error ? (
           <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
             {error}
+          </p>
+        ) : null}
+        {success ? (
+          <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+            {success}
           </p>
         ) : null}
       </div>

@@ -12,15 +12,29 @@ export function MarkdownEditor({
   name,
   defaultValue = "",
   label,
-  required
+  required,
+  value: controlledValue,
+  onChange,
+  disabled = false
 }: {
   name: string;
   defaultValue?: string | null;
   label: string;
   required?: boolean;
+  value?: string;
+  onChange?: (value: string) => void;
+  disabled?: boolean;
 }) {
-  const [value, setValue] = useState(defaultValue ?? "");
+  const [uncontrolledValue, setUncontrolledValue] = useState(defaultValue ?? "");
   const [mode, setMode] = useState<"write" | "preview">("write");
+  const value = controlledValue ?? uncontrolledValue;
+
+  function updateValue(nextValue: string) {
+    if (controlledValue === undefined) {
+      setUncontrolledValue(nextValue);
+    }
+    onChange?.(nextValue);
+  }
 
   return (
     <div className="grid gap-2">
@@ -34,6 +48,7 @@ export function MarkdownEditor({
               mode === "write" ? "bg-slate-100 text-slate-800" : "text-slate-600"
             )}
             onClick={() => setMode("write")}
+            disabled={disabled}
           >
             <FileText size={14} />
             编辑
@@ -45,6 +60,7 @@ export function MarkdownEditor({
               mode === "preview" ? "bg-slate-100 text-slate-800" : "text-slate-600"
             )}
             onClick={() => setMode("preview")}
+            disabled={disabled}
           >
             <Eye size={14} />
             预览
@@ -56,7 +72,8 @@ export function MarkdownEditor({
           name={name}
           required={required}
           value={value}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => updateValue(event.target.value)}
+          disabled={disabled}
           className={cn(textareaClassName, "min-h-[360px] font-mono leading-6")}
           placeholder="请输入 Markdown 内容..."
         />

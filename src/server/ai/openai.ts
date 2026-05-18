@@ -16,6 +16,19 @@ type EnglishPostOutput = {
   seoDescription: string;
 };
 
+type ChineseDraftInput = {
+  rawInput: string;
+};
+
+export type ChineseDraftOutput = {
+  title: string;
+  excerpt: string;
+  content: string;
+  slug: string;
+  seoTitle: string;
+  seoDescription: string;
+};
+
 export type SeoTargetType = "homepage" | "category" | "tag" | "post";
 
 type SeoSuggestionInput = {
@@ -94,6 +107,36 @@ function parseEnglishPost(payload: unknown): EnglishPostOutput {
   }
 
   return output;
+}
+
+function parseChineseDraft(payload: unknown): ChineseDraftOutput {
+  const text = outputText(payload);
+  if (!text) {
+    throw new Error("AI provider did not return generated Chinese draft.");
+  }
+
+  const parsed = JSON.parse(text) as Partial<ChineseDraftOutput>;
+  const output = {
+    title: clean(parsed.title, 255),
+    excerpt: clean(parsed.excerpt, 500),
+    content: clean(parsed.content),
+    slug: clean(parsed.slug, 180)
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .replace(/-{2,}/g, "-"),
+    seoTitle: clean(parsed.seoTitle, 255),
+    seoDescription: clean(parsed.seoDescription, 500)
+  };
+
+  if (!output.title || !output.content) {
+    throw new Error("AI provider returned incomplete Chinese draft.");
+  }
+
+  return {
+    ...output,
+    slug: output.slug || "draft-post"
+  };
 }
 
 function parseSeoSuggestion(payload: unknown): SeoSuggestionOutput {
@@ -259,6 +302,116 @@ export async function generateEnglishPost(
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error(`${providerLabel(apiBaseUrl)} generation timed out. Please try again.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function generateChineseDraft(
+  input: ChineseDraftInput
+): Promise<ChineseDraftOutput> {
+  const { apiKey, apiBaseUrl, model, timeoutMs, writingStyle } =
+    await getAiSettingsForGeneration();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(responsesUrl(apiBaseUrl), {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model,
+        input: [
+          {
+            role: "system",
+            content: [
+              {
+                type: "input_text",
+                text:
+                  "You are the BSVgo CMS Chinese editor. Turn rough notes, links, fragments, or unstructured source material into a polished Simplified Chinese blog draft in Markdown. Follow the configured writing style, preserve facts and technical details, organize messy material into a coherent article, and do not invent unsupported claims."
+              }
+            ]
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: JSON.stringify({
+                  task: "Rewrite unstructured material into a Chinese blog draft.",
+                  writingStyle,
+                  rawInput: input.rawInput
+                })
+              }
+            ]
+          }
+        ],
+        text: {
+          format: {
+            type: "json_schema",
+            name: "chinese_blog_draft",
+            strict: true,
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                title: {
+                  type: "string",
+                  description: "Simplified Chinese article title."
+                },
+                excerpt: {
+                  type: "string",
+                  description: "Simplified Chinese article summary for list pages."
+                },
+                content: {
+                  type: "string",
+                  description: "Simplified Chinese article body in Markdown."
+                },
+                slug: {
+                  type: "string",
+                  description:
+                    "Lowercase English URL slug using only letters, numbers, and hyphens."
+                },
+                seoTitle: {
+                  type: "string",
+                  description: "Simplified Chinese SEO title."
+                },
+                seoDescription: {
+                  type: "string",
+                  description: "Simplified Chinese SEO description."
+                }
+              },
+              required: [
+                "title",
+                "excerpt",
+                "content",
+                "slug",
+                "seoTitle",
+                "seoDescription"
+              ]
+            }
+          }
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `${providerLabel(apiBaseUrl)} request failed: ${response.status} ${errorText}`
+      );
+    }
+
+    return parseChineseDraft(await response.json());
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`${providerLabel(apiBaseUrl)} draft generation timed out.`);
     }
     throw error;
   } finally {
