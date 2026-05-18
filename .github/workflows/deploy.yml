@@ -178,6 +178,26 @@ jobs:
             set_env_var "NEXT_PUBLIC_SITE_URL" "${NEXT_PUBLIC_SITE_URL:-}"
             chmod 600 .env
 
+            load_optional_env_var() {
+              key="$1"
+              value="${!key:-}"
+
+              if [ -z "$value" ] && [ -f .env ]; then
+                value="$(awk -v key="$key" 'BEGIN { prefix = key "=" } index($0, prefix) == 1 { print substr($0, length(prefix) + 1); exit }' .env)"
+              fi
+
+              if [ -n "$value" ]; then
+                export "$key=$value"
+              else
+                unset "$key"
+              fi
+            }
+
+            load_optional_env_var "UPLOAD_DIR"
+            load_optional_env_var "MEDIA_PUBLIC_BASE_URL"
+            load_optional_env_var "MAX_UPLOAD_SIZE_MB"
+            load_optional_env_var "NEXT_PUBLIC_SITE_URL"
+
             node --version
             npm --version
 
