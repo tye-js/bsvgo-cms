@@ -1,6 +1,7 @@
 import { ImagePlus } from "lucide-react";
 
 import { ButtonLink } from "@/components/admin/Button";
+import { CopyButton } from "@/components/admin/CopyButton";
 import { ConfirmSubmitButton } from "@/components/forms/ConfirmSubmitButton";
 import { formatDate } from "@/lib/utils";
 import { deleteMediaAssetAction } from "@/server/media/actions";
@@ -78,15 +79,22 @@ export default async function MediaPage() {
                     {formatDate(asset.createdAt)}
                   </td>
                   <td className="px-5 py-4">
-                    <form action={deleteMediaAssetAction}>
-                      <input type="hidden" name="id" value={asset.id} />
-                      <ConfirmSubmitButton
-                        message="确定从媒体库删除这张图片吗？已有文章会保留当前封面 URL。"
+                    <div className="flex flex-wrap gap-2">
+                      <CopyButton
+                        value={asset.url}
+                        label="复制来源"
                         className="min-h-8 px-2"
-                      >
-                        删除
-                      </ConfirmSubmitButton>
-                    </form>
+                      />
+                      <form action={deleteMediaAssetAction}>
+                        <input type="hidden" name="id" value={asset.id} />
+                        <ConfirmSubmitButton
+                          message="确定从媒体库删除这张图片吗？已有文章会保留当前封面 URL。"
+                          className="min-h-8 px-2"
+                        >
+                          删除
+                        </ConfirmSubmitButton>
+                      </form>
+                    </div>
                   </td>
                 </tr>
               ))}

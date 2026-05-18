@@ -101,13 +101,36 @@ export const writingStyleSchema = z.object({
   writingStyle: z.string().trim().max(2000, "写作风格不能超过 2000 个字符").optional()
 });
 
-export const aiDraftRewriteSchema = z.object({
-  rawInput: z
-    .string()
-    .trim()
-    .min(20, "请先输入至少 20 个字符的原始素材")
-    .max(20000, "原始素材不能超过 20000 个字符")
-});
+export const aiDraftRewriteSchema = z
+  .object({
+    rawInput: z.string().trim().max(20000, "原始素材不能超过 20000 个字符").optional(),
+    sourceUrl: z
+      .string()
+      .trim()
+      .url("请输入有效的网页或视频链接")
+      .refine((value) => {
+        if (!value) return true;
+        try {
+          const url = new URL(value);
+          return url.protocol === "http:" || url.protocol === "https:";
+        } catch {
+          return false;
+        }
+      }, "链接必须以 http:// 或 https:// 开头")
+      .or(z.literal(""))
+      .optional()
+  })
+  .refine(
+    (value) =>
+      Boolean(value.sourceUrl?.trim()) || Boolean(value.rawInput?.trim().length),
+    "请先输入原始素材，或提供一个网页/视频链接"
+  )
+  .refine(
+    (value) =>
+      Boolean(value.sourceUrl?.trim()) ||
+      Boolean(value.rawInput && value.rawInput.trim().length >= 20),
+    "如果不提供链接，请先输入至少 20 个字符的原始素材"
+  );
 
 export const homepageSeoSchema = z.object({
   enTitle: z.string().trim().max(255).optional(),

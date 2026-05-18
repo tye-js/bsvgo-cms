@@ -109,6 +109,7 @@ export function PostForm({
   const zh = getTranslation(post, "zh");
   const submitTimeoutMs = generateEnglishFromChinese ? 70000 : undefined;
   const [rawDraftInput, setRawDraftInput] = useState("");
+  const [sourceUrl, setSourceUrl] = useState("");
   const [draftRewriteError, setDraftRewriteError] = useState("");
   const [draftRewriteSuccess, setDraftRewriteSuccess] = useState("");
   const [isRewritingDraft, startDraftRewrite] = useTransition();
@@ -142,7 +143,8 @@ export function PostForm({
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          rawInput: rawDraftInput
+          rawInput: rawDraftInput,
+          sourceUrl
         })
       });
       const payload = (await response.json()) as DraftRewriteResult;
@@ -190,6 +192,19 @@ export function PostForm({
               </p>
             </div>
             <div className="grid gap-4">
+              <Field
+                label="网页或视频链接"
+                hint="可选。视频页会尽量抓取字幕，优先英文字幕或英文自动字幕；抓不到时会回退到网页标题、描述和可见文本。"
+              >
+                <input
+                  type="url"
+                  value={sourceUrl}
+                  onChange={(event) => setSourceUrl(event.target.value)}
+                  disabled={isRewritingDraft}
+                  className={inputClassName}
+                  placeholder="https://..."
+                />
+              </Field>
               <Field label="未整理素材">
                 <textarea
                   value={rawDraftInput}
@@ -211,7 +226,10 @@ export function PostForm({
               ) : null}
               <button
                 type="button"
-                disabled={isRewritingDraft || rawDraftInput.trim().length < 20}
+                disabled={
+                  isRewritingDraft ||
+                  (!sourceUrl.trim() && rawDraftInput.trim().length < 20)
+                }
                 className={buttonClassName("secondary", "justify-self-start")}
                 onClick={rewriteDraft}
               >

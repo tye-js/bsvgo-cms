@@ -17,7 +17,11 @@ type EnglishPostOutput = {
 };
 
 type ChineseDraftInput = {
-  rawInput: string;
+  rawInput?: string;
+  sourceUrl?: string;
+  sourceTitle?: string;
+  sourceDescription?: string;
+  sourceContent?: string;
 };
 
 export type ChineseDraftOutput = {
@@ -346,7 +350,13 @@ export async function generateChineseDraft(
                 text: JSON.stringify({
                   task: "Rewrite unstructured material into a Chinese blog draft.",
                   writingStyle,
-                  rawInput: input.rawInput
+                  rawInput: input.rawInput ?? "",
+                  source: {
+                    url: input.sourceUrl ?? "",
+                    title: input.sourceTitle ?? "",
+                    description: input.sourceDescription ?? "",
+                    content: input.sourceContent ?? ""
+                  }
                 })
               }
             ]
