@@ -112,12 +112,22 @@ export function TagForm({
               />
             </Field>
             <Field label="中文名称">
-              <input
-                name="zhName"
-                value={zhName}
-                onChange={(event) => setZhName(event.target.value)}
-                className={inputClassName}
-              />
+              <div className="grid gap-2">
+                <input
+                  name="zhName"
+                  value={zhName}
+                  onChange={(event) => setZhName(event.target.value)}
+                  required
+                  className={inputClassName}
+                />
+                <button
+                  type="button"
+                  className={buttonClassName("ghost", "min-h-8 justify-self-start px-2 text-xs")}
+                  onClick={() => setZhName(enName)}
+                >
+                  中文同英文
+                </button>
+              </div>
             </Field>
           </div>
           <Field label="英文描述">

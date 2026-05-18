@@ -18,6 +18,7 @@ import { db } from "@/server/db";
 import {
   categories,
   categoryTranslations,
+  mediaAssets,
   postTags,
   postTranslations,
   posts,
@@ -26,7 +27,10 @@ import {
   users,
   type Locale
 } from "@/server/db/schema";
-import { upsertMediaAssetFromUrlWithClient } from "@/server/media/service";
+import {
+  getMediaAssetWithClient,
+  upsertMediaAssetFromUrlWithClient
+} from "@/server/media/service";
 
 type ActionState = {
   error?: string;
@@ -114,6 +118,7 @@ function postDataFromForm(formData: FormData) {
     slug: stringValue(formData, "slug"),
     categoryId: stringValue(formData, "categoryId"),
     status: stringValue(formData, "status"),
+    coverImageId: stringValue(formData, "coverImageId"),
     coverImageUrl: stringValue(formData, "coverImageUrl"),
     coverImageAlt: stringValue(formData, "coverImageAlt"),
     enSeoTitle: stringValue(formData, "enSeoTitle"),
@@ -148,6 +153,63 @@ function publishedAtValue(value: string | undefined, status: string) {
   if (value) return new Date(value);
   if (status === "published") return new Date();
   return null;
+}
+
+async function resolveCoverImage(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  {
+    coverImageId,
+    coverImageUrl,
+    coverImageAlt,
+    fallbackText,
+    userId
+  }: {
+    coverImageId?: string;
+    coverImageUrl?: string;
+    coverImageAlt?: string;
+    fallbackText: string;
+    userId: string;
+  }
+) {
+  const requestedId = toNullable(coverImageId);
+  const requestedUrl = toRequiredText(coverImageUrl);
+  const altText = toRequiredText(coverImageAlt) || fallbackText;
+
+  if (requestedId) {
+    const asset = await getMediaAssetWithClient(tx, requestedId);
+    if (asset) {
+      if (toRequiredText(asset.altText) !== altText) {
+        await tx
+          .update(mediaAssets)
+          .set({ altText, updatedAt: new Date() })
+          .where(eq(mediaAssets.id, asset.id));
+      }
+
+      return {
+        coverImage: asset.url,
+        coverImageId: asset.id
+      };
+    }
+  }
+
+  if (!requestedUrl) {
+    return {
+      coverImage: "",
+      coverImageId: null
+    };
+  }
+
+  const mediaAssetId = await upsertMediaAssetFromUrlWithClient(tx, {
+    url: requestedUrl,
+    altText,
+    caption: fallbackText,
+    userId
+  });
+
+  return {
+    coverImage: requestedUrl,
+    coverImageId: mediaAssetId
+  };
 }
 
 async function upsertPostTranslation(
@@ -251,16 +313,14 @@ export async function createPostAction(
   try {
     const [created] = await db.transaction(async (tx) => {
       await tx.execute(POST_WRITE_TIMEOUT);
-      const coverImageUrl = toRequiredText(data.coverImageUrl);
       const coverImageText = data.enTitle || data.zhTitle || data.slug;
-      const coverImageId = coverImageUrl
-        ? await upsertMediaAssetFromUrlWithClient(tx, {
-            url: coverImageUrl,
-            altText: data.coverImageAlt || coverImageText,
-            caption: coverImageText,
-            userId: user.id
-          })
-        : null;
+      const coverImage = await resolveCoverImage(tx, {
+        coverImageId: data.coverImageId,
+        coverImageUrl: data.coverImageUrl,
+        coverImageAlt: data.coverImageAlt,
+        fallbackText: coverImageText,
+        userId: user.id
+      });
 
       const [post] = await tx
         .insert(posts)
@@ -269,8 +329,8 @@ export async function createPostAction(
           categoryId: data.categoryId,
           authorId: user.id,
           status: data.status,
-          coverImage: coverImageUrl,
-          coverImageId,
+          coverImage: coverImage.coverImage,
+          coverImageId: coverImage.coverImageId,
           publishedAt: publishedAtValue(data.publishedAt, data.status),
           featured: data.featured,
           pinned: data.pinned,
@@ -328,16 +388,14 @@ export async function updatePostAction(
   try {
     await db.transaction(async (tx) => {
       await tx.execute(POST_WRITE_TIMEOUT);
-      const coverImageUrl = toRequiredText(data.coverImageUrl);
       const coverImageText = data.enTitle || data.zhTitle || data.slug;
-      const coverImageId = coverImageUrl
-        ? await upsertMediaAssetFromUrlWithClient(tx, {
-            url: coverImageUrl,
-            altText: data.coverImageAlt || coverImageText,
-            caption: coverImageText,
-            userId: user.id
-          })
-        : null;
+      const coverImage = await resolveCoverImage(tx, {
+        coverImageId: data.coverImageId,
+        coverImageUrl: data.coverImageUrl,
+        coverImageAlt: data.coverImageAlt,
+        fallbackText: coverImageText,
+        userId: user.id
+      });
 
       await tx
         .update(posts)
@@ -345,8 +403,8 @@ export async function updatePostAction(
           slug: data.slug,
           categoryId: data.categoryId,
           status: data.status,
-          coverImage: coverImageUrl,
-          coverImageId,
+          coverImage: coverImage.coverImage,
+          coverImageId: coverImage.coverImageId,
           publishedAt: publishedAtValue(data.publishedAt, data.status),
           featured: data.featured,
           pinned: data.pinned,
@@ -540,16 +598,14 @@ export async function createTagAction(
       seoDescription: toRequiredText(data.enSeoDescription)
     });
 
-    if (data.zhName || data.zhDescription || data.zhSeoTitle || data.zhSeoDescription) {
-      await tx.insert(tagTranslations).values({
-        tagId: tag.id,
-        locale: "zh",
-        name: data.zhName || data.enName,
-        description: toRequiredText(data.zhDescription),
-        seoTitle: toRequiredText(data.zhSeoTitle),
-        seoDescription: toRequiredText(data.zhSeoDescription)
-      });
-    }
+    await tx.insert(tagTranslations).values({
+      tagId: tag.id,
+      locale: "zh",
+      name: data.zhName,
+      description: toRequiredText(data.zhDescription),
+      seoTitle: toRequiredText(data.zhSeoTitle),
+      seoDescription: toRequiredText(data.zhSeoDescription)
+    });
 
     return [tag];
   });
@@ -614,31 +670,25 @@ export async function updateTagAction(
         }
       });
 
-    if (data.zhName || data.zhDescription || data.zhSeoTitle || data.zhSeoDescription) {
-      await tx
-        .insert(tagTranslations)
-        .values({
-          tagId: id,
-          locale: "zh",
-          name: data.zhName || data.enName,
+    await tx
+      .insert(tagTranslations)
+      .values({
+        tagId: id,
+        locale: "zh",
+        name: data.zhName,
+        description: toRequiredText(data.zhDescription),
+        seoTitle: toRequiredText(data.zhSeoTitle),
+        seoDescription: toRequiredText(data.zhSeoDescription)
+      })
+      .onConflictDoUpdate({
+        target: [tagTranslations.tagId, tagTranslations.locale],
+        set: {
+          name: data.zhName,
           description: toRequiredText(data.zhDescription),
           seoTitle: toRequiredText(data.zhSeoTitle),
           seoDescription: toRequiredText(data.zhSeoDescription)
-        })
-        .onConflictDoUpdate({
-          target: [tagTranslations.tagId, tagTranslations.locale],
-          set: {
-            name: data.zhName || data.enName,
-            description: toRequiredText(data.zhDescription),
-            seoTitle: toRequiredText(data.zhSeoTitle),
-            seoDescription: toRequiredText(data.zhSeoDescription)
-          }
-        });
-    } else {
-      await tx
-        .delete(tagTranslations)
-        .where(and(eq(tagTranslations.tagId, id), eq(tagTranslations.locale, "zh")));
-    }
+        }
+      });
   });
 
   revalidatePath("/tags");

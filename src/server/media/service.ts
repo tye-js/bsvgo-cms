@@ -45,6 +45,24 @@ export async function getMediaAsset(id: string) {
   return asset ?? null;
 }
 
+export async function getMediaAssetWithClient(
+  client: typeof db | Transaction,
+  id: string
+) {
+  const [asset] = await client
+    .select({
+      id: mediaAssets.id,
+      url: mediaAssets.url,
+      altText: mediaAssets.altText,
+      caption: mediaAssets.caption
+    })
+    .from(mediaAssets)
+    .where(and(eq(mediaAssets.id, id), isNull(mediaAssets.deletedAt)))
+    .limit(1);
+
+  return asset ?? null;
+}
+
 export async function upsertMediaAssetFromUrl({
   url,
   altText,

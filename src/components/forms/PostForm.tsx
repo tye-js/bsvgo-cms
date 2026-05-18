@@ -15,7 +15,9 @@ import type { Locale, PostStatus } from "@/server/db/schema";
 type SelectOption = {
   id: string;
   slug: string;
-  name: string;
+  name?: string;
+  enName?: string | null;
+  zhName?: string | null;
 };
 
 type MediaAssetOption = {
@@ -44,6 +46,7 @@ type PostFormValue = {
   slug: string;
   categoryId: string;
   status: PostStatus;
+  coverImageId: string | null;
   coverImageUrl: string | null;
   coverImageAlt?: string | null;
   enSeoTitle: string | null;
@@ -90,6 +93,12 @@ function getTranslation(post: PostFormValue | undefined, locale: Locale) {
 function toDateInputValue(date: Date | null | undefined) {
   if (!date) return "";
   return new Date(date).toISOString().slice(0, 16);
+}
+
+function optionLabel(option: SelectOption) {
+  const enName = option.enName ?? option.name ?? option.slug;
+  const zhName = option.zhName ?? "";
+  return zhName && zhName !== enName ? `${enName} / ${zhName}` : enName;
 }
 
 export function PostForm({
@@ -416,7 +425,7 @@ export function PostForm({
                   defaultChecked={post?.tagIds.includes(tag.id) ?? false}
                   className="h-4 w-4 rounded border-slate-300 text-slate-700"
                 />
-                {tag.name}
+                {optionLabel(tag)}
               </label>
             ))}
             {tags.length === 0 ? (
@@ -429,6 +438,7 @@ export function PostForm({
           <h2 className="mb-4 font-semibold text-slate-950">SEO 与媒体</h2>
           <div className="grid gap-4">
             <CoverImageField
+              defaultAssetId={post?.coverImageId ?? ""}
               defaultUrl={post?.coverImageUrl ?? ""}
               defaultAlt={post?.coverImageAlt ?? zh?.title ?? en?.title ?? ""}
               mediaAssets={mediaAssets}

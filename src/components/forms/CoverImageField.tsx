@@ -28,15 +28,18 @@ type UploadResponse = {
 };
 
 export function CoverImageField({
+  defaultAssetId,
   defaultUrl,
   defaultAlt,
   mediaAssets
 }: {
+  defaultAssetId?: string | null;
   defaultUrl?: string | null;
   defaultAlt?: string | null;
   mediaAssets: MediaAssetOption[];
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [assetId, setAssetId] = useState(defaultAssetId ?? "");
   const [url, setUrl] = useState(defaultUrl ?? "");
   const [altText, setAltText] = useState(defaultAlt ?? "");
   const [caption, setCaption] = useState("");
@@ -55,6 +58,7 @@ export function CoverImageField({
     .slice(0, 24);
 
   function clearCover() {
+    setAssetId("");
     setUrl("");
     setAltText("");
     setCaption("");
@@ -68,6 +72,7 @@ export function CoverImageField({
   function chooseAsset(assetId: string) {
     const asset = mediaAssets.find((item) => item.id === assetId);
     if (!asset) return;
+    setAssetId(asset.id);
     setUrl(asset.url);
     setAltText(asset.altText);
     setCaption(asset.caption);
@@ -97,6 +102,7 @@ export function CoverImageField({
         return;
       }
 
+      setAssetId(payload.id);
       setUrl(payload.url);
       setAltText(payload.altText);
       setError("");
@@ -131,6 +137,7 @@ export function CoverImageField({
         </div>
       </div>
 
+      <input type="hidden" name="coverImageId" value={assetId} />
       <input type="hidden" name="coverImageUrl" value={url} />
       <input type="hidden" name="coverImageAlt" value={altText} />
 
@@ -138,7 +145,10 @@ export function CoverImageField({
         <input
           type="url"
           value={url}
-            onChange={(event) => setUrl(event.target.value)}
+          onChange={(event) => {
+            setAssetId("");
+            setUrl(event.target.value);
+          }}
           disabled={isPending}
           className={inputClassName}
           placeholder="https://..."

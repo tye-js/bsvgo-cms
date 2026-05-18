@@ -42,14 +42,12 @@ export async function getDashboardStats() {
       slug: posts.slug,
       status: posts.status,
       updatedAt: posts.updatedAt,
-      title: postTranslations.title
+      title: sql<string>`coalesce(nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'en'), ''), nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'zh'), ''), ${posts.slug})`
     })
     .from(posts)
-    .innerJoin(
-      postTranslations,
-      and(eq(postTranslations.postId, posts.id), eq(postTranslations.locale, "en"))
-    )
+    .leftJoin(postTranslations, eq(postTranslations.postId, posts.id))
     .where(isNull(posts.deletedAt))
+    .groupBy(posts.id)
     .orderBy(desc(posts.updatedAt))
     .limit(6);
 
@@ -76,6 +74,8 @@ export async function listPosts(options: {
   const pageSize = options.pageSize ?? 12;
   const query = options.query?.trim();
   const status = options.status ?? "all";
+  const titleExpression = sql<string>`coalesce(nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'en'), ''), nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'zh'), ''), ${posts.slug})`;
+  const categoryNameExpression = sql<string>`coalesce(nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'en'), ''), nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'zh'), ''), ${categories.slug})`;
 
   const filters = [
     isNull(posts.deletedAt),
@@ -96,34 +96,23 @@ export async function listPosts(options: {
       pinned: posts.pinned,
       publishedAt: posts.publishedAt,
       updatedAt: posts.updatedAt,
-      title: postTranslations.title,
-      categoryName: categoryTranslations.name
+      title: titleExpression,
+      categoryName: categoryNameExpression
     })
     .from(posts)
-    .innerJoin(
-      postTranslations,
-      and(eq(postTranslations.postId, posts.id), eq(postTranslations.locale, "en"))
-    )
+    .leftJoin(postTranslations, eq(postTranslations.postId, posts.id))
     .innerJoin(categories, eq(categories.id, posts.categoryId))
-    .innerJoin(
-      categoryTranslations,
-      and(
-        eq(categoryTranslations.categoryId, categories.id),
-        eq(categoryTranslations.locale, "en")
-      )
-    )
+    .leftJoin(categoryTranslations, eq(categoryTranslations.categoryId, categories.id))
     .where(where)
+    .groupBy(posts.id, categories.id)
     .orderBy(desc(posts.pinned), desc(posts.updatedAt))
     .limit(pageSize)
     .offset((page - 1) * pageSize);
 
   const [totalRow] = await db
-    .select({ total: count() })
+    .select({ total: sql<number>`count(distinct ${posts.id})` })
     .from(posts)
-    .innerJoin(
-      postTranslations,
-      and(eq(postTranslations.postId, posts.id), eq(postTranslations.locale, "en"))
-    )
+    .leftJoin(postTranslations, eq(postTranslations.postId, posts.id))
     .where(where);
 
   return {
@@ -142,32 +131,26 @@ export async function getPostEditorOptions() {
     .select({
       id: categories.id,
       slug: categories.slug,
-      name: categoryTranslations.name
+      name: sql<string>`coalesce(nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'en'), ''), nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'zh'), ''), ${categories.slug})`
     })
     .from(categories)
-    .innerJoin(
-      categoryTranslations,
-      and(
-        eq(categoryTranslations.categoryId, categories.id),
-        eq(categoryTranslations.locale, "en")
-      )
-    )
+    .leftJoin(categoryTranslations, eq(categoryTranslations.categoryId, categories.id))
     .where(isNull(categories.deletedAt))
+    .groupBy(categories.id)
     .orderBy(asc(categories.sortOrder));
 
   const tagRows = await db
     .select({
       id: tags.id,
       slug: tags.slug,
-      name: tagTranslations.name
+      enName: sql<string>`max(${tagTranslations.name}) filter (where ${tagTranslations.locale} = 'en')`,
+      zhName: sql<string>`max(${tagTranslations.name}) filter (where ${tagTranslations.locale} = 'zh')`
     })
     .from(tags)
-    .innerJoin(
-      tagTranslations,
-      and(eq(tagTranslations.tagId, tags.id), eq(tagTranslations.locale, "en"))
-    )
+    .leftJoin(tagTranslations, eq(tagTranslations.tagId, tags.id))
     .where(isNull(tags.deletedAt))
-    .orderBy(asc(tagTranslations.name));
+    .groupBy(tags.id)
+    .orderBy(asc(sql`max(${tagTranslations.name}) filter (where ${tagTranslations.locale} = 'en')`));
 
   return { categories: categoryRows, tags: tagRows };
 }
@@ -197,6 +180,7 @@ export async function getPostForEdit(id: string) {
   return {
     ...post,
     status: post.status as PostStatus,
+    coverImageId: post.coverImageId,
     coverImageUrl: post.coverImage,
     coverImageAlt: coverAsset?.altText ?? "",
     enSeoTitle:
@@ -310,10 +294,26 @@ export async function getTagForEdit(id: string) {
     .select()
     .from(tagTranslations)
     .where(eq(tagTranslations.tagId, id));
+  const enTranslation = translations.find((translation) => translation.locale === "en");
+  const zhTranslation =
+    translations.find((translation) => translation.locale === "zh") ??
+    (enTranslation
+      ? {
+          ...enTranslation,
+          locale: "zh",
+          name: enTranslation.name,
+          description: "",
+          seoTitle: "",
+          seoDescription: ""
+        }
+      : undefined);
+  const normalizedTranslations = [];
+  if (enTranslation) normalizedTranslations.push(enTranslation);
+  if (zhTranslation) normalizedTranslations.push(zhTranslation);
 
   return {
     ...tag,
-    translations: translations.map((translation) => ({
+    translations: normalizedTranslations.map((translation) => ({
       ...translation,
       locale: translation.locale as "en" | "zh"
     }))
@@ -357,21 +357,19 @@ export async function getRelatedPostsForPost(postId: string, limit = 6) {
   const tagIds = tagRows.map((tag) => tag.tagId);
   const scoreExpression = sql<number>`
     case when ${posts.categoryId} = ${post.categoryId} then 2 else 0 end +
-    count(${postTags.tagId})
+    count(distinct ${postTags.tagId})
   `;
+  const titleExpression = sql<string>`coalesce(nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'en'), ''), nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'zh'), ''), ${posts.slug})`;
 
   return db
     .select({
       id: posts.id,
       slug: posts.slug,
-      title: postTranslations.title,
+      title: titleExpression,
       score: scoreExpression
     })
     .from(posts)
-    .innerJoin(
-      postTranslations,
-      and(eq(postTranslations.postId, posts.id), eq(postTranslations.locale, "en"))
-    )
+    .leftJoin(postTranslations, eq(postTranslations.postId, posts.id))
     .leftJoin(postTags, eq(postTags.postId, posts.id))
     .where(
       and(
@@ -383,7 +381,7 @@ export async function getRelatedPostsForPost(postId: string, limit = 6) {
           : eq(posts.categoryId, post.categoryId)
       )
     )
-    .groupBy(posts.id, postTranslations.title)
+    .groupBy(posts.id)
     .orderBy(desc(scoreExpression), desc(posts.publishedAt))
     .limit(limit);
 }

@@ -55,6 +55,30 @@ type SeoSuggestionInput = {
   keywords?: string;
 };
 
+type ResponsesJsonSchema = {
+  type: "object";
+  additionalProperties: false;
+  properties: Record<string, unknown>;
+  required: string[];
+};
+
+type ResponsesTextFormat = {
+  type: "json_schema";
+  name: string;
+  strict: true;
+  schema: ResponsesJsonSchema;
+};
+
+type ResponsesInput = Array<{
+  role: "system" | "user";
+  content: Array<{
+    type: "input_text";
+    text: string;
+  }>;
+}>;
+
+type AiGenerationSettings = Awaited<ReturnType<typeof getAiSettingsForGeneration>>;
+
 export type LocalizedSeoSuggestion = {
   title: string;
   description: string;
@@ -225,10 +249,19 @@ const localizedSeoSchema = {
   required: ["title", "description", "keywords", "ogTitle", "ogDescription"]
 } as const;
 
-export async function generateEnglishPost(
-  input: EnglishPostInput
-): Promise<EnglishPostOutput> {
-  const { apiKey, apiBaseUrl, model, timeoutMs } = await getAiSettingsForGeneration();
+async function callResponsesJson({
+  settings,
+  input,
+  format,
+  timeoutMessage
+}: {
+  settings?: AiGenerationSettings;
+  input: ResponsesInput;
+  format: ResponsesTextFormat;
+  timeoutMessage: string;
+}) {
+  const { apiKey, apiBaseUrl, model, timeoutMs } =
+    settings ?? (await getAiSettingsForGeneration());
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -242,73 +275,9 @@ export async function generateEnglishPost(
       },
       body: JSON.stringify({
         model,
-        input: [
-          {
-            role: "system",
-            content: [
-              {
-                type: "input_text",
-                text:
-                  "You are the BSVgo CMS English editor. Translate and adapt Chinese blog drafts into polished English Markdown for a technical audience. Preserve factual meaning, headings, links, code blocks, lists, quotes, and Markdown structure. Do not add unsupported facts."
-              }
-            ]
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "input_text",
-                text: JSON.stringify({
-                  task: "Generate the English version of this BSVgo blog post.",
-                  sourceLanguage: "zh",
-                  targetLanguage: "en",
-                  title: input.title,
-                  excerpt: input.excerpt ?? "",
-                  content: input.content
-                })
-              }
-            ]
-          }
-        ],
+        input,
         text: {
-          format: {
-            type: "json_schema",
-            name: "english_blog_post",
-            strict: true,
-            schema: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                title: {
-                  type: "string",
-                  description: "English article title, concise and publication-ready."
-                },
-                excerpt: {
-                  type: "string",
-                  description: "English summary for list pages."
-                },
-                content: {
-                  type: "string",
-                  description: "English article body in Markdown."
-                },
-                seoTitle: {
-                  type: "string",
-                  description: "English SEO title, under 60 characters when possible."
-                },
-                seoDescription: {
-                  type: "string",
-                  description: "English SEO description, under 160 characters when possible."
-                }
-              },
-              required: [
-                "title",
-                "excerpt",
-                "content",
-                "seoTitle",
-                "seoDescription"
-              ]
-            }
-          }
+          format
         }
       })
     });
@@ -320,257 +289,262 @@ export async function generateEnglishPost(
       );
     }
 
-    return parseEnglishPost(await response.json());
+    return response.json();
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`${providerLabel(apiBaseUrl)} generation timed out. Please try again.`);
+      throw new Error(`${providerLabel(apiBaseUrl)} ${timeoutMessage}`);
     }
     throw error;
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function generateEnglishPost(
+  input: EnglishPostInput
+): Promise<EnglishPostOutput> {
+  const payload = await callResponsesJson({
+    input: [
+      {
+        role: "system",
+        content: [
+          {
+            type: "input_text",
+            text:
+              "You are the BSVgo CMS English editor. Translate and adapt Chinese blog drafts into polished English Markdown for a technical audience. Preserve factual meaning, headings, links, code blocks, lists, quotes, and Markdown structure. Do not add unsupported facts."
+          }
+        ]
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: JSON.stringify({
+              task: "Generate the English version of this BSVgo blog post.",
+              sourceLanguage: "zh",
+              targetLanguage: "en",
+              title: input.title,
+              excerpt: input.excerpt ?? "",
+              content: input.content
+            })
+          }
+        ]
+      }
+    ],
+    format: {
+      type: "json_schema",
+      name: "english_blog_post",
+      strict: true,
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          title: {
+            type: "string",
+            description: "English article title, concise and publication-ready."
+          },
+          excerpt: {
+            type: "string",
+            description: "English summary for list pages."
+          },
+          content: {
+            type: "string",
+            description: "English article body in Markdown."
+          },
+          seoTitle: {
+            type: "string",
+            description: "English SEO title, under 60 characters when possible."
+          },
+          seoDescription: {
+            type: "string",
+            description: "English SEO description, under 160 characters when possible."
+          }
+        },
+        required: ["title", "excerpt", "content", "seoTitle", "seoDescription"]
+      }
+    },
+    timeoutMessage: "generation timed out. Please try again."
+  });
+
+  return parseEnglishPost(payload);
 }
 
 export async function generateChineseDraft(
   input: ChineseDraftInput
 ): Promise<ChineseDraftOutput> {
-  const { apiKey, apiBaseUrl, model, timeoutMs, writingStyle } =
-    await getAiSettingsForGeneration();
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const response = await fetch(responsesUrl(apiBaseUrl), {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model,
-        input: [
+  const settings = await getAiSettingsForGeneration();
+  const payload = await callResponsesJson({
+    settings,
+    input: [
+      {
+        role: "system",
+        content: [
           {
-            role: "system",
-            content: [
-              {
-                type: "input_text",
-                text:
-                  "You are the BSVgo CMS bilingual editor. Turn rough notes, links, fragments, transcripts, or unstructured source material into polished Simplified Chinese and English blog drafts in Markdown. Follow the configured writing style, preserve facts and technical details, organize messy material into coherent articles, and do not invent unsupported claims. Chinese and English should be equivalent articles, not summaries of each other."
+            type: "input_text",
+            text:
+              "You are the BSVgo CMS bilingual editor. Turn rough notes, links, fragments, transcripts, or unstructured source material into polished Simplified Chinese and English blog drafts in Markdown. Follow the configured writing style, preserve facts and technical details, organize messy material into coherent articles, and do not invent unsupported claims. Chinese and English should be equivalent articles, not summaries of each other."
+          }
+        ]
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: JSON.stringify({
+              task: "Rewrite unstructured material into bilingual blog drafts.",
+              writingStyle: settings.writingStyle,
+              rawInput: input.rawInput ?? "",
+              source: {
+                url: input.sourceUrl ?? "",
+                title: input.sourceTitle ?? "",
+                description: input.sourceDescription ?? "",
+                content: input.sourceContent ?? ""
               }
+            })
+          }
+        ]
+      }
+    ],
+    format: {
+      type: "json_schema",
+      name: "chinese_blog_draft",
+      strict: true,
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          slug: {
+            type: "string",
+            description:
+              "Lowercase English URL slug using only letters, numbers, and hyphens."
+          },
+          zh: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              title: {
+                type: "string",
+                description: "Simplified Chinese article title."
+              },
+              excerpt: {
+                type: "string",
+                description: "Simplified Chinese article summary for list pages."
+              },
+              content: {
+                type: "string",
+                description: "Simplified Chinese article body in Markdown."
+              },
+              seoTitle: {
+                type: "string",
+                description: "Simplified Chinese SEO title."
+              },
+              seoDescription: {
+                type: "string",
+                description: "Simplified Chinese SEO description."
+              }
+            },
+            required: [
+              "title",
+              "excerpt",
+              "content",
+              "seoTitle",
+              "seoDescription"
             ]
           },
-          {
-            role: "user",
-            content: [
-              {
-                type: "input_text",
-                text: JSON.stringify({
-                  task: "Rewrite unstructured material into bilingual blog drafts.",
-                  writingStyle,
-                  rawInput: input.rawInput ?? "",
-                  source: {
-                    url: input.sourceUrl ?? "",
-                    title: input.sourceTitle ?? "",
-                    description: input.sourceDescription ?? "",
-                    content: input.sourceContent ?? ""
-                  }
-                })
-              }
-            ]
-          }
-        ],
-        text: {
-          format: {
-            type: "json_schema",
-            name: "chinese_blog_draft",
-            strict: true,
-            schema: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                slug: {
-                  type: "string",
-                  description:
-                    "Lowercase English URL slug using only letters, numbers, and hyphens."
-                },
-                zh: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    title: {
-                      type: "string",
-                      description: "Simplified Chinese article title."
-                    },
-                    excerpt: {
-                      type: "string",
-                      description: "Simplified Chinese article summary for list pages."
-                    },
-                    content: {
-                      type: "string",
-                      description: "Simplified Chinese article body in Markdown."
-                    },
-                    seoTitle: {
-                      type: "string",
-                      description: "Simplified Chinese SEO title."
-                    },
-                    seoDescription: {
-                      type: "string",
-                      description: "Simplified Chinese SEO description."
-                    }
-                  },
-                  required: [
-                    "title",
-                    "excerpt",
-                    "content",
-                    "seoTitle",
-                    "seoDescription"
-                  ]
-                },
-                en: {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    title: {
-                      type: "string",
-                      description: "English article title."
-                    },
-                    excerpt: {
-                      type: "string",
-                      description: "English article summary for list pages."
-                    },
-                    content: {
-                      type: "string",
-                      description: "English article body in Markdown."
-                    },
-                    seoTitle: {
-                      type: "string",
-                      description: "English SEO title."
-                    },
-                    seoDescription: {
-                      type: "string",
-                      description: "English SEO description."
-                    }
-                  },
-                  required: [
-                    "title",
-                    "excerpt",
-                    "content",
-                    "seoTitle",
-                    "seoDescription"
-                  ]
-                }
+          en: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              title: {
+                type: "string",
+                description: "English article title."
               },
-              required: ["slug", "zh", "en"]
-            }
+              excerpt: {
+                type: "string",
+                description: "English article summary for list pages."
+              },
+              content: {
+                type: "string",
+                description: "English article body in Markdown."
+              },
+              seoTitle: {
+                type: "string",
+                description: "English SEO title."
+              },
+              seoDescription: {
+                type: "string",
+                description: "English SEO description."
+              }
+            },
+            required: ["title", "excerpt", "content", "seoTitle", "seoDescription"]
           }
-        }
-      })
-    });
+        },
+        required: ["slug", "zh", "en"]
+      }
+    },
+    timeoutMessage: "draft generation timed out."
+  });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `${providerLabel(apiBaseUrl)} request failed: ${response.status} ${errorText}`
-      );
-    }
-
-    return parseChineseDraft(await response.json());
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`${providerLabel(apiBaseUrl)} draft generation timed out.`);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
+  return parseChineseDraft(payload);
 }
 
 export async function generateSeoSuggestion(
   input: SeoSuggestionInput
 ): Promise<SeoSuggestionOutput> {
-  const { apiKey, apiBaseUrl, model, timeoutMs } = await getAiSettingsForGeneration();
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const response = await fetch(responsesUrl(apiBaseUrl), {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
+  const payload = await callResponsesJson({
+    input: [
+      {
+        role: "system",
+        content: [
+          {
+            type: "input_text",
+            text:
+              "You are the BSVgo CMS bilingual SEO editor. Generate concise, search-friendly SEO metadata for both English and Simplified Chinese pages. Keep each locale natural for native readers, preserve technical accuracy, and do not add facts unsupported by the source content. English SEO is for the English frontend page; Chinese SEO is for the Chinese frontend page."
+          }
+        ]
       },
-      body: JSON.stringify({
-        model,
-        input: [
+      {
+        role: "user",
+        content: [
           {
-            role: "system",
-            content: [
-              {
-                type: "input_text",
-                text:
-                  "You are the BSVgo CMS bilingual SEO editor. Generate concise, search-friendly SEO metadata for both English and Simplified Chinese pages. Keep each locale natural for native readers, preserve technical accuracy, and do not add facts unsupported by the source content. English SEO is for the English frontend page; Chinese SEO is for the Chinese frontend page."
-              }
-            ]
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "input_text",
-                text: JSON.stringify({
-                  task: "Generate SEO metadata.",
-                  targetType: input.targetType,
-                  english: {
-                    title: input.enTitle ?? "",
-                    description: input.enDescription ?? "",
-                    content: input.enContent ?? ""
-                  },
-                  chinese: {
-                    title: input.zhTitle ?? "",
-                    description: input.zhDescription ?? "",
-                    content: input.zhContent ?? ""
-                  },
-                  keywords: input.keywords ?? ""
-                })
-              }
-            ]
-          }
-        ],
-        text: {
-          format: {
-            type: "json_schema",
-            name: "seo_metadata",
-            strict: true,
-            schema: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                en: localizedSeoSchema,
-                zh: localizedSeoSchema
+            type: "input_text",
+            text: JSON.stringify({
+              task: "Generate SEO metadata.",
+              targetType: input.targetType,
+              english: {
+                title: input.enTitle ?? "",
+                description: input.enDescription ?? "",
+                content: input.enContent ?? ""
               },
-              required: ["en", "zh"]
-            }
+              chinese: {
+                title: input.zhTitle ?? "",
+                description: input.zhDescription ?? "",
+                content: input.zhContent ?? ""
+              },
+              keywords: input.keywords ?? ""
+            })
           }
-        }
-      })
-    });
+        ]
+      }
+    ],
+    format: {
+      type: "json_schema",
+      name: "seo_metadata",
+      strict: true,
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          en: localizedSeoSchema,
+          zh: localizedSeoSchema
+        },
+        required: ["en", "zh"]
+      }
+    },
+    timeoutMessage: "SEO generation timed out."
+  });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `${providerLabel(apiBaseUrl)} request failed: ${response.status} ${errorText}`
-      );
-    }
-
-    return parseSeoSuggestion(await response.json());
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`${providerLabel(apiBaseUrl)} SEO generation timed out.`);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
+  return parseSeoSuggestion(payload);
 }

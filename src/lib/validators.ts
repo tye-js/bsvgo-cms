@@ -16,6 +16,7 @@ export const postSchema = z.object({
   slug: slugSchema,
   categoryId: z.string().uuid("请选择分类"),
   status: z.enum(["draft", "published", "archived"]),
+  coverImageId: z.string().uuid("请选择有效的封面图片").or(z.literal("")),
   coverImageUrl: z.string().trim().url("请输入有效的封面图片 URL").or(z.literal("")),
   coverImageAlt: z.string().trim().max(255).optional(),
   enSeoTitle: z.string().trim().max(255).optional(),
@@ -64,7 +65,7 @@ export const tagSchema = z.object({
   zhSeoDescription: z.string().trim().max(500).optional(),
   enName: z.string().trim().min(1, "英文名称为必填项").max(120),
   enDescription: z.string().trim().optional(),
-  zhName: z.string().trim().optional(),
+  zhName: z.string().trim().min(1, "中文名称为必填项").max(120),
   zhDescription: z.string().trim().optional()
 });
 
