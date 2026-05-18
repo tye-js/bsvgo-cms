@@ -20,18 +20,26 @@ export type SeoTargetType = "homepage" | "category" | "tag" | "post";
 
 type SeoSuggestionInput = {
   targetType: SeoTargetType;
-  title: string;
-  description?: string;
-  content?: string;
+  enTitle?: string;
+  enDescription?: string;
+  enContent?: string;
+  zhTitle?: string;
+  zhDescription?: string;
+  zhContent?: string;
   keywords?: string;
 };
 
-export type SeoSuggestionOutput = {
+export type LocalizedSeoSuggestion = {
   title: string;
   description: string;
   keywords: string;
   ogTitle: string;
   ogDescription: string;
+};
+
+export type SeoSuggestionOutput = {
+  en: LocalizedSeoSuggestion;
+  zh: LocalizedSeoSuggestion;
 };
 
 function responsesUrl(apiBaseUrl: string) {
@@ -96,19 +104,61 @@ function parseSeoSuggestion(payload: unknown): SeoSuggestionOutput {
 
   const parsed = JSON.parse(text) as Partial<SeoSuggestionOutput>;
   const output = {
-    title: clean(parsed.title, 255),
-    description: clean(parsed.description, 500),
-    keywords: clean(parsed.keywords, 500),
-    ogTitle: clean(parsed.ogTitle, 255),
-    ogDescription: clean(parsed.ogDescription, 500)
+    en: {
+      title: clean(parsed.en?.title, 255),
+      description: clean(parsed.en?.description, 500),
+      keywords: clean(parsed.en?.keywords, 500),
+      ogTitle: clean(parsed.en?.ogTitle, 255),
+      ogDescription: clean(parsed.en?.ogDescription, 500)
+    },
+    zh: {
+      title: clean(parsed.zh?.title, 255),
+      description: clean(parsed.zh?.description, 500),
+      keywords: clean(parsed.zh?.keywords, 500),
+      ogTitle: clean(parsed.zh?.ogTitle, 255),
+      ogDescription: clean(parsed.zh?.ogDescription, 500)
+    }
   };
 
-  if (!output.title || !output.description) {
-    throw new Error("AI provider returned incomplete SEO suggestions.");
+  if (
+    !output.en.title ||
+    !output.en.description ||
+    !output.zh.title ||
+    !output.zh.description
+  ) {
+    throw new Error("AI provider returned incomplete bilingual SEO suggestions.");
   }
 
   return output;
 }
+
+const localizedSeoSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    title: {
+      type: "string",
+      description: "SEO title for this locale, ideally concise and search-friendly."
+    },
+    description: {
+      type: "string",
+      description: "Meta description for this locale, ideally 120-160 characters."
+    },
+    keywords: {
+      type: "string",
+      description: "Comma-separated SEO keywords in this locale."
+    },
+    ogTitle: {
+      type: "string",
+      description: "Open Graph title for social previews in this locale."
+    },
+    ogDescription: {
+      type: "string",
+      description: "Open Graph description for social previews in this locale."
+    }
+  },
+  required: ["title", "description", "keywords", "ogTitle", "ogDescription"]
+} as const;
 
 export async function generateEnglishPost(
   input: EnglishPostInput
@@ -240,7 +290,7 @@ export async function generateSeoSuggestion(
               {
                 type: "input_text",
                 text:
-                  "You are the BSVgo CMS SEO editor. Generate concise, search-friendly English SEO metadata for a technical blog. Prefer clear intent, accurate terminology, and natural language. Do not add facts that are not supported by the source content."
+                  "You are the BSVgo CMS bilingual SEO editor. Generate concise, search-friendly SEO metadata for both English and Simplified Chinese pages. Keep each locale natural for native readers, preserve technical accuracy, and do not add facts unsupported by the source content. English SEO is for the English frontend page; Chinese SEO is for the Chinese frontend page."
               }
             ]
           },
@@ -252,9 +302,16 @@ export async function generateSeoSuggestion(
                 text: JSON.stringify({
                   task: "Generate SEO metadata.",
                   targetType: input.targetType,
-                  title: input.title,
-                  description: input.description ?? "",
-                  content: input.content ?? "",
+                  english: {
+                    title: input.enTitle ?? "",
+                    description: input.enDescription ?? "",
+                    content: input.enContent ?? ""
+                  },
+                  chinese: {
+                    title: input.zhTitle ?? "",
+                    description: input.zhDescription ?? "",
+                    content: input.zhContent ?? ""
+                  },
                   keywords: input.keywords ?? ""
                 })
               }
@@ -270,34 +327,10 @@ export async function generateSeoSuggestion(
               type: "object",
               additionalProperties: false,
               properties: {
-                title: {
-                  type: "string",
-                  description: "SEO title, ideally 45-60 characters."
-                },
-                description: {
-                  type: "string",
-                  description: "Meta description, ideally 120-160 characters."
-                },
-                keywords: {
-                  type: "string",
-                  description: "Comma-separated SEO keywords."
-                },
-                ogTitle: {
-                  type: "string",
-                  description: "Open Graph title for social previews."
-                },
-                ogDescription: {
-                  type: "string",
-                  description: "Open Graph description for social previews."
-                }
+                en: localizedSeoSchema,
+                zh: localizedSeoSchema
               },
-              required: [
-                "title",
-                "description",
-                "keywords",
-                "ogTitle",
-                "ogDescription"
-              ]
+              required: ["en", "zh"]
             }
           }
         }

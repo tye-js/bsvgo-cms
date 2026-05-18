@@ -18,8 +18,10 @@ export const postSchema = z.object({
   status: z.enum(["draft", "published", "archived"]),
   coverImageUrl: z.string().trim().url("请输入有效的封面图片 URL").or(z.literal("")),
   coverImageAlt: z.string().trim().max(255).optional(),
-  seoTitle: z.string().trim().max(255).optional(),
-  seoDescription: z.string().trim().optional(),
+  enSeoTitle: z.string().trim().max(255).optional(),
+  enSeoDescription: z.string().trim().max(500).optional(),
+  zhSeoTitle: z.string().trim().max(255).optional(),
+  zhSeoDescription: z.string().trim().max(500).optional(),
   publishedAt: z.string().optional(),
   featured: z.boolean(),
   pinned: z.boolean(),
@@ -44,8 +46,10 @@ export const newPostSchema = postSchema.extend({
 });
 
 export const categorySchema = z.object({
-  seoTitle: z.string().trim().max(255).optional(),
-  seoDescription: z.string().trim().optional(),
+  enSeoTitle: z.string().trim().max(255).optional(),
+  enSeoDescription: z.string().trim().max(500).optional(),
+  zhSeoTitle: z.string().trim().max(255).optional(),
+  zhSeoDescription: z.string().trim().max(500).optional(),
   enName: z.string().trim().min(1, "英文名称为必填项").max(160),
   enDescription: z.string().trim().optional(),
   zhName: z.string().trim().min(1, "中文名称为必填项").max(160),
@@ -54,8 +58,10 @@ export const categorySchema = z.object({
 
 export const tagSchema = z.object({
   slug: slugSchema.max(140),
-  seoTitle: z.string().trim().max(255).optional(),
-  seoDescription: z.string().trim().optional(),
+  enSeoTitle: z.string().trim().max(255).optional(),
+  enSeoDescription: z.string().trim().max(500).optional(),
+  zhSeoTitle: z.string().trim().max(255).optional(),
+  zhSeoDescription: z.string().trim().max(500).optional(),
   enName: z.string().trim().min(1, "英文名称为必填项").max(120),
   enDescription: z.string().trim().optional(),
   zhName: z.string().trim().optional(),
@@ -92,22 +98,34 @@ export const aiSettingsSchema = z.object({
 });
 
 export const homepageSeoSchema = z.object({
-  title: z.string().trim().min(1, "首页 SEO 标题为必填项").max(255),
-  description: z.string().trim().min(1, "首页 SEO 描述为必填项").max(500),
-  keywords: z.string().trim().max(500).optional(),
-  ogTitle: z.string().trim().max(255).optional(),
-  ogDescription: z.string().trim().max(500).optional(),
+  enTitle: z.string().trim().max(255).optional(),
+  enDescription: z.string().trim().max(500).optional(),
+  enKeywords: z.string().trim().max(500).optional(),
+  enOgTitle: z.string().trim().max(255).optional(),
+  enOgDescription: z.string().trim().max(500).optional(),
+  zhTitle: z.string().trim().max(255).optional(),
+  zhDescription: z.string().trim().max(500).optional(),
+  zhKeywords: z.string().trim().max(500).optional(),
+  zhOgTitle: z.string().trim().max(255).optional(),
+  zhOgDescription: z.string().trim().max(500).optional(),
   ogImage: z.string().trim().url("请输入有效的 Open Graph 图片 URL").or(z.literal("")),
   canonicalUrl: z.string().trim().url("请输入有效的 canonical URL").or(z.literal(""))
 });
 
-export const seoSuggestionSchema = z.object({
-  targetType: z.enum(["homepage", "category", "tag", "post"]),
-  title: z.string().trim().min(1, "请先填写标题或名称").max(255),
-  description: z.string().trim().optional(),
-  content: z.string().trim().optional(),
-  keywords: z.string().trim().optional()
-});
+export const seoSuggestionSchema = z
+  .object({
+    targetType: z.enum(["homepage", "category", "tag", "post"]),
+    enTitle: z.string().trim().max(255).optional(),
+    enDescription: z.string().trim().optional(),
+    enContent: z.string().trim().optional(),
+    zhTitle: z.string().trim().max(255).optional(),
+    zhDescription: z.string().trim().optional(),
+    zhContent: z.string().trim().optional(),
+    keywords: z.string().trim().optional()
+  })
+  .refine((value) => value.enTitle || value.zhTitle, {
+    message: "请先填写英文或中文标题/名称"
+  });
 
 export const mediaAssetSchema = z.object({
   url: z.string().trim().url("请输入有效的图片 URL"),

@@ -14,13 +14,30 @@ export const AI_SETTING_KEYS = {
 } as const;
 
 export const HOMEPAGE_SEO_SETTING_KEYS = {
+  en: {
+    title: "seo.home.en.title",
+    description: "seo.home.en.description",
+    keywords: "seo.home.en.keywords",
+    ogTitle: "seo.home.en.og_title",
+    ogDescription: "seo.home.en.og_description"
+  },
+  zh: {
+    title: "seo.home.zh.title",
+    description: "seo.home.zh.description",
+    keywords: "seo.home.zh.keywords",
+    ogTitle: "seo.home.zh.og_title",
+    ogDescription: "seo.home.zh.og_description"
+  },
+  ogImage: "seo.home.og_image",
+  canonicalUrl: "seo.home.canonical_url"
+} as const;
+
+const LEGACY_HOMEPAGE_SEO_SETTING_KEYS = {
   title: "seo.home.title",
   description: "seo.home.description",
   keywords: "seo.home.keywords",
   ogTitle: "seo.home.og_title",
-  ogDescription: "seo.home.og_description",
-  ogImage: "seo.home.og_image",
-  canonicalUrl: "seo.home.canonical_url"
+  ogDescription: "seo.home.og_description"
 } as const;
 
 export const DEFAULT_AI_API_BASE_URL = "https://api.openai.com/v1";
@@ -39,6 +56,16 @@ async function getSettings(keys: string[]) {
     .select()
     .from(appSettings)
     .where(inArray(appSettings.key, keys));
+}
+
+function homepageSeoSettingKeys() {
+  return [
+    ...Object.values(HOMEPAGE_SEO_SETTING_KEYS.en),
+    ...Object.values(HOMEPAGE_SEO_SETTING_KEYS.zh),
+    HOMEPAGE_SEO_SETTING_KEYS.ogImage,
+    HOMEPAGE_SEO_SETTING_KEYS.canonicalUrl,
+    ...Object.values(LEGACY_HOMEPAGE_SEO_SETTING_KEYS)
+  ];
 }
 
 export async function getAiSettingsForGeneration() {
@@ -73,7 +100,7 @@ export async function getAiSettingsForGeneration() {
 export async function getSettingsPageData() {
   const rows = await getSettings([
     ...Object.values(AI_SETTING_KEYS),
-    ...Object.values(HOMEPAGE_SEO_SETTING_KEYS)
+    ...homepageSeoSettingKeys()
   ]);
   const byKey = new Map(rows.map((row) => [row.key, row]));
   const apiKey = decryptIfNeeded(byKey.get(AI_SETTING_KEYS.apiKey)).trim();
@@ -87,14 +114,38 @@ export async function getSettingsPageData() {
     String(DEFAULT_AI_TIMEOUT_MS);
 
   const homepageSeo = {
-    title: decryptIfNeeded(byKey.get(HOMEPAGE_SEO_SETTING_KEYS.title)).trim(),
-    description: decryptIfNeeded(
-      byKey.get(HOMEPAGE_SEO_SETTING_KEYS.description)
+    enTitle: (
+      decryptIfNeeded(byKey.get(HOMEPAGE_SEO_SETTING_KEYS.en.title)) ||
+      decryptIfNeeded(byKey.get(LEGACY_HOMEPAGE_SEO_SETTING_KEYS.title))
     ).trim(),
-    keywords: decryptIfNeeded(byKey.get(HOMEPAGE_SEO_SETTING_KEYS.keywords)).trim(),
-    ogTitle: decryptIfNeeded(byKey.get(HOMEPAGE_SEO_SETTING_KEYS.ogTitle)).trim(),
-    ogDescription: decryptIfNeeded(
-      byKey.get(HOMEPAGE_SEO_SETTING_KEYS.ogDescription)
+    enDescription: (
+      decryptIfNeeded(byKey.get(HOMEPAGE_SEO_SETTING_KEYS.en.description)) ||
+      decryptIfNeeded(byKey.get(LEGACY_HOMEPAGE_SEO_SETTING_KEYS.description))
+    ).trim(),
+    enKeywords: (
+      decryptIfNeeded(byKey.get(HOMEPAGE_SEO_SETTING_KEYS.en.keywords)) ||
+      decryptIfNeeded(byKey.get(LEGACY_HOMEPAGE_SEO_SETTING_KEYS.keywords))
+    ).trim(),
+    enOgTitle: (
+      decryptIfNeeded(byKey.get(HOMEPAGE_SEO_SETTING_KEYS.en.ogTitle)) ||
+      decryptIfNeeded(byKey.get(LEGACY_HOMEPAGE_SEO_SETTING_KEYS.ogTitle))
+    ).trim(),
+    enOgDescription: (
+      decryptIfNeeded(byKey.get(HOMEPAGE_SEO_SETTING_KEYS.en.ogDescription)) ||
+      decryptIfNeeded(byKey.get(LEGACY_HOMEPAGE_SEO_SETTING_KEYS.ogDescription))
+    ).trim(),
+    zhTitle: decryptIfNeeded(byKey.get(HOMEPAGE_SEO_SETTING_KEYS.zh.title)).trim(),
+    zhDescription: decryptIfNeeded(
+      byKey.get(HOMEPAGE_SEO_SETTING_KEYS.zh.description)
+    ).trim(),
+    zhKeywords: decryptIfNeeded(
+      byKey.get(HOMEPAGE_SEO_SETTING_KEYS.zh.keywords)
+    ).trim(),
+    zhOgTitle: decryptIfNeeded(
+      byKey.get(HOMEPAGE_SEO_SETTING_KEYS.zh.ogTitle)
+    ).trim(),
+    zhOgDescription: decryptIfNeeded(
+      byKey.get(HOMEPAGE_SEO_SETTING_KEYS.zh.ogDescription)
     ).trim(),
     ogImage: decryptIfNeeded(byKey.get(HOMEPAGE_SEO_SETTING_KEYS.ogImage)).trim(),
     canonicalUrl: decryptIfNeeded(
@@ -115,38 +166,91 @@ export async function getSettingsPageData() {
 }
 
 export async function saveHomepageSeoSettings({
-  title,
-  description,
-  keywords,
-  ogTitle,
-  ogDescription,
+  enTitle,
+  enDescription,
+  enKeywords,
+  enOgTitle,
+  enOgDescription,
+  zhTitle,
+  zhDescription,
+  zhKeywords,
+  zhOgTitle,
+  zhOgDescription,
   ogImage,
   canonicalUrl,
   userId
 }: {
-  title: string;
-  description: string;
-  keywords?: string;
-  ogTitle?: string;
-  ogDescription?: string;
+  enTitle?: string;
+  enDescription?: string;
+  enKeywords?: string;
+  enOgTitle?: string;
+  enOgDescription?: string;
+  zhTitle?: string;
+  zhDescription?: string;
+  zhKeywords?: string;
+  zhOgTitle?: string;
+  zhOgDescription?: string;
   ogImage?: string;
   canonicalUrl?: string;
   userId: string;
 }) {
   const now = new Date();
   const values = [
-    { key: HOMEPAGE_SEO_SETTING_KEYS.title, value: title.trim() },
-    { key: HOMEPAGE_SEO_SETTING_KEYS.description, value: description.trim() },
-    { key: HOMEPAGE_SEO_SETTING_KEYS.keywords, value: keywords?.trim() ?? "" },
-    { key: HOMEPAGE_SEO_SETTING_KEYS.ogTitle, value: ogTitle?.trim() ?? "" },
+    { key: HOMEPAGE_SEO_SETTING_KEYS.en.title, value: enTitle?.trim() ?? "" },
     {
-      key: HOMEPAGE_SEO_SETTING_KEYS.ogDescription,
-      value: ogDescription?.trim() ?? ""
+      key: HOMEPAGE_SEO_SETTING_KEYS.en.description,
+      value: enDescription?.trim() ?? ""
+    },
+    {
+      key: HOMEPAGE_SEO_SETTING_KEYS.en.keywords,
+      value: enKeywords?.trim() ?? ""
+    },
+    {
+      key: HOMEPAGE_SEO_SETTING_KEYS.en.ogTitle,
+      value: enOgTitle?.trim() ?? ""
+    },
+    {
+      key: HOMEPAGE_SEO_SETTING_KEYS.en.ogDescription,
+      value: enOgDescription?.trim() ?? ""
+    },
+    { key: HOMEPAGE_SEO_SETTING_KEYS.zh.title, value: zhTitle?.trim() ?? "" },
+    {
+      key: HOMEPAGE_SEO_SETTING_KEYS.zh.description,
+      value: zhDescription?.trim() ?? ""
+    },
+    {
+      key: HOMEPAGE_SEO_SETTING_KEYS.zh.keywords,
+      value: zhKeywords?.trim() ?? ""
+    },
+    {
+      key: HOMEPAGE_SEO_SETTING_KEYS.zh.ogTitle,
+      value: zhOgTitle?.trim() ?? ""
+    },
+    {
+      key: HOMEPAGE_SEO_SETTING_KEYS.zh.ogDescription,
+      value: zhOgDescription?.trim() ?? ""
     },
     { key: HOMEPAGE_SEO_SETTING_KEYS.ogImage, value: ogImage?.trim() ?? "" },
     {
       key: HOMEPAGE_SEO_SETTING_KEYS.canonicalUrl,
       value: canonicalUrl?.trim() ?? ""
+    },
+    { key: LEGACY_HOMEPAGE_SEO_SETTING_KEYS.title, value: enTitle?.trim() ?? "" },
+    {
+      key: LEGACY_HOMEPAGE_SEO_SETTING_KEYS.description,
+      value: enDescription?.trim() ?? ""
+    },
+    {
+      key: LEGACY_HOMEPAGE_SEO_SETTING_KEYS.keywords,
+      value: enKeywords?.trim() ?? ""
+    },
+    {
+      key: LEGACY_HOMEPAGE_SEO_SETTING_KEYS.ogTitle,
+      value: enOgTitle?.trim() ?? ""
+    },
+    {
+      key: LEGACY_HOMEPAGE_SEO_SETTING_KEYS.ogDescription,
+      value: enOgDescription?.trim() ?? ""
     }
   ];
 

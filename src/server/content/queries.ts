@@ -199,11 +199,17 @@ export async function getPostForEdit(id: string) {
     status: post.status as PostStatus,
     coverImageUrl: post.coverImage,
     coverImageAlt: coverAsset?.altText ?? "",
-    seoTitle:
+    enSeoTitle:
       translations.find((translation) => translation.locale === "en")?.seoTitle ??
       "",
-    seoDescription:
+    enSeoDescription:
       translations.find((translation) => translation.locale === "en")
+        ?.seoDescription ?? "",
+    zhSeoTitle:
+      translations.find((translation) => translation.locale === "zh")?.seoTitle ??
+      "",
+    zhSeoDescription:
+      translations.find((translation) => translation.locale === "zh")
         ?.seoDescription ?? "",
     readingTimeMinutes:
       translations.find((translation) => translation.locale === "en")
@@ -226,7 +232,11 @@ export async function listCategories() {
       seoDescription: categories.seoDescription,
       updatedAt: categories.updatedAt,
       enName: sql<string>`max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'en')`,
-      zhName: sql<string>`max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'zh')`
+      zhName: sql<string>`max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'zh')`,
+      enSeoTitle: sql<string>`coalesce(nullif(max(${categoryTranslations.seoTitle}) filter (where ${categoryTranslations.locale} = 'en'), ''), ${categories.seoTitle}, '')`,
+      enSeoDescription: sql<string>`coalesce(nullif(max(${categoryTranslations.seoDescription}) filter (where ${categoryTranslations.locale} = 'en'), ''), ${categories.seoDescription}, '')`,
+      zhSeoTitle: sql<string>`coalesce(max(${categoryTranslations.seoTitle}) filter (where ${categoryTranslations.locale} = 'zh'), '')`,
+      zhSeoDescription: sql<string>`coalesce(max(${categoryTranslations.seoDescription}) filter (where ${categoryTranslations.locale} = 'zh'), '')`
     })
     .from(categories)
     .leftJoin(categoryTranslations, eq(categoryTranslations.categoryId, categories.id))
@@ -274,6 +284,10 @@ export async function listTags(query?: string) {
       updatedAt: tags.updatedAt,
       enName: sql<string>`max(${tagTranslations.name}) filter (where ${tagTranslations.locale} = 'en')`,
       zhName: sql<string>`max(${tagTranslations.name}) filter (where ${tagTranslations.locale} = 'zh')`,
+      enSeoTitle: sql<string>`coalesce(nullif(max(${tagTranslations.seoTitle}) filter (where ${tagTranslations.locale} = 'en'), ''), ${tags.seoTitle}, '')`,
+      enSeoDescription: sql<string>`coalesce(nullif(max(${tagTranslations.seoDescription}) filter (where ${tagTranslations.locale} = 'en'), ''), ${tags.seoDescription}, '')`,
+      zhSeoTitle: sql<string>`coalesce(max(${tagTranslations.seoTitle}) filter (where ${tagTranslations.locale} = 'zh'), '')`,
+      zhSeoDescription: sql<string>`coalesce(max(${tagTranslations.seoDescription}) filter (where ${tagTranslations.locale} = 'zh'), '')`,
       postCount: sql<number>`count(distinct ${postTags.postId})`
     })
     .from(tags)

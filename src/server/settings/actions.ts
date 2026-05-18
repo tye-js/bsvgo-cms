@@ -53,11 +53,16 @@ export async function updateHomepageSeoAction(
 ): Promise<ActionState> {
   const user = await requireRole(["admin"]);
   const parsed = homepageSeoSchema.safeParse({
-    title: stringValue(formData, "title"),
-    description: stringValue(formData, "description"),
-    keywords: stringValue(formData, "keywords"),
-    ogTitle: stringValue(formData, "ogTitle"),
-    ogDescription: stringValue(formData, "ogDescription"),
+    enTitle: stringValue(formData, "enTitle"),
+    enDescription: stringValue(formData, "enDescription"),
+    enKeywords: stringValue(formData, "enKeywords"),
+    enOgTitle: stringValue(formData, "enOgTitle"),
+    enOgDescription: stringValue(formData, "enOgDescription"),
+    zhTitle: stringValue(formData, "zhTitle"),
+    zhDescription: stringValue(formData, "zhDescription"),
+    zhKeywords: stringValue(formData, "zhKeywords"),
+    zhOgTitle: stringValue(formData, "zhOgTitle"),
+    zhOgDescription: stringValue(formData, "zhOgDescription"),
     ogImage: stringValue(formData, "ogImage"),
     canonicalUrl: stringValue(formData, "canonicalUrl")
   });
@@ -79,22 +84,20 @@ export async function generateHomepageSeoAction(
   _previousState: ActionState,
   formData: FormData
 ): Promise<ActionState & {
-  suggestion?: {
-    title: string;
-    description: string;
-    keywords: string;
-    ogTitle: string;
-    ogDescription: string;
-  };
+  suggestion?: Awaited<ReturnType<typeof generateSeoSuggestion>>;
 }> {
   await requireRole(["admin"]);
 
   try {
     const suggestion = await generateSeoSuggestion({
       targetType: "homepage",
-      title: stringValue(formData, "title") || "BSVgo Blog",
-      description: stringValue(formData, "description"),
-      keywords: stringValue(formData, "keywords")
+      enTitle: stringValue(formData, "enTitle") || "BSVgo Blog",
+      enDescription: stringValue(formData, "enDescription"),
+      zhTitle: stringValue(formData, "zhTitle") || "BSVgo 博客",
+      zhDescription: stringValue(formData, "zhDescription"),
+      keywords:
+        stringValue(formData, "enKeywords") ||
+        stringValue(formData, "zhKeywords")
     });
 
     return {

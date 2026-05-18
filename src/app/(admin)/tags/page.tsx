@@ -50,12 +50,14 @@ export default async function TagsPage({
 
       <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-left text-sm">
+          <table className="w-full min-w-[980px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-5 py-3 font-medium">英文</th>
                 <th className="px-5 py-3 font-medium">中文</th>
                 <th className="px-5 py-3 font-medium">Slug</th>
+                <th className="px-5 py-3 font-medium">英文 SEO</th>
+                <th className="px-5 py-3 font-medium">中文 SEO</th>
                 <th className="px-5 py-3 font-medium">文章数</th>
                 <th className="px-5 py-3 font-medium">更新时间</th>
                 <th className="px-5 py-3 font-medium">操作</th>
@@ -67,6 +69,8 @@ export default async function TagsPage({
                   <td className="px-5 py-4 font-medium text-slate-950">{tag.enName}</td>
                   <td className="px-5 py-4 text-slate-600">{tag.zhName ?? "-"}</td>
                   <td className="px-5 py-4 text-slate-500">{tag.slug}</td>
+                  <td className="px-5 py-4 text-slate-500">{tag.enSeoTitle || "-"}</td>
+                  <td className="px-5 py-4 text-slate-500">{tag.zhSeoTitle || "-"}</td>
                   <td className="px-5 py-4 text-slate-500">{tag.postCount}</td>
                   <td className="px-5 py-4 text-slate-500">
                     {formatDate(tag.updatedAt)}
@@ -94,7 +98,7 @@ export default async function TagsPage({
               ))}
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
+                  <td colSpan={8} className="px-5 py-10 text-center text-slate-500">
                     未找到标签。
                   </td>
                 </tr>

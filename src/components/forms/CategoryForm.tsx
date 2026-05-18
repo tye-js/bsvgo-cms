@@ -12,12 +12,18 @@ type Translation = {
   locale: Locale;
   name: string;
   description: string | null;
+  seoTitle?: string;
+  seoDescription?: string;
 };
 
 type CategoryFormValue = {
   slug: string;
   seoTitle: string | null;
   seoDescription: string | null;
+  enSeoTitle?: string | null;
+  enSeoDescription?: string | null;
+  zhSeoTitle?: string | null;
+  zhSeoDescription?: string | null;
   translations: Translation[];
 };
 
@@ -46,9 +52,20 @@ export function CategoryForm({
   const [zhName, setZhName] = useState(zh?.name ?? "");
   const [enDescription, setEnDescription] = useState(en?.description ?? "");
   const [zhDescription, setZhDescription] = useState(zh?.description ?? "");
-  const [seoTitle, setSeoTitle] = useState(category.seoTitle ?? "");
-  const [seoDescription, setSeoDescription] = useState(
-    category.seoDescription ?? ""
+  const [enSeoTitle, setEnSeoTitle] = useState(
+    category.enSeoTitle ?? en?.seoTitle ?? category.seoTitle ?? ""
+  );
+  const [enSeoDescription, setEnSeoDescription] = useState(
+    category.enSeoDescription ??
+      en?.seoDescription ??
+      category.seoDescription ??
+      ""
+  );
+  const [zhSeoTitle, setZhSeoTitle] = useState(
+    category.zhSeoTitle ?? zh?.seoTitle ?? ""
+  );
+  const [zhSeoDescription, setZhSeoDescription] = useState(
+    category.zhSeoDescription ?? zh?.seoDescription ?? ""
   );
 
   return (
@@ -112,29 +129,63 @@ export function CategoryForm({
             <Field label="Slug">
               <input value={category.slug} readOnly className={`${inputClassName} bg-slate-50`} />
             </Field>
-            <Field label="SEO 标题">
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <p className="text-sm font-semibold text-slate-800">英文分类页 SEO</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                对应前台英文分类入口。
+              </p>
+            </div>
+            <Field label="英文 SEO 标题">
               <input
-                name="seoTitle"
-                value={seoTitle}
-                onChange={(event) => setSeoTitle(event.target.value)}
+                name="enSeoTitle"
+                value={enSeoTitle}
+                onChange={(event) => setEnSeoTitle(event.target.value)}
                 className={inputClassName}
               />
             </Field>
-            <Field label="SEO 描述">
+            <Field label="英文 SEO 描述">
               <textarea
-                name="seoDescription"
-                value={seoDescription}
-                onChange={(event) => setSeoDescription(event.target.value)}
+                name="enSeoDescription"
+                value={enSeoDescription}
+                onChange={(event) => setEnSeoDescription(event.target.value)}
+                maxLength={500}
+                className={textareaClassName}
+              />
+            </Field>
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <p className="text-sm font-semibold text-slate-800">中文分类页 SEO</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                对应前台中文分类入口。
+              </p>
+            </div>
+            <Field label="中文 SEO 标题">
+              <input
+                name="zhSeoTitle"
+                value={zhSeoTitle}
+                onChange={(event) => setZhSeoTitle(event.target.value)}
+                className={inputClassName}
+              />
+            </Field>
+            <Field label="中文 SEO 描述">
+              <textarea
+                name="zhSeoDescription"
+                value={zhSeoDescription}
+                onChange={(event) => setZhSeoDescription(event.target.value)}
+                maxLength={500}
                 className={textareaClassName}
               />
             </Field>
             <SeoSuggestionButton
               targetType="category"
-              sourceTitle={() => enName || zhName || category.slug}
-              sourceDescription={() => enDescription || zhDescription || seoDescription}
+              sourceEnTitle={() => enName || category.slug}
+              sourceEnDescription={() => enDescription || enSeoDescription}
+              sourceZhTitle={() => zhName || enName || category.slug}
+              sourceZhDescription={() => zhDescription || zhSeoDescription}
               onApply={(suggestion) => {
-                setSeoTitle(suggestion.title);
-                setSeoDescription(suggestion.description);
+                setEnSeoTitle(suggestion.en.title);
+                setEnSeoDescription(suggestion.en.description);
+                setZhSeoTitle(suggestion.zh.title);
+                setZhSeoDescription(suggestion.zh.description);
               }}
             />
           </div>

@@ -12,12 +12,18 @@ type Translation = {
   locale: Locale;
   name: string;
   description: string | null;
+  seoTitle?: string;
+  seoDescription?: string;
 };
 
 type TagFormValue = {
   slug: string;
   seoTitle: string | null;
   seoDescription: string | null;
+  enSeoTitle?: string | null;
+  enSeoDescription?: string | null;
+  zhSeoTitle?: string | null;
+  zhSeoDescription?: string | null;
   translations: Translation[];
 };
 
@@ -49,8 +55,18 @@ export function TagForm({
   const [zhName, setZhName] = useState(zh?.name ?? "");
   const [enDescription, setEnDescription] = useState(en?.description ?? "");
   const [zhDescription, setZhDescription] = useState(zh?.description ?? "");
-  const [seoTitle, setSeoTitle] = useState(tag?.seoTitle ?? "");
-  const [seoDescription, setSeoDescription] = useState(tag?.seoDescription ?? "");
+  const [enSeoTitle, setEnSeoTitle] = useState(
+    tag?.enSeoTitle ?? en?.seoTitle ?? tag?.seoTitle ?? ""
+  );
+  const [enSeoDescription, setEnSeoDescription] = useState(
+    tag?.enSeoDescription ?? en?.seoDescription ?? tag?.seoDescription ?? ""
+  );
+  const [zhSeoTitle, setZhSeoTitle] = useState(
+    tag?.zhSeoTitle ?? zh?.seoTitle ?? ""
+  );
+  const [zhSeoDescription, setZhSeoDescription] = useState(
+    tag?.zhSeoDescription ?? zh?.seoDescription ?? ""
+  );
 
   return (
     <form action={formAction} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -119,29 +135,63 @@ export function TagForm({
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="mb-4 font-semibold text-slate-950">SEO</h2>
           <div className="grid gap-4">
-            <Field label="SEO 标题">
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <p className="text-sm font-semibold text-slate-800">英文标签页 SEO</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                对应前台英文标签入口。
+              </p>
+            </div>
+            <Field label="英文 SEO 标题">
               <input
-                name="seoTitle"
-                value={seoTitle}
-                onChange={(event) => setSeoTitle(event.target.value)}
+                name="enSeoTitle"
+                value={enSeoTitle}
+                onChange={(event) => setEnSeoTitle(event.target.value)}
                 className={inputClassName}
               />
             </Field>
-            <Field label="SEO 描述">
+            <Field label="英文 SEO 描述">
               <textarea
-                name="seoDescription"
-                value={seoDescription}
-                onChange={(event) => setSeoDescription(event.target.value)}
+                name="enSeoDescription"
+                value={enSeoDescription}
+                onChange={(event) => setEnSeoDescription(event.target.value)}
+                maxLength={500}
+                className={textareaClassName}
+              />
+            </Field>
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <p className="text-sm font-semibold text-slate-800">中文标签页 SEO</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                对应前台中文标签入口。
+              </p>
+            </div>
+            <Field label="中文 SEO 标题">
+              <input
+                name="zhSeoTitle"
+                value={zhSeoTitle}
+                onChange={(event) => setZhSeoTitle(event.target.value)}
+                className={inputClassName}
+              />
+            </Field>
+            <Field label="中文 SEO 描述">
+              <textarea
+                name="zhSeoDescription"
+                value={zhSeoDescription}
+                onChange={(event) => setZhSeoDescription(event.target.value)}
+                maxLength={500}
                 className={textareaClassName}
               />
             </Field>
             <SeoSuggestionButton
               targetType="tag"
-              sourceTitle={() => enName || zhName || slug}
-              sourceDescription={() => enDescription || zhDescription || seoDescription}
+              sourceEnTitle={() => enName || slug}
+              sourceEnDescription={() => enDescription || enSeoDescription}
+              sourceZhTitle={() => zhName || enName || slug}
+              sourceZhDescription={() => zhDescription || zhSeoDescription}
               onApply={(suggestion) => {
-                setSeoTitle(suggestion.title);
-                setSeoDescription(suggestion.description);
+                setEnSeoTitle(suggestion.en.title);
+                setEnSeoDescription(suggestion.en.description);
+                setZhSeoTitle(suggestion.zh.title);
+                setZhSeoDescription(suggestion.zh.description);
               }}
             />
           </div>

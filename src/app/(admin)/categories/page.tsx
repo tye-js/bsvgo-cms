@@ -20,13 +20,14 @@ export default async function CategoriesPage() {
 
       <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
+          <table className="w-full min-w-[900px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-5 py-3 font-medium">英文</th>
                 <th className="px-5 py-3 font-medium">中文</th>
                 <th className="px-5 py-3 font-medium">Slug</th>
-                <th className="px-5 py-3 font-medium">SEO 标题</th>
+                <th className="px-5 py-3 font-medium">英文 SEO</th>
+                <th className="px-5 py-3 font-medium">中文 SEO</th>
                 <th className="px-5 py-3 font-medium">更新时间</th>
                 <th className="px-5 py-3 font-medium">操作</th>
               </tr>
@@ -39,9 +40,8 @@ export default async function CategoriesPage() {
                   </td>
                   <td className="px-5 py-4 text-slate-600">{category.zhName}</td>
                   <td className="px-5 py-4 text-slate-500">{category.slug}</td>
-                  <td className="px-5 py-4 text-slate-500">
-                    {category.seoTitle ?? "-"}
-                  </td>
+                  <td className="px-5 py-4 text-slate-500">{category.enSeoTitle || "-"}</td>
+                  <td className="px-5 py-4 text-slate-500">{category.zhSeoTitle || "-"}</td>
                   <td className="px-5 py-4 text-slate-500">
                     {formatDate(category.updatedAt)}
                   </td>

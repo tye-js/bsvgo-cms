@@ -3,25 +3,28 @@
 import { useState, useTransition } from "react";
 
 import { buttonClassName } from "@/components/admin/Button";
-import type { SeoTargetType } from "@/server/ai/openai";
-
-type SeoSuggestion = {
-  title: string;
-  description: string;
-};
+import type { SeoSuggestionOutput, SeoTargetType } from "@/server/ai/openai";
 
 export function SeoSuggestionButton({
   targetType,
-  sourceTitle,
-  sourceDescription,
-  sourceContent,
+  sourceEnTitle,
+  sourceEnDescription,
+  sourceEnContent,
+  sourceZhTitle,
+  sourceZhDescription,
+  sourceZhContent,
+  sourceKeywords,
   onApply
 }: {
   targetType: SeoTargetType;
-  sourceTitle: () => string;
-  sourceDescription?: () => string;
-  sourceContent?: () => string;
-  onApply: (suggestion: SeoSuggestion) => void;
+  sourceEnTitle?: () => string;
+  sourceEnDescription?: () => string;
+  sourceEnContent?: () => string;
+  sourceZhTitle?: () => string;
+  sourceZhDescription?: () => string;
+  sourceZhContent?: () => string;
+  sourceKeywords?: () => string;
+  onApply: (suggestion: SeoSuggestionOutput) => void;
 }) {
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -37,13 +40,17 @@ export function SeoSuggestionButton({
         },
         body: JSON.stringify({
           targetType,
-          title: sourceTitle(),
-          description: sourceDescription?.() ?? "",
-          content: sourceContent?.() ?? ""
+          enTitle: sourceEnTitle?.() ?? "",
+          enDescription: sourceEnDescription?.() ?? "",
+          enContent: sourceEnContent?.() ?? "",
+          zhTitle: sourceZhTitle?.() ?? "",
+          zhDescription: sourceZhDescription?.() ?? "",
+          zhContent: sourceZhContent?.() ?? "",
+          keywords: sourceKeywords?.() ?? ""
         })
       });
       const payload = (await response.json()) as
-        | (SeoSuggestion & { error?: string })
+        | (SeoSuggestionOutput & { error?: string })
         | { error: string };
 
       if (!response.ok || "error" in payload) {
@@ -51,10 +58,7 @@ export function SeoSuggestionButton({
         return;
       }
 
-      onApply({
-        title: payload.title,
-        description: payload.description
-      });
+      onApply(payload);
     });
   }
 
@@ -66,7 +70,7 @@ export function SeoSuggestionButton({
         className={buttonClassName("secondary")}
         onClick={generate}
       >
-        {isPending ? "AI 生成中..." : "用 AI 生成 SEO 建议"}
+        {isPending ? "AI 生成中..." : "用 AI 生成双语 SEO 建议"}
       </button>
       {error ? (
         <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">

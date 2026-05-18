@@ -100,6 +100,8 @@ export const categoryTranslations = pgTable(
     locale: varchar("locale", { length: 10 }).notNull(),
     name: varchar("name", { length: 100 }).notNull(),
     description: text("description").notNull(),
+    seoTitle: varchar("seo_title", { length: 255 }).notNull().default(""),
+    seoDescription: varchar("seo_description", { length: 500 }).notNull().default(""),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull()
   },
@@ -139,7 +141,9 @@ export const tagTranslations = pgTable(
       .references(() => tags.id, { onDelete: "cascade" }),
     locale: varchar("locale", { length: 10 }).notNull(),
     name: varchar("name", { length: 100 }).notNull(),
-    description: text("description").notNull().default("")
+    description: text("description").notNull().default(""),
+    seoTitle: varchar("seo_title", { length: 255 }).notNull().default(""),
+    seoDescription: varchar("seo_description", { length: 500 }).notNull().default("")
   },
   (table) => ({
     tagLocaleIdx: uniqueIndex("tag_translations_tag_locale_unique").on(

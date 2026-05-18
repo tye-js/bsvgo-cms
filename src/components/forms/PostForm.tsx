@@ -44,8 +44,10 @@ type PostFormValue = {
   status: PostStatus;
   coverImageUrl: string | null;
   coverImageAlt?: string | null;
-  seoTitle: string | null;
-  seoDescription: string | null;
+  enSeoTitle: string | null;
+  enSeoDescription: string | null;
+  zhSeoTitle: string | null;
+  zhSeoDescription: string | null;
   publishedAt: Date | null;
   featured: boolean;
   pinned: boolean;
@@ -93,8 +95,18 @@ export function PostForm({
   const en = getTranslation(post, "en");
   const zh = getTranslation(post, "zh");
   const submitTimeoutMs = generateEnglishFromChinese ? 70000 : undefined;
-  const [seoTitle, setSeoTitle] = useState(post?.seoTitle ?? "");
-  const [seoDescription, setSeoDescription] = useState(post?.seoDescription ?? "");
+  const [enSeoTitle, setEnSeoTitle] = useState(
+    post?.enSeoTitle ?? en?.seoTitle ?? ""
+  );
+  const [enSeoDescription, setEnSeoDescription] = useState(
+    post?.enSeoDescription ?? en?.seoDescription ?? ""
+  );
+  const [zhSeoTitle, setZhSeoTitle] = useState(
+    post?.zhSeoTitle ?? zh?.seoTitle ?? ""
+  );
+  const [zhSeoDescription, setZhSeoDescription] = useState(
+    post?.zhSeoDescription ?? zh?.seoDescription ?? ""
+  );
   const formValue = (name: string) =>
     formRef.current ? String(new FormData(formRef.current).get(name) ?? "") : "";
 
@@ -287,34 +299,65 @@ export function PostForm({
               defaultAlt={post?.coverImageAlt ?? zh?.title ?? en?.title ?? ""}
               mediaAssets={mediaAssets}
             />
-            <Field label="SEO 标题">
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <p className="text-sm font-semibold text-slate-800">英文页面 SEO</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                用于前台英文文章页的 title 和 meta description。
+              </p>
+            </div>
+            <Field label="英文 SEO 标题">
               <input
-                name="seoTitle"
-                value={seoTitle}
-                onChange={(event) => setSeoTitle(event.target.value)}
+                name="enSeoTitle"
+                value={enSeoTitle}
+                onChange={(event) => setEnSeoTitle(event.target.value)}
                 className={inputClassName}
               />
             </Field>
-            <Field label="SEO 描述">
+            <Field label="英文 SEO 描述">
               <textarea
-                name="seoDescription"
-                value={seoDescription}
-                onChange={(event) => setSeoDescription(event.target.value)}
+                name="enSeoDescription"
+                value={enSeoDescription}
+                onChange={(event) => setEnSeoDescription(event.target.value)}
+                maxLength={500}
+                className={textareaClassName}
+              />
+            </Field>
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <p className="text-sm font-semibold text-slate-800">中文页面 SEO</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                用于前台中文文章页的 title 和 meta description。
+              </p>
+            </div>
+            <Field label="中文 SEO 标题">
+              <input
+                name="zhSeoTitle"
+                value={zhSeoTitle}
+                onChange={(event) => setZhSeoTitle(event.target.value)}
+                className={inputClassName}
+              />
+            </Field>
+            <Field label="中文 SEO 描述">
+              <textarea
+                name="zhSeoDescription"
+                value={zhSeoDescription}
+                onChange={(event) => setZhSeoDescription(event.target.value)}
+                maxLength={500}
                 className={textareaClassName}
               />
             </Field>
             <SeoSuggestionButton
               targetType="post"
-              sourceTitle={() =>
-                formValue("enTitle") || formValue("zhTitle") || post?.slug || ""
-              }
-              sourceDescription={() => formValue("enExcerpt") || formValue("zhExcerpt")}
-              sourceContent={() =>
-                formValue("enContent") || formValue("zhContent")
-              }
+              sourceEnTitle={() => formValue("enTitle")}
+              sourceEnDescription={() => formValue("enExcerpt") || enSeoDescription}
+              sourceEnContent={() => formValue("enContent")}
+              sourceZhTitle={() => formValue("zhTitle") || post?.slug || ""}
+              sourceZhDescription={() => formValue("zhExcerpt") || zhSeoDescription}
+              sourceZhContent={() => formValue("zhContent")}
               onApply={(suggestion) => {
-                setSeoTitle(suggestion.title);
-                setSeoDescription(suggestion.description);
+                setEnSeoTitle(suggestion.en.title);
+                setEnSeoDescription(suggestion.en.description);
+                setZhSeoTitle(suggestion.zh.title);
+                setZhSeoDescription(suggestion.zh.description);
               }}
             />
             <div className="grid grid-cols-2 gap-3">

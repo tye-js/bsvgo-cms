@@ -61,14 +61,14 @@ Core tables:
 
 - `users`: admin/editor accounts with Argon2id password hashes
 - `sessions`: hashed session tokens and expiration
-- `posts`: article metadata, status, slug, SEO, publishing, ordering, featured and pinned flags
-- `post_translations`: English and optional Chinese title, excerpt, body
+- `posts`: article metadata, status, slug, publishing, ordering, featured and pinned flags
+- `post_translations`: English and optional Chinese title, excerpt, body, SEO title, and SEO description
 - `media_assets`: managed image URLs used for required post covers
 - `app_settings`: database-backed operational settings such as encrypted AI API key
-- `categories`: fixed primary categories
-- `category_translations`: English and Chinese category copy
-- `tags`: tag metadata and SEO
-- `tag_translations`: English and optional Chinese tag copy
+- `categories`: fixed primary categories with legacy English SEO fallback fields
+- `category_translations`: English and Chinese category copy plus localized SEO fields
+- `tags`: tag metadata with legacy English SEO fallback fields
+- `tag_translations`: English and optional Chinese tag copy plus localized SEO fields
 - `post_tags`: many-to-many post/tag bindings
 
 English remains the primary language for the public blog, while new CMS posts are created from a Chinese source draft. The CMS generates the linked English translation with the configured OpenAI Codex model and stores both languages on the same `posts` record.
@@ -204,14 +204,14 @@ The API key is stored encrypted in PostgreSQL. Leaving the key field blank keeps
 
 ## SEO Management
 
-The CMS stores SEO metadata in PostgreSQL for the public frontend to consume:
+The CMS stores SEO metadata in PostgreSQL for the public frontend to consume. SEO is managed separately for English and Chinese frontend routes:
 
-- Homepage SEO is stored in `app_settings` keys prefixed with `seo.home.*`.
-- Category SEO uses `categories.seo_title` and `categories.seo_description`.
-- Tag SEO uses `tags.seo_title` and `tags.seo_description`.
-- Post SEO uses `post_translations.seo_title` and `post_translations.seo_description` on the English primary translation.
+- Homepage SEO is stored in `app_settings` keys prefixed with `seo.home.en.*` and `seo.home.zh.*`. Legacy `seo.home.*` keys are still written from the English values as a fallback.
+- Category SEO uses `category_translations.seo_title` and `category_translations.seo_description` per locale. `categories.seo_title` and `categories.seo_description` remain as English fallback fields.
+- Tag SEO uses `tag_translations.seo_title` and `tag_translations.seo_description` per locale. `tags.seo_title` and `tags.seo_description` remain as English fallback fields.
+- Post SEO uses `post_translations.seo_title` and `post_translations.seo_description` per locale.
 
-Admins can manage homepage SEO from Settings. Article, category, and tag edit forms include SEO fields and AI-assisted SEO suggestions powered by the configured AI provider.
+Admins can manage bilingual homepage SEO from Settings. Article, category, and tag edit forms include separate English and Chinese SEO fields. AI-assisted SEO suggestions generate both languages in one request through the configured AI provider.
 
 ## Media
 

@@ -27,9 +27,9 @@ export default async function SettingsPage() {
             <Bot size={20} />
           </div>
           <div>
-            <h2 className="font-semibold text-slate-950">AI 英文生成</h2>
+            <h2 className="font-semibold text-slate-950">AI 内容与 SEO 生成</h2>
             <p className="mt-1 text-sm text-slate-500">
-              用于从中文草稿创建文章时生成英文内容。仅管理员可以修改此配置。
+              用于从中文草稿创建英文内容，也用于生成中英文 SEO 建议。仅管理员可以修改此配置。
             </p>
           </div>
         </div>
@@ -49,9 +49,9 @@ export default async function SettingsPage() {
             <Search size={20} />
           </div>
           <div>
-            <h2 className="font-semibold text-slate-950">首页 SEO</h2>
+            <h2 className="font-semibold text-slate-950">双语首页 SEO</h2>
             <p className="mt-1 text-sm text-slate-500">
-              管理首页标题、描述、关键词、Open Graph 和 canonical URL，可用 AI 生成优化建议。
+              分别管理英文首页和中文首页的标题、描述、关键词与 Open Graph 文案，可用 AI 同时生成双语建议。
             </p>
           </div>
         </div>
@@ -66,16 +66,16 @@ export default async function SettingsPage() {
         <h2 className="font-semibold text-slate-950">SEO 管理范围</h2>
         <div className="mt-3 grid gap-3 text-sm leading-6 text-slate-600 md:grid-cols-2">
           <p>
-            首页 SEO 在本页维护，保存到数据库设置项，供前台首页读取。
+            首页 SEO 在本页维护，按 `seo.home.en.*` 和 `seo.home.zh.*` 保存，供前台中英文首页读取。
           </p>
           <p>
-            分类页 SEO 在「分类」编辑页维护，包括 SEO 标题和描述。
+            分类页 SEO 在「分类」编辑页维护，英文和中文分别保存到分类翻译记录。
           </p>
           <p>
-            标签页 SEO 在「标签」编辑页维护，包括 SEO 标题和描述。
+            标签页 SEO 在「标签」编辑页维护，英文和中文分别保存到标签翻译记录。
           </p>
           <p>
-            文章页 SEO 在「文章」编辑页维护，跟随同一篇文章的英文主内容记录保存。
+            文章页 SEO 在「文章」编辑页维护，英文 SEO 对应英文文章翻译，中文 SEO 对应中文文章翻译。
           </p>
         </div>
       </section>

@@ -115,8 +115,10 @@ function postDataFromForm(formData: FormData) {
     status: stringValue(formData, "status"),
     coverImageUrl: stringValue(formData, "coverImageUrl"),
     coverImageAlt: stringValue(formData, "coverImageAlt"),
-    seoTitle: stringValue(formData, "seoTitle"),
-    seoDescription: stringValue(formData, "seoDescription"),
+    enSeoTitle: stringValue(formData, "enSeoTitle"),
+    enSeoDescription: stringValue(formData, "enSeoDescription"),
+    zhSeoTitle: stringValue(formData, "zhSeoTitle"),
+    zhSeoDescription: stringValue(formData, "zhSeoDescription"),
     publishedAt: stringValue(formData, "publishedAt"),
     featured: booleanValue(formData, "featured"),
     pinned: booleanValue(formData, "pinned"),
@@ -230,8 +232,10 @@ export async function createPostAction(
     enTitle: english.title,
     enExcerpt: english.excerpt,
     enContent: english.content,
-    seoTitle: english.seoTitle || zhData.seoTitle,
-    seoDescription: english.seoDescription || zhData.seoDescription
+    enSeoTitle: zhData.enSeoTitle || english.seoTitle,
+    enSeoDescription: zhData.enSeoDescription || english.seoDescription,
+    zhSeoTitle: zhData.zhSeoTitle || zhData.zhTitle,
+    zhSeoDescription: zhData.zhSeoDescription || zhData.zhExcerpt
   };
 
   let createdId: string;
@@ -271,16 +275,16 @@ export async function createPostAction(
         excerpt: data.enExcerpt,
         content: data.enContent,
         readingMinutes: data.readingTimeMinutes,
-        seoTitle: data.seoTitle,
-        seoDescription: data.seoDescription
+        seoTitle: data.enSeoTitle,
+        seoDescription: data.enSeoDescription
       });
       await upsertPostTranslation(tx, post.id, "zh", {
         title: data.zhTitle,
         excerpt: data.zhExcerpt,
         content: data.zhContent,
         readingMinutes: data.readingTimeMinutes,
-        seoTitle: data.seoTitle,
-        seoDescription: data.seoDescription
+        seoTitle: data.zhSeoTitle,
+        seoDescription: data.zhSeoDescription
       });
 
       if (data.tagIds.length) {
@@ -348,16 +352,16 @@ export async function updatePostAction(
         excerpt: data.enExcerpt,
         content: data.enContent,
         readingMinutes: data.readingTimeMinutes,
-        seoTitle: data.seoTitle,
-        seoDescription: data.seoDescription
+        seoTitle: data.enSeoTitle,
+        seoDescription: data.enSeoDescription
       });
       await upsertPostTranslation(tx, id, "zh", {
         title: data.zhTitle,
         excerpt: data.zhExcerpt,
         content: data.zhContent,
         readingMinutes: data.readingTimeMinutes,
-        seoTitle: data.seoTitle,
-        seoDescription: data.seoDescription
+        seoTitle: data.zhSeoTitle,
+        seoDescription: data.zhSeoDescription
       });
 
       await tx.delete(postTags).where(eq(postTags.postId, id));
@@ -412,8 +416,10 @@ export async function updateCategoryAction(
 ): Promise<ActionState> {
   await requireUser();
   const parsed = categorySchema.safeParse({
-    seoTitle: stringValue(formData, "seoTitle"),
-    seoDescription: stringValue(formData, "seoDescription"),
+    enSeoTitle: stringValue(formData, "enSeoTitle"),
+    enSeoDescription: stringValue(formData, "enSeoDescription"),
+    zhSeoTitle: stringValue(formData, "zhSeoTitle"),
+    zhSeoDescription: stringValue(formData, "zhSeoDescription"),
     enName: stringValue(formData, "enName"),
     enDescription: stringValue(formData, "enDescription"),
     zhName: stringValue(formData, "zhName"),
@@ -430,8 +436,8 @@ export async function updateCategoryAction(
     await tx
       .update(categories)
       .set({
-        seoTitle: toNullable(data.seoTitle),
-        seoDescription: toNullable(data.seoDescription),
+        seoTitle: toNullable(data.enSeoTitle),
+        seoDescription: toNullable(data.enSeoDescription),
         updatedAt: new Date()
       })
       .where(eq(categories.id, id));
@@ -446,7 +452,15 @@ export async function updateCategoryAction(
           description:
             locale === "en"
               ? toRequiredText(data.enDescription)
-              : toRequiredText(data.zhDescription)
+              : toRequiredText(data.zhDescription),
+          seoTitle:
+            locale === "en"
+              ? toRequiredText(data.enSeoTitle)
+              : toRequiredText(data.zhSeoTitle),
+          seoDescription:
+            locale === "en"
+              ? toRequiredText(data.enSeoDescription)
+              : toRequiredText(data.zhSeoDescription)
         })
         .onConflictDoUpdate({
           target: [categoryTranslations.categoryId, categoryTranslations.locale],
@@ -456,6 +470,14 @@ export async function updateCategoryAction(
               locale === "en"
                 ? toRequiredText(data.enDescription)
                 : toRequiredText(data.zhDescription),
+            seoTitle:
+              locale === "en"
+                ? toRequiredText(data.enSeoTitle)
+                : toRequiredText(data.zhSeoTitle),
+            seoDescription:
+              locale === "en"
+                ? toRequiredText(data.enSeoDescription)
+                : toRequiredText(data.zhSeoDescription),
             updatedAt: new Date()
           }
         });
@@ -474,8 +496,10 @@ export async function createTagAction(
   await requireUser();
   const parsed = tagSchema.safeParse({
     slug: stringValue(formData, "slug"),
-    seoTitle: stringValue(formData, "seoTitle"),
-    seoDescription: stringValue(formData, "seoDescription"),
+    enSeoTitle: stringValue(formData, "enSeoTitle"),
+    enSeoDescription: stringValue(formData, "enSeoDescription"),
+    zhSeoTitle: stringValue(formData, "zhSeoTitle"),
+    zhSeoDescription: stringValue(formData, "zhSeoDescription"),
     enName: stringValue(formData, "enName"),
     enDescription: stringValue(formData, "enDescription"),
     zhName: stringValue(formData, "zhName"),
@@ -494,8 +518,8 @@ export async function createTagAction(
       .values({
         name: data.enName,
         slug: data.slug,
-        seoTitle: toNullable(data.seoTitle),
-        seoDescription: toNullable(data.seoDescription)
+        seoTitle: toNullable(data.enSeoTitle),
+        seoDescription: toNullable(data.enSeoDescription)
       })
       .returning({ id: tags.id });
 
@@ -503,15 +527,19 @@ export async function createTagAction(
       tagId: tag.id,
       locale: "en",
       name: data.enName,
-      description: toRequiredText(data.enDescription)
+      description: toRequiredText(data.enDescription),
+      seoTitle: toRequiredText(data.enSeoTitle),
+      seoDescription: toRequiredText(data.enSeoDescription)
     });
 
-    if (data.zhName || data.zhDescription) {
+    if (data.zhName || data.zhDescription || data.zhSeoTitle || data.zhSeoDescription) {
       await tx.insert(tagTranslations).values({
         tagId: tag.id,
         locale: "zh",
         name: data.zhName || data.enName,
-        description: toRequiredText(data.zhDescription)
+        description: toRequiredText(data.zhDescription),
+        seoTitle: toRequiredText(data.zhSeoTitle),
+        seoDescription: toRequiredText(data.zhSeoDescription)
       });
     }
 
@@ -530,8 +558,10 @@ export async function updateTagAction(
   await requireUser();
   const parsed = tagSchema.safeParse({
     slug: stringValue(formData, "slug"),
-    seoTitle: stringValue(formData, "seoTitle"),
-    seoDescription: stringValue(formData, "seoDescription"),
+    enSeoTitle: stringValue(formData, "enSeoTitle"),
+    enSeoDescription: stringValue(formData, "enSeoDescription"),
+    zhSeoTitle: stringValue(formData, "zhSeoTitle"),
+    zhSeoDescription: stringValue(formData, "zhSeoDescription"),
     enName: stringValue(formData, "enName"),
     enDescription: stringValue(formData, "enDescription"),
     zhName: stringValue(formData, "zhName"),
@@ -550,8 +580,8 @@ export async function updateTagAction(
       .set({
         slug: data.slug,
         name: data.enName,
-        seoTitle: toNullable(data.seoTitle),
-        seoDescription: toNullable(data.seoDescription),
+        seoTitle: toNullable(data.enSeoTitle),
+        seoDescription: toNullable(data.enSeoDescription),
         updatedAt: new Date()
       })
       .where(eq(tags.id, id));
@@ -562,30 +592,38 @@ export async function updateTagAction(
         tagId: id,
         locale: "en",
         name: data.enName,
-        description: toRequiredText(data.enDescription)
+        description: toRequiredText(data.enDescription),
+        seoTitle: toRequiredText(data.enSeoTitle),
+        seoDescription: toRequiredText(data.enSeoDescription)
       })
       .onConflictDoUpdate({
         target: [tagTranslations.tagId, tagTranslations.locale],
         set: {
           name: data.enName,
-          description: toRequiredText(data.enDescription)
+          description: toRequiredText(data.enDescription),
+          seoTitle: toRequiredText(data.enSeoTitle),
+          seoDescription: toRequiredText(data.enSeoDescription)
         }
       });
 
-    if (data.zhName || data.zhDescription) {
+    if (data.zhName || data.zhDescription || data.zhSeoTitle || data.zhSeoDescription) {
       await tx
         .insert(tagTranslations)
         .values({
           tagId: id,
           locale: "zh",
           name: data.zhName || data.enName,
-          description: toRequiredText(data.zhDescription)
+          description: toRequiredText(data.zhDescription),
+          seoTitle: toRequiredText(data.zhSeoTitle),
+          seoDescription: toRequiredText(data.zhSeoDescription)
         })
         .onConflictDoUpdate({
           target: [tagTranslations.tagId, tagTranslations.locale],
           set: {
             name: data.zhName || data.enName,
-            description: toRequiredText(data.zhDescription)
+            description: toRequiredText(data.zhDescription),
+            seoTitle: toRequiredText(data.zhSeoTitle),
+            seoDescription: toRequiredText(data.zhSeoDescription)
           }
         });
     } else {
