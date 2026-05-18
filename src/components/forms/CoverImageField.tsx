@@ -40,11 +40,19 @@ export function CoverImageField({
   const [url, setUrl] = useState(defaultUrl ?? "");
   const [altText, setAltText] = useState(defaultAlt ?? "");
   const [caption, setCaption] = useState("");
+  const [assetQuery, setAssetQuery] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isPending, startTransition] = useTransition();
   const previewUrl = coverImageUrl(url);
   const hasCover = Boolean(url.trim());
+  const filteredAssets = mediaAssets
+    .filter((asset) => {
+      const query = assetQuery.trim().toLowerCase();
+      if (!query) return true;
+      return `${asset.altText} ${asset.caption} ${asset.url}`.toLowerCase().includes(query);
+    })
+    .slice(0, 24);
 
   function clearCover() {
     setUrl("");
@@ -157,20 +165,49 @@ export function CoverImageField({
       </Field>
 
       {mediaAssets.length ? (
-        <Field label="从媒体库选择">
-          <select
-            className={inputClassName}
-            value=""
-            disabled={isPending}
-            onChange={(event) => chooseAsset(event.target.value)}
-          >
-            <option value="">选择已有图片</option>
-            {mediaAssets.map((asset) => (
-              <option key={asset.id} value={asset.id}>
-                {asset.altText || asset.url}
-              </option>
-            ))}
-          </select>
+        <Field
+          label="从媒体库选择"
+          hint="适合图片较多的情况：先搜索，再点缩略图。当前显示前 24 个匹配结果。"
+        >
+          <div className="grid gap-3">
+            <input
+              value={assetQuery}
+              onChange={(event) => setAssetQuery(event.target.value)}
+              disabled={isPending}
+              className={inputClassName}
+              placeholder="搜索替代文本、说明或 URL"
+            />
+            <div className="grid max-h-72 grid-cols-3 gap-2 overflow-y-auto rounded-md border border-slate-200 bg-slate-50 p-2">
+              {filteredAssets.map((asset) => (
+                <button
+                  key={asset.id}
+                  type="button"
+                  disabled={isPending}
+                  className={cn(
+                    "group overflow-hidden rounded-md border bg-white text-left transition hover:border-slate-400",
+                    asset.url === url ? "border-slate-700 ring-2 ring-slate-200" : "border-slate-200"
+                  )}
+                  onClick={() => chooseAsset(asset.id)}
+                  title={asset.altText || asset.url}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={asset.url}
+                    alt={asset.altText}
+                    className="aspect-[4/3] w-full object-cover"
+                  />
+                  <span className="block truncate px-2 py-1 text-[11px] text-slate-500">
+                    {asset.altText || asset.url}
+                  </span>
+                </button>
+              ))}
+              {filteredAssets.length === 0 ? (
+                <p className="col-span-3 px-2 py-6 text-center text-xs text-slate-500">
+                  没有匹配的图片。
+                </p>
+              ) : null}
+            </div>
+          </div>
         </Field>
       ) : null}
 

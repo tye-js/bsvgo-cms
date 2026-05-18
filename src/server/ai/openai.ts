@@ -25,12 +25,21 @@ type ChineseDraftInput = {
 };
 
 export type ChineseDraftOutput = {
-  title: string;
-  excerpt: string;
-  content: string;
   slug: string;
-  seoTitle: string;
-  seoDescription: string;
+  zh: {
+    title: string;
+    excerpt: string;
+    content: string;
+    seoTitle: string;
+    seoDescription: string;
+  };
+  en: {
+    title: string;
+    excerpt: string;
+    content: string;
+    seoTitle: string;
+    seoDescription: string;
+  };
 };
 
 export type SeoTargetType = "homepage" | "category" | "tag" | "post";
@@ -121,20 +130,29 @@ function parseChineseDraft(payload: unknown): ChineseDraftOutput {
 
   const parsed = JSON.parse(text) as Partial<ChineseDraftOutput>;
   const output = {
-    title: clean(parsed.title, 255),
-    excerpt: clean(parsed.excerpt, 500),
-    content: clean(parsed.content),
     slug: clean(parsed.slug, 180)
       .toLowerCase()
       .replace(/[^a-z0-9-]+/g, "-")
       .replace(/^-+|-+$/g, "")
       .replace(/-{2,}/g, "-"),
-    seoTitle: clean(parsed.seoTitle, 255),
-    seoDescription: clean(parsed.seoDescription, 500)
+    zh: {
+      title: clean(parsed.zh?.title, 255),
+      excerpt: clean(parsed.zh?.excerpt, 500),
+      content: clean(parsed.zh?.content),
+      seoTitle: clean(parsed.zh?.seoTitle, 255),
+      seoDescription: clean(parsed.zh?.seoDescription, 500)
+    },
+    en: {
+      title: clean(parsed.en?.title, 255),
+      excerpt: clean(parsed.en?.excerpt, 500),
+      content: clean(parsed.en?.content),
+      seoTitle: clean(parsed.en?.seoTitle, 255),
+      seoDescription: clean(parsed.en?.seoDescription, 500)
+    }
   };
 
-  if (!output.title || !output.content) {
-    throw new Error("AI provider returned incomplete Chinese draft.");
+  if (!output.zh.title || !output.zh.content || !output.en.title || !output.en.content) {
+    throw new Error("AI provider returned incomplete bilingual draft.");
   }
 
   return {
@@ -338,7 +356,7 @@ export async function generateChineseDraft(
               {
                 type: "input_text",
                 text:
-                  "You are the BSVgo CMS Chinese editor. Turn rough notes, links, fragments, or unstructured source material into a polished Simplified Chinese blog draft in Markdown. Follow the configured writing style, preserve facts and technical details, organize messy material into a coherent article, and do not invent unsupported claims."
+                  "You are the BSVgo CMS bilingual editor. Turn rough notes, links, fragments, transcripts, or unstructured source material into polished Simplified Chinese and English blog drafts in Markdown. Follow the configured writing style, preserve facts and technical details, organize messy material into coherent articles, and do not invent unsupported claims. Chinese and English should be equivalent articles, not summaries of each other."
               }
             ]
           },
@@ -348,7 +366,7 @@ export async function generateChineseDraft(
               {
                 type: "input_text",
                 text: JSON.stringify({
-                  task: "Rewrite unstructured material into a Chinese blog draft.",
+                  task: "Rewrite unstructured material into bilingual blog drafts.",
                   writingStyle,
                   rawInput: input.rawInput ?? "",
                   source: {
@@ -371,40 +389,79 @@ export async function generateChineseDraft(
               type: "object",
               additionalProperties: false,
               properties: {
-                title: {
-                  type: "string",
-                  description: "Simplified Chinese article title."
-                },
-                excerpt: {
-                  type: "string",
-                  description: "Simplified Chinese article summary for list pages."
-                },
-                content: {
-                  type: "string",
-                  description: "Simplified Chinese article body in Markdown."
-                },
                 slug: {
                   type: "string",
                   description:
                     "Lowercase English URL slug using only letters, numbers, and hyphens."
                 },
-                seoTitle: {
-                  type: "string",
-                  description: "Simplified Chinese SEO title."
+                zh: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    title: {
+                      type: "string",
+                      description: "Simplified Chinese article title."
+                    },
+                    excerpt: {
+                      type: "string",
+                      description: "Simplified Chinese article summary for list pages."
+                    },
+                    content: {
+                      type: "string",
+                      description: "Simplified Chinese article body in Markdown."
+                    },
+                    seoTitle: {
+                      type: "string",
+                      description: "Simplified Chinese SEO title."
+                    },
+                    seoDescription: {
+                      type: "string",
+                      description: "Simplified Chinese SEO description."
+                    }
+                  },
+                  required: [
+                    "title",
+                    "excerpt",
+                    "content",
+                    "seoTitle",
+                    "seoDescription"
+                  ]
                 },
-                seoDescription: {
-                  type: "string",
-                  description: "Simplified Chinese SEO description."
+                en: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    title: {
+                      type: "string",
+                      description: "English article title."
+                    },
+                    excerpt: {
+                      type: "string",
+                      description: "English article summary for list pages."
+                    },
+                    content: {
+                      type: "string",
+                      description: "English article body in Markdown."
+                    },
+                    seoTitle: {
+                      type: "string",
+                      description: "English SEO title."
+                    },
+                    seoDescription: {
+                      type: "string",
+                      description: "English SEO description."
+                    }
+                  },
+                  required: [
+                    "title",
+                    "excerpt",
+                    "content",
+                    "seoTitle",
+                    "seoDescription"
+                  ]
                 }
               },
-              required: [
-                "title",
-                "excerpt",
-                "content",
-                "slug",
-                "seoTitle",
-                "seoDescription"
-              ]
+              required: ["slug", "zh", "en"]
             }
           }
         }

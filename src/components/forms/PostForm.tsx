@@ -65,12 +65,21 @@ type ActionState = {
 };
 
 type DraftRewriteResult = {
-  title: string;
-  excerpt: string;
-  content: string;
   slug: string;
-  seoTitle: string;
-  seoDescription: string;
+  zh: {
+    title: string;
+    excerpt: string;
+    content: string;
+    seoTitle: string;
+    seoDescription: string;
+  };
+  en: {
+    title: string;
+    excerpt: string;
+    content: string;
+    seoTitle: string;
+    seoDescription: string;
+  };
   error?: string;
 };
 
@@ -107,7 +116,7 @@ export function PostForm({
   const formRef = useRef<HTMLFormElement>(null);
   const en = getTranslation(post, "en");
   const zh = getTranslation(post, "zh");
-  const submitTimeoutMs = generateEnglishFromChinese ? 70000 : undefined;
+  const submitTimeoutMs = generateEnglishFromChinese ? 30000 : undefined;
   const [rawDraftInput, setRawDraftInput] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [draftRewriteError, setDraftRewriteError] = useState("");
@@ -117,6 +126,9 @@ export function PostForm({
   const [zhTitle, setZhTitle] = useState(zh?.title ?? "");
   const [zhExcerpt, setZhExcerpt] = useState(zh?.excerpt ?? "");
   const [zhContent, setZhContent] = useState(zh?.content ?? "");
+  const [enTitle, setEnTitle] = useState(en?.title ?? "");
+  const [enExcerpt, setEnExcerpt] = useState(en?.excerpt ?? "");
+  const [enContent, setEnContent] = useState(en?.content ?? "");
   const [enSeoTitle, setEnSeoTitle] = useState(
     post?.enSeoTitle ?? en?.seoTitle ?? ""
   );
@@ -155,12 +167,17 @@ export function PostForm({
       }
 
       setSlug(payload.slug);
-      setZhTitle(payload.title);
-      setZhExcerpt(payload.excerpt);
-      setZhContent(payload.content);
-      setZhSeoTitle(payload.seoTitle);
-      setZhSeoDescription(payload.seoDescription);
-      setDraftRewriteSuccess("AI 已生成中文草稿，请检查后再创建文章。");
+      setZhTitle(payload.zh.title);
+      setZhExcerpt(payload.zh.excerpt);
+      setZhContent(payload.zh.content);
+      setZhSeoTitle(payload.zh.seoTitle);
+      setZhSeoDescription(payload.zh.seoDescription);
+      setEnTitle(payload.en.title);
+      setEnExcerpt(payload.en.excerpt);
+      setEnContent(payload.en.content);
+      setEnSeoTitle(payload.en.seoTitle);
+      setEnSeoDescription(payload.en.seoDescription);
+      setDraftRewriteSuccess("AI 已生成中英文草稿、Slug 和双语 SEO，请检查后再创建文章。");
     });
   }
 
@@ -188,7 +205,7 @@ export function PostForm({
             <div className="mb-5">
               <h2 className="font-semibold text-slate-950">AI 写作助手</h2>
               <p className="mt-1 text-sm text-slate-500">
-                把未整理的信息、链接、要点或聊天记录放在这里，AI 会按设置页的写作风格整理成中文草稿。
+                把未整理的信息、链接、要点或聊天记录放在这里，AI 会按设置页的写作风格生成中英文稿、Slug 和双语 SEO。
               </p>
             </div>
             <div className="grid gap-4">
@@ -241,7 +258,7 @@ export function PostForm({
                 ) : (
                   <Sparkles size={16} />
                 )}
-                {isRewritingDraft ? "AI 正在整理..." : "用 AI 整理成中文草稿"}
+                {isRewritingDraft ? "AI 正在生成..." : "用 AI 生成中英文文章"}
               </button>
             </div>
           </section>
@@ -282,51 +299,40 @@ export function PostForm({
           </div>
         </section>
 
-        {generateEnglishFromChinese ? (
-          <>
-            <input type="hidden" name="enTitle" value="" />
-            <input type="hidden" name="enExcerpt" value="" />
-            <input type="hidden" name="enContent" value="" />
-            <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="font-semibold text-slate-950">英文内容</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                创建文章时会根据中文草稿生成英文标题、摘要、正文和 SEO 字段。
-              </p>
-            </section>
-          </>
-        ) : (
-          <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-5">
-              <h2 className="font-semibold text-slate-950">英文内容</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                英文版本与同一篇文章记录关联。
-              </p>
-            </div>
-            <div className="grid gap-4">
-              <Field label="英文标题">
-                <input
-                  name="enTitle"
-                  defaultValue={en?.title ?? ""}
-                  required
-                  className={inputClassName}
-                />
-              </Field>
-              <Field label="英文摘要">
-                <textarea
-                  name="enExcerpt"
-                  defaultValue={en?.excerpt ?? ""}
-                  className={textareaClassName}
-                />
-              </Field>
-              <MarkdownEditor
-                name="enContent"
-                label="英文正文"
-                required
-                defaultValue={en?.content ?? ""}
+        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-5">
+            <h2 className="font-semibold text-slate-950">英文内容</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              英文版本与同一篇文章记录关联。新建时可由 AI 助手生成，也可手动填写。
+            </p>
+          </div>
+          <div className="grid gap-4">
+            <Field label="英文标题">
+              <input
+                name="enTitle"
+                value={enTitle}
+                onChange={(event) => setEnTitle(event.target.value)}
+                required={!generateEnglishFromChinese}
+                className={inputClassName}
               />
-            </div>
-          </section>
-        )}
+            </Field>
+            <Field label="英文摘要">
+              <textarea
+                name="enExcerpt"
+                value={enExcerpt}
+                onChange={(event) => setEnExcerpt(event.target.value)}
+                className={textareaClassName}
+              />
+            </Field>
+            <MarkdownEditor
+              name="enContent"
+              label="英文正文"
+              required={!generateEnglishFromChinese}
+              value={enContent}
+              onChange={setEnContent}
+            />
+          </div>
+        </section>
       </div>
 
       <aside className="grid content-start gap-4">
@@ -533,14 +539,14 @@ export function PostForm({
               timeoutMs={submitTimeoutMs}
               message={
                 generateEnglishFromChinese
-                  ? "英文生成时间比预期更久。如果 AI 服务无法及时完成，请等待错误提示后再重新提交。"
+                  ? "创建文章时间比预期更久。如果服务器无法及时完成，请等待错误提示后再重新提交。"
                   : undefined
               }
             />
             <SubmitButton
               className="w-full"
-              pendingLabel={generateEnglishFromChinese ? "正在生成英文..." : undefined}
-              timeoutLabel={generateEnglishFromChinese ? "生成超时" : undefined}
+              pendingLabel={generateEnglishFromChinese ? "正在创建文章..." : undefined}
+              timeoutLabel={generateEnglishFromChinese ? "创建超时" : undefined}
               timeoutMs={submitTimeoutMs}
             >
               {submitLabel}

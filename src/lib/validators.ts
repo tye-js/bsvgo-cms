@@ -37,7 +37,7 @@ export const postSchema = z.object({
 });
 
 export const newPostSchema = postSchema.extend({
-  enTitle: z.string().trim().optional(),
+  enTitle: z.string().trim().max(255).optional(),
   enExcerpt: z.string().trim().optional(),
   enContent: z.string().trim().optional(),
   zhTitle: z.string().trim().min(1, "中文标题为必填项").max(255),

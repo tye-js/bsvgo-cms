@@ -218,15 +218,22 @@ export async function createPostAction(
   }
 
   const zhData = parsed.data;
-  const english = await generateEnglishPost({
-    title: zhData.zhTitle,
-    excerpt: zhData.zhExcerpt,
-    content: zhData.zhContent
-  }).catch((error) => ({ error: friendlyAiError(error) }));
+  const english =
+    zhData.enTitle?.trim() && zhData.enContent?.trim()
+      ? {
+          title: zhData.enTitle,
+          excerpt: zhData.enExcerpt ?? "",
+          content: zhData.enContent,
+          seoTitle: zhData.enSeoTitle ?? "",
+          seoDescription: zhData.enSeoDescription ?? ""
+        }
+      : await generateEnglishPost({
+          title: zhData.zhTitle,
+          excerpt: zhData.zhExcerpt,
+          content: zhData.zhContent
+        }).catch((error) => ({ error: friendlyAiError(error) }));
 
-  if ("error" in english) {
-    return english;
-  }
+  if ("error" in english) return english;
 
   const data = {
     ...zhData,

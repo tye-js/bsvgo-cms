@@ -90,7 +90,7 @@ export default async function AdminLayout({
             </form>
           </div>
         </header>
-        <main className="w-full py-6">
+        <main className="w-full px-3 py-6 sm:px-4 lg:px-5">
           {children}
         </main>
       </div>
