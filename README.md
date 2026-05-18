@@ -202,6 +202,17 @@ Open Settings as an admin and configure:
 
 The API key is stored encrypted in PostgreSQL. Leaving the key field blank keeps the existing key.
 
+## SEO Management
+
+The CMS stores SEO metadata in PostgreSQL for the public frontend to consume:
+
+- Homepage SEO is stored in `app_settings` keys prefixed with `seo.home.*`.
+- Category SEO uses `categories.seo_title` and `categories.seo_description`.
+- Tag SEO uses `tags.seo_title` and `tags.seo_description`.
+- Post SEO uses `post_translations.seo_title` and `post_translations.seo_description` on the English primary translation.
+
+Admins can manage homepage SEO from Settings. Article, category, and tag edit forms include SEO fields and AI-assisted SEO suggestions powered by the configured AI provider.
+
 ## Media
 
 Post cover images are optional. When a post has no cover, the CMS displays `/images/post-cover-placeholder.svg` and saves `posts.cover_image` as an empty string. Uploaded or selected covers are stored in `media_assets`, linked through `posts.cover_image_id`, and mirrored to `posts.cover_image` for the existing frontend.

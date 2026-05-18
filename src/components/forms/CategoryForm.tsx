@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { buttonClassName } from "@/components/admin/Button";
 import { Field, inputClassName, textareaClassName } from "@/components/admin/Field";
+import { SeoSuggestionButton } from "@/components/forms/SeoSuggestionButton";
 import { SubmitButton } from "@/components/forms/SubmitButton";
 import type { Locale } from "@/server/db/schema";
 
@@ -41,6 +42,14 @@ export function CategoryForm({
   const [state, formAction] = useActionState(action, {});
   const en = translation(category, "en");
   const zh = translation(category, "zh");
+  const [enName, setEnName] = useState(en?.name ?? "");
+  const [zhName, setZhName] = useState(zh?.name ?? "");
+  const [enDescription, setEnDescription] = useState(en?.description ?? "");
+  const [zhDescription, setZhDescription] = useState(zh?.description ?? "");
+  const [seoTitle, setSeoTitle] = useState(category.seoTitle ?? "");
+  const [seoDescription, setSeoDescription] = useState(
+    category.seoDescription ?? ""
+  );
 
   return (
     <form action={formAction} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -61,7 +70,8 @@ export function CategoryForm({
             <Field label="英文名称">
               <input
                 name="enName"
-                defaultValue={en?.name ?? ""}
+                value={enName}
+                onChange={(event) => setEnName(event.target.value)}
                 required
                 className={inputClassName}
               />
@@ -69,7 +79,8 @@ export function CategoryForm({
             <Field label="中文名称">
               <input
                 name="zhName"
-                defaultValue={zh?.name ?? ""}
+                value={zhName}
+                onChange={(event) => setZhName(event.target.value)}
                 required
                 className={inputClassName}
               />
@@ -78,14 +89,16 @@ export function CategoryForm({
           <Field label="英文描述">
             <textarea
               name="enDescription"
-              defaultValue={en?.description ?? ""}
+              value={enDescription}
+              onChange={(event) => setEnDescription(event.target.value)}
               className={textareaClassName}
             />
           </Field>
           <Field label="中文描述">
             <textarea
               name="zhDescription"
-              defaultValue={zh?.description ?? ""}
+              value={zhDescription}
+              onChange={(event) => setZhDescription(event.target.value)}
               className={textareaClassName}
             />
           </Field>
@@ -102,17 +115,28 @@ export function CategoryForm({
             <Field label="SEO 标题">
               <input
                 name="seoTitle"
-                defaultValue={category.seoTitle ?? ""}
+                value={seoTitle}
+                onChange={(event) => setSeoTitle(event.target.value)}
                 className={inputClassName}
               />
             </Field>
             <Field label="SEO 描述">
               <textarea
                 name="seoDescription"
-                defaultValue={category.seoDescription ?? ""}
+                value={seoDescription}
+                onChange={(event) => setSeoDescription(event.target.value)}
                 className={textareaClassName}
               />
             </Field>
+            <SeoSuggestionButton
+              targetType="category"
+              sourceTitle={() => enName || zhName || category.slug}
+              sourceDescription={() => enDescription || zhDescription || seoDescription}
+              onApply={(suggestion) => {
+                setSeoTitle(suggestion.title);
+                setSeoDescription(suggestion.description);
+              }}
+            />
           </div>
         </section>
         <div className="sticky bottom-4 flex gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">

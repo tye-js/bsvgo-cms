@@ -1,7 +1,12 @@
-import { Bot, Database, Image, ShieldCheck } from "lucide-react";
+import { Bot, Database, Image, Search, ShieldCheck } from "lucide-react";
 
 import { AiSettingsForm } from "@/components/forms/AiSettingsForm";
-import { updateAiSettingsAction } from "@/server/settings/actions";
+import { HomepageSeoForm } from "@/components/forms/HomepageSeoForm";
+import {
+  generateHomepageSeoAction,
+  updateAiSettingsAction,
+  updateHomepageSeoAction
+} from "@/server/settings/actions";
 import { getSettingsPageData } from "@/server/settings/service";
 
 export default async function SettingsPage() {
@@ -36,6 +41,43 @@ export default async function SettingsPage() {
           model={settings.ai.model}
           timeoutMs={settings.ai.timeoutMs}
         />
+      </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-5 flex items-start gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-100 text-slate-600">
+            <Search size={20} />
+          </div>
+          <div>
+            <h2 className="font-semibold text-slate-950">首页 SEO</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              管理首页标题、描述、关键词、Open Graph 和 canonical URL，可用 AI 生成优化建议。
+            </p>
+          </div>
+        </div>
+        <HomepageSeoForm
+          action={updateHomepageSeoAction}
+          generateAction={generateHomepageSeoAction}
+          value={settings.homepageSeo}
+        />
+      </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="font-semibold text-slate-950">SEO 管理范围</h2>
+        <div className="mt-3 grid gap-3 text-sm leading-6 text-slate-600 md:grid-cols-2">
+          <p>
+            首页 SEO 在本页维护，保存到数据库设置项，供前台首页读取。
+          </p>
+          <p>
+            分类页 SEO 在「分类」编辑页维护，包括 SEO 标题和描述。
+          </p>
+          <p>
+            标签页 SEO 在「标签」编辑页维护，包括 SEO 标题和描述。
+          </p>
+          <p>
+            文章页 SEO 在「文章」编辑页维护，跟随同一篇文章的英文主内容记录保存。
+          </p>
+        </div>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3">

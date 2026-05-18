@@ -91,6 +91,24 @@ export const aiSettingsSchema = z.object({
     .max(180000, "超时时间不能超过 180000 毫秒")
 });
 
+export const homepageSeoSchema = z.object({
+  title: z.string().trim().min(1, "首页 SEO 标题为必填项").max(255),
+  description: z.string().trim().min(1, "首页 SEO 描述为必填项").max(500),
+  keywords: z.string().trim().max(500).optional(),
+  ogTitle: z.string().trim().max(255).optional(),
+  ogDescription: z.string().trim().max(500).optional(),
+  ogImage: z.string().trim().url("请输入有效的 Open Graph 图片 URL").or(z.literal("")),
+  canonicalUrl: z.string().trim().url("请输入有效的 canonical URL").or(z.literal(""))
+});
+
+export const seoSuggestionSchema = z.object({
+  targetType: z.enum(["homepage", "category", "tag", "post"]),
+  title: z.string().trim().min(1, "请先填写标题或名称").max(255),
+  description: z.string().trim().optional(),
+  content: z.string().trim().optional(),
+  keywords: z.string().trim().optional()
+});
+
 export const mediaAssetSchema = z.object({
   url: z.string().trim().url("请输入有效的图片 URL"),
   altText: z.string().trim().max(255).optional(),

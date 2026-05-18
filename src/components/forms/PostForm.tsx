@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef, useState } from "react";
 
 import { buttonClassName } from "@/components/admin/Button";
 import { Field, inputClassName, textareaClassName } from "@/components/admin/Field";
 import { CoverImageField } from "@/components/forms/CoverImageField";
 import { MarkdownEditor } from "@/components/forms/MarkdownEditor";
+import { SeoSuggestionButton } from "@/components/forms/SeoSuggestionButton";
 import { SubmitButton, SubmitTimeoutNotice } from "@/components/forms/SubmitButton";
 import type { Locale, PostStatus } from "@/server/db/schema";
 
@@ -88,12 +89,21 @@ export function PostForm({
   generateEnglishFromChinese?: boolean;
 }) {
   const [state, formAction] = useActionState(action, {});
+  const formRef = useRef<HTMLFormElement>(null);
   const en = getTranslation(post, "en");
   const zh = getTranslation(post, "zh");
   const submitTimeoutMs = generateEnglishFromChinese ? 70000 : undefined;
+  const [seoTitle, setSeoTitle] = useState(post?.seoTitle ?? "");
+  const [seoDescription, setSeoDescription] = useState(post?.seoDescription ?? "");
+  const formValue = (name: string) =>
+    formRef.current ? String(new FormData(formRef.current).get(name) ?? "") : "";
 
   return (
-    <form action={formAction} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+    <form
+      ref={formRef}
+      action={formAction}
+      className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]"
+    >
       <div className="grid gap-6">
         {state.error ? (
           <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -280,17 +290,33 @@ export function PostForm({
             <Field label="SEO 标题">
               <input
                 name="seoTitle"
-                defaultValue={post?.seoTitle ?? ""}
+                value={seoTitle}
+                onChange={(event) => setSeoTitle(event.target.value)}
                 className={inputClassName}
               />
             </Field>
             <Field label="SEO 描述">
               <textarea
                 name="seoDescription"
-                defaultValue={post?.seoDescription ?? ""}
+                value={seoDescription}
+                onChange={(event) => setSeoDescription(event.target.value)}
                 className={textareaClassName}
               />
             </Field>
+            <SeoSuggestionButton
+              targetType="post"
+              sourceTitle={() =>
+                formValue("enTitle") || formValue("zhTitle") || post?.slug || ""
+              }
+              sourceDescription={() => formValue("enExcerpt") || formValue("zhExcerpt")}
+              sourceContent={() =>
+                formValue("enContent") || formValue("zhContent")
+              }
+              onApply={(suggestion) => {
+                setSeoTitle(suggestion.title);
+                setSeoDescription(suggestion.description);
+              }}
+            />
             <div className="grid grid-cols-2 gap-3">
               <Field label="阅读分钟">
                 <input

@@ -13,6 +13,16 @@ export const AI_SETTING_KEYS = {
   timeoutMs: "ai.openai.timeout_ms"
 } as const;
 
+export const HOMEPAGE_SEO_SETTING_KEYS = {
+  title: "seo.home.title",
+  description: "seo.home.description",
+  keywords: "seo.home.keywords",
+  ogTitle: "seo.home.og_title",
+  ogDescription: "seo.home.og_description",
+  ogImage: "seo.home.og_image",
+  canonicalUrl: "seo.home.canonical_url"
+} as const;
+
 export const DEFAULT_AI_API_BASE_URL = "https://api.openai.com/v1";
 export const DEFAULT_AI_MODEL = "gpt-5.3-codex";
 export const DEFAULT_AI_TIMEOUT_MS = 60000;
@@ -61,7 +71,10 @@ export async function getAiSettingsForGeneration() {
 }
 
 export async function getSettingsPageData() {
-  const rows = await getSettings(Object.values(AI_SETTING_KEYS));
+  const rows = await getSettings([
+    ...Object.values(AI_SETTING_KEYS),
+    ...Object.values(HOMEPAGE_SEO_SETTING_KEYS)
+  ]);
   const byKey = new Map(rows.map((row) => [row.key, row]));
   const apiKey = decryptIfNeeded(byKey.get(AI_SETTING_KEYS.apiKey)).trim();
   const model =
@@ -73,6 +86,22 @@ export async function getSettingsPageData() {
     decryptIfNeeded(byKey.get(AI_SETTING_KEYS.timeoutMs)).trim() ||
     String(DEFAULT_AI_TIMEOUT_MS);
 
+  const homepageSeo = {
+    title: decryptIfNeeded(byKey.get(HOMEPAGE_SEO_SETTING_KEYS.title)).trim(),
+    description: decryptIfNeeded(
+      byKey.get(HOMEPAGE_SEO_SETTING_KEYS.description)
+    ).trim(),
+    keywords: decryptIfNeeded(byKey.get(HOMEPAGE_SEO_SETTING_KEYS.keywords)).trim(),
+    ogTitle: decryptIfNeeded(byKey.get(HOMEPAGE_SEO_SETTING_KEYS.ogTitle)).trim(),
+    ogDescription: decryptIfNeeded(
+      byKey.get(HOMEPAGE_SEO_SETTING_KEYS.ogDescription)
+    ).trim(),
+    ogImage: decryptIfNeeded(byKey.get(HOMEPAGE_SEO_SETTING_KEYS.ogImage)).trim(),
+    canonicalUrl: decryptIfNeeded(
+      byKey.get(HOMEPAGE_SEO_SETTING_KEYS.canonicalUrl)
+    ).trim()
+  };
+
   return {
     ai: {
       hasApiKey: apiKey.length > 0,
@@ -80,8 +109,69 @@ export async function getSettingsPageData() {
       apiBaseUrl,
       model,
       timeoutMs: timeoutValue
-    }
+    },
+    homepageSeo
   };
+}
+
+export async function saveHomepageSeoSettings({
+  title,
+  description,
+  keywords,
+  ogTitle,
+  ogDescription,
+  ogImage,
+  canonicalUrl,
+  userId
+}: {
+  title: string;
+  description: string;
+  keywords?: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImage?: string;
+  canonicalUrl?: string;
+  userId: string;
+}) {
+  const now = new Date();
+  const values = [
+    { key: HOMEPAGE_SEO_SETTING_KEYS.title, value: title.trim() },
+    { key: HOMEPAGE_SEO_SETTING_KEYS.description, value: description.trim() },
+    { key: HOMEPAGE_SEO_SETTING_KEYS.keywords, value: keywords?.trim() ?? "" },
+    { key: HOMEPAGE_SEO_SETTING_KEYS.ogTitle, value: ogTitle?.trim() ?? "" },
+    {
+      key: HOMEPAGE_SEO_SETTING_KEYS.ogDescription,
+      value: ogDescription?.trim() ?? ""
+    },
+    { key: HOMEPAGE_SEO_SETTING_KEYS.ogImage, value: ogImage?.trim() ?? "" },
+    {
+      key: HOMEPAGE_SEO_SETTING_KEYS.canonicalUrl,
+      value: canonicalUrl?.trim() ?? ""
+    }
+  ];
+
+  await db.transaction(async (tx) => {
+    for (const value of values) {
+      await tx
+        .insert(appSettings)
+        .values({
+          key: value.key,
+          value: value.value,
+          encrypted: false,
+          updatedBy: userId,
+          updatedAt: now
+        })
+        .onConflictDoUpdate({
+          target: appSettings.key,
+          set: {
+            value: value.value,
+            encrypted: false,
+            updatedBy: userId,
+            updatedAt: now
+          }
+        });
+    }
+  });
 }
 
 export async function saveAiSettings({
