@@ -24,6 +24,23 @@ type ChineseDraftInput = {
   sourceContent?: string;
 };
 
+type ChineseDraftCoreInput = ChineseDraftInput;
+
+type DraftTranslationInput = {
+  zhTitle: string;
+  zhExcerpt?: string;
+  zhContent: string;
+};
+
+type DraftMetadataInput = {
+  zhTitle: string;
+  zhExcerpt?: string;
+  zhContent: string;
+  enTitle: string;
+  enExcerpt?: string;
+  enContent: string;
+};
+
 export type ChineseDraftOutput = {
   slug: string;
   zh: {
@@ -37,6 +54,34 @@ export type ChineseDraftOutput = {
     title: string;
     excerpt: string;
     content: string;
+    seoTitle: string;
+    seoDescription: string;
+  };
+};
+
+export type ChineseDraftCoreOutput = {
+  zh: {
+    title: string;
+    excerpt: string;
+    content: string;
+  };
+};
+
+export type DraftTranslationOutput = {
+  en: {
+    title: string;
+    excerpt: string;
+    content: string;
+  };
+};
+
+export type DraftMetadataOutput = {
+  slug: string;
+  zh: {
+    seoTitle: string;
+    seoDescription: string;
+  };
+  en: {
     seoTitle: string;
     seoDescription: string;
   };
@@ -183,6 +228,89 @@ function parseChineseDraft(payload: unknown): ChineseDraftOutput {
     ...output,
     slug: output.slug || "draft-post"
   };
+}
+
+function parseChineseDraftCore(payload: unknown): ChineseDraftCoreOutput {
+  const text = outputText(payload);
+  if (!text) {
+    throw new Error("AI provider did not return generated Chinese draft.");
+  }
+
+  const parsed = JSON.parse(text) as Partial<ChineseDraftCoreOutput>;
+  const output = {
+    zh: {
+      title: clean(parsed.zh?.title, 255),
+      excerpt: clean(parsed.zh?.excerpt, 500),
+      content: clean(parsed.zh?.content)
+    }
+  };
+
+  if (!output.zh.title || !output.zh.content) {
+    throw new Error("AI provider returned incomplete Chinese draft.");
+  }
+
+  return output;
+}
+
+function parseDraftTranslation(payload: unknown): DraftTranslationOutput {
+  const text = outputText(payload);
+  if (!text) {
+    throw new Error("AI provider did not return translated English content.");
+  }
+
+  const parsed = JSON.parse(text) as Partial<DraftTranslationOutput>;
+  const output = {
+    en: {
+      title: clean(parsed.en?.title, 255),
+      excerpt: clean(parsed.en?.excerpt, 500),
+      content: clean(parsed.en?.content)
+    }
+  };
+
+  if (!output.en.title || !output.en.content) {
+    throw new Error("AI provider returned incomplete translated English content.");
+  }
+
+  return output;
+}
+
+function parseDraftMetadata(payload: unknown): DraftMetadataOutput {
+  const text = outputText(payload);
+  if (!text) {
+    throw new Error("AI provider did not return draft metadata.");
+  }
+
+  const parsed = JSON.parse(text) as Partial<DraftMetadataOutput>;
+  const output = {
+    slug: clean(parsed.slug, 180)
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .replace(/-{2,}/g, "-"),
+    zh: {
+      seoTitle: clean(parsed.zh?.seoTitle, 255),
+      seoDescription: clean(parsed.zh?.seoDescription, 500)
+    },
+    en: {
+      seoTitle: clean(parsed.en?.seoTitle, 255),
+      seoDescription: clean(parsed.en?.seoDescription, 500)
+    }
+  };
+
+  if (!output.slug) {
+    throw new Error("AI provider returned an invalid slug.");
+  }
+
+  if (
+    !output.zh.seoTitle ||
+    !output.zh.seoDescription ||
+    !output.en.seoTitle ||
+    !output.en.seoDescription
+  ) {
+    throw new Error("AI provider returned incomplete draft metadata.");
+  }
+
+  return output;
 }
 
 function parseSeoSuggestion(payload: unknown): SeoSuggestionOutput {
@@ -488,6 +616,238 @@ export async function generateChineseDraft(
   });
 
   return parseChineseDraft(payload);
+}
+
+export async function generateChineseDraftCore(
+  input: ChineseDraftCoreInput
+): Promise<ChineseDraftCoreOutput> {
+  const settings = await getAiSettingsForGeneration();
+  const payload = await callResponsesJson({
+    settings,
+    input: [
+      {
+        role: "system",
+        content: [
+          {
+            type: "input_text",
+            text:
+              "You are the BSVgo CMS Chinese editor. Turn rough notes, links, fragments, transcripts, or unstructured source material into a polished Simplified Chinese blog draft in Markdown. Follow the configured writing style, preserve facts and technical details, organize messy material into coherent articles, and do not invent unsupported claims. Return only Chinese title, excerpt, and content."
+          }
+        ]
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: JSON.stringify({
+              task: "Rewrite unstructured material into a Chinese blog draft.",
+              writingStyle: settings.writingStyle,
+              rawInput: input.rawInput ?? "",
+              source: {
+                url: input.sourceUrl ?? "",
+                title: input.sourceTitle ?? "",
+                description: input.sourceDescription ?? "",
+                content: input.sourceContent ?? ""
+              }
+            })
+          }
+        ]
+      }
+    ],
+    format: {
+      type: "json_schema",
+      name: "chinese_blog_draft_core",
+      strict: true,
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          zh: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              title: {
+                type: "string",
+                description: "Simplified Chinese article title."
+              },
+              excerpt: {
+                type: "string",
+                description: "Simplified Chinese article summary for list pages."
+              },
+              content: {
+                type: "string",
+                description: "Simplified Chinese article body in Markdown."
+              }
+            },
+            required: ["title", "excerpt", "content"]
+          }
+        },
+        required: ["zh"]
+      }
+    },
+    timeoutMessage: "draft generation timed out."
+  });
+
+  return parseChineseDraftCore(payload);
+}
+
+export async function translateDraftToEnglish(
+  input: DraftTranslationInput
+): Promise<DraftTranslationOutput> {
+  const payload = await callResponsesJson({
+    input: [
+      {
+        role: "system",
+        content: [
+          {
+            type: "input_text",
+            text:
+              "You are the BSVgo CMS English editor. Translate the provided Simplified Chinese draft into polished English Markdown. Preserve factual meaning, headings, links, code blocks, lists, and tone. Do not add unsupported facts."
+          }
+        ]
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: JSON.stringify({
+              task: "Translate the Chinese draft into English.",
+              chinese: {
+                title: input.zhTitle,
+                excerpt: input.zhExcerpt ?? "",
+                content: input.zhContent
+              }
+            })
+          }
+        ]
+      }
+    ],
+    format: {
+      type: "json_schema",
+      name: "draft_translation",
+      strict: true,
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          en: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              title: {
+                type: "string",
+                description: "English article title."
+              },
+              excerpt: {
+                type: "string",
+                description: "English article summary."
+              },
+              content: {
+                type: "string",
+                description: "English article body in Markdown."
+              }
+            },
+            required: ["title", "excerpt", "content"]
+          }
+        },
+        required: ["en"]
+      }
+    },
+    timeoutMessage: "translation timed out."
+  });
+
+  return parseDraftTranslation(payload);
+}
+
+export async function generateDraftMetadata(
+  input: DraftMetadataInput
+): Promise<DraftMetadataOutput> {
+  const payload = await callResponsesJson({
+    input: [
+      {
+        role: "system",
+        content: [
+          {
+            type: "input_text",
+            text:
+              "You are the BSVgo CMS metadata editor. Generate a concise URL slug plus SEO titles and descriptions for both Simplified Chinese and English pages. Keep them search-friendly, accurate, and natural."
+          }
+        ]
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: JSON.stringify({
+              task: "Generate slug and bilingual SEO metadata.",
+              chinese: {
+                title: input.zhTitle,
+                excerpt: input.zhExcerpt ?? "",
+                content: input.zhContent
+              },
+              english: {
+                title: input.enTitle,
+                excerpt: input.enExcerpt ?? "",
+                content: input.enContent
+              }
+            })
+          }
+        ]
+      }
+    ],
+    format: {
+      type: "json_schema",
+      name: "draft_metadata",
+      strict: true,
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          slug: {
+            type: "string",
+            description: "Lowercase English URL slug using only letters, numbers, and hyphens."
+          },
+          zh: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              seoTitle: {
+                type: "string",
+                description: "Simplified Chinese SEO title."
+              },
+              seoDescription: {
+                type: "string",
+                description: "Simplified Chinese SEO description."
+              }
+            },
+            required: ["seoTitle", "seoDescription"]
+          },
+          en: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              seoTitle: {
+                type: "string",
+                description: "English SEO title."
+              },
+              seoDescription: {
+                type: "string",
+                description: "English SEO description."
+              }
+            },
+            required: ["seoTitle", "seoDescription"]
+          }
+        },
+        required: ["slug", "zh", "en"]
+      }
+    },
+    timeoutMessage: "metadata generation timed out."
+  });
+
+  return parseDraftMetadata(payload);
 }
 
 export async function generateSeoSuggestion(

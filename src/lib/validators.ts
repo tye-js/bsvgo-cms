@@ -38,6 +38,7 @@ export const postSchema = z.object({
 });
 
 export const newPostSchema = postSchema.extend({
+  slug: slugSchema.or(z.literal("")),
   enTitle: z.string().trim().max(255).optional(),
   enExcerpt: z.string().trim().optional(),
   enContent: z.string().trim().optional(),
@@ -132,6 +133,21 @@ export const aiDraftRewriteSchema = z
       Boolean(value.rawInput && value.rawInput.trim().length >= 20),
     "如果不提供链接，请先输入至少 20 个字符的原始素材"
   );
+
+export const aiDraftTranslateSchema = z.object({
+  zhTitle: z.string().trim().min(1, "中文标题为必填项").max(255),
+  zhExcerpt: z.string().trim().optional(),
+  zhContent: z.string().trim().min(1, "中文正文为必填项")
+});
+
+export const aiDraftMetadataSchema = z.object({
+  zhTitle: z.string().trim().min(1, "中文标题为必填项").max(255),
+  zhExcerpt: z.string().trim().optional(),
+  zhContent: z.string().trim().min(1, "中文正文为必填项"),
+  enTitle: z.string().trim().min(1, "英文标题为必填项").max(255),
+  enExcerpt: z.string().trim().optional(),
+  enContent: z.string().trim().min(1, "英文正文为必填项")
+});
 
 export const homepageSeoSchema = z.object({
   enTitle: z.string().trim().max(255).optional(),

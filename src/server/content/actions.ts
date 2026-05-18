@@ -113,6 +113,17 @@ function booleanValue(formData: FormData, key: string) {
   return formData.get(key) === "on";
 }
 
+function fallbackSlug(value: string) {
+  const slug = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+
+  return slug || `draft-post-${Date.now()}`;
+}
+
 function postDataFromForm(formData: FormData) {
   return {
     slug: stringValue(formData, "slug"),
@@ -279,7 +290,12 @@ export async function createPostAction(
     return { error: parsed.error.issues[0]?.message ?? "文章数据无效" };
   }
 
-  const zhData = parsed.data;
+  const zhData = {
+    ...parsed.data,
+    slug:
+      parsed.data.slug.trim() ||
+      fallbackSlug(parsed.data.zhTitle || parsed.data.enTitle || "draft-post")
+  };
   const english =
     zhData.enTitle?.trim() && zhData.enContent?.trim()
       ? {

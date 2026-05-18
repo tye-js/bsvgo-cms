@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { aiDraftRewriteSchema } from "@/lib/validators";
-import { generateChineseDraftCore } from "@/server/ai/openai";
-import {
-  SourceIngestionError,
-  fetchAiDraftSource
-} from "@/server/ai/source-ingestion";
+import { aiDraftTranslateSchema } from "@/lib/validators";
+import { translateDraftToEnglish } from "@/server/ai/openai";
 import { getCurrentUser } from "@/server/auth/session";
 
 export const runtime = "nodejs";
@@ -37,35 +33,25 @@ export async function POST(request: Request) {
     );
   }
 
-  const parsed = aiDraftRewriteSchema.safeParse(body);
+  const parsed = aiDraftTranslateSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.issues[0]?.message ?? "文章素材无效" },
+      { error: parsed.error.issues[0]?.message ?? "中文草稿无效" },
       { status: 400 }
     );
   }
 
   try {
-    const source = await fetchAiDraftSource(parsed.data.sourceUrl?.trim() ?? "");
-    const draft = await generateChineseDraftCore({
-      rawInput: parsed.data.rawInput,
-      ...source
-    });
+    const draft = await translateDraftToEnglish(parsed.data);
     return NextResponse.json(draft);
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      return NextResponse.json(
-        { error: "链接读取超时。可以把网页关键信息粘贴到素材框后重试。" },
-        { status: 400 }
-      );
-    }
-
-    if (error instanceof SourceIngestionError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
     return NextResponse.json(
-      { error: "AI 改写文章失败。请检查 AI 设置后重试。" },
+      {
+        error:
+          error instanceof Error && error.message.includes("timed out")
+            ? "英文稿生成超时。可以稍后重试。"
+            : "英文稿自动生成失败。请检查 AI 设置后重试。"
+      },
       { status: 500 }
     );
   }

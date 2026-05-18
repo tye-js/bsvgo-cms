@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useRef, useState, useTransition } from "react";
+import { useActionState, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
 
 import { buttonClassName } from "@/components/admin/Button";
@@ -68,22 +68,36 @@ type ActionState = {
 };
 
 type DraftRewriteResult = {
-  slug: string;
   zh: {
     title: string;
     excerpt: string;
     content: string;
-    seoTitle: string;
-    seoDescription: string;
   };
+  error?: string;
+};
+
+type DraftRewriteError = {
+  error: string;
+};
+
+type DraftTranslationResult = {
   en: {
     title: string;
     excerpt: string;
     content: string;
+  };
+};
+
+type DraftMetadataResult = {
+  slug: string;
+  zh: {
     seoTitle: string;
     seoDescription: string;
   };
-  error?: string;
+  en: {
+    seoTitle: string;
+    seoDescription: string;
+  };
 };
 
 function getTranslation(post: PostFormValue | undefined, locale: Locale) {
@@ -99,6 +113,66 @@ function optionLabel(option: SelectOption) {
   const enName = option.enName ?? option.name ?? option.slug;
   const zhName = option.zhName ?? "";
   return zhName && zhName !== enName ? `${enName} / ${zhName}` : enName;
+}
+
+async function readJsonResponse<T extends object>(
+  response: Response,
+  defaultError: string
+): Promise<T | DraftRewriteError> {
+  const contentType = response.headers.get("content-type") ?? "";
+  const text = await response.text();
+  const trimmedText = text.trim();
+  const looksLikeJson =
+    contentType.includes("application/json") ||
+    trimmedText.startsWith("{") ||
+    trimmedText.startsWith("[");
+
+  if (looksLikeJson) {
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      return {
+        error: "AI 返回了无法解析的结果，请稍后重试。"
+      };
+    }
+  }
+
+  let responsePath = "";
+  try {
+    responsePath = new URL(response.url).pathname;
+  } catch {
+    responsePath = "";
+  }
+
+  if (response.redirected && responsePath === "/login") {
+    return {
+      error: "登录状态已失效，请重新登录后再试。"
+    };
+  }
+
+  if (response.redirected && responsePath === "/dashboard") {
+    return {
+      error: "当前账号没有权限执行这项操作。"
+    };
+  }
+
+  if (response.status === 504 || /gateway timeout/i.test(trimmedText)) {
+    return {
+      error: "AI 生成超时了。可以缩短素材后再试，或稍后重试。"
+    };
+  }
+
+  if (response.status === 502 || /bad gateway/i.test(trimmedText)) {
+    return {
+      error: "AI 服务暂时不可用，请稍后再试。"
+    };
+  }
+
+  return {
+    error:
+      defaultError ||
+      `请求失败（${response.status}）`
+  };
 }
 
 export function PostForm({
@@ -130,7 +204,11 @@ export function PostForm({
   const [sourceUrl, setSourceUrl] = useState("");
   const [draftRewriteError, setDraftRewriteError] = useState("");
   const [draftRewriteSuccess, setDraftRewriteSuccess] = useState("");
-  const [isRewritingDraft, startDraftRewrite] = useTransition();
+  const [draftTranslationError, setDraftTranslationError] = useState("");
+  const [draftTranslationPending, setDraftTranslationPending] = useState(false);
+  const [draftMetadataError, setDraftMetadataError] = useState("");
+  const [draftMetadataPending, setDraftMetadataPending] = useState(false);
+  const [isRewritingDraft, setIsRewritingDraft] = useState(false);
   const [slug, setSlug] = useState(post?.slug ?? "");
   const [zhTitle, setZhTitle] = useState(zh?.title ?? "");
   const [zhExcerpt, setZhExcerpt] = useState(zh?.excerpt ?? "");
@@ -153,41 +231,141 @@ export function PostForm({
   const formValue = (name: string) =>
     formRef.current ? String(new FormData(formRef.current).get(name) ?? "") : "";
 
+  function syncDraftMetadata(payload: DraftMetadataResult) {
+    setSlug(payload.slug);
+    setZhSeoTitle(payload.zh.seoTitle);
+    setZhSeoDescription(payload.zh.seoDescription);
+    setEnSeoTitle(payload.en.seoTitle);
+    setEnSeoDescription(payload.en.seoDescription);
+  }
+
   function rewriteDraft() {
     setDraftRewriteError("");
     setDraftRewriteSuccess("");
+    setDraftTranslationError("");
+    setDraftMetadataError("");
 
-    startDraftRewrite(async () => {
-      const response = await fetch("/api/posts/draft/rewrite", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          rawInput: rawDraftInput,
-          sourceUrl
-        })
-      });
-      const payload = (await response.json()) as DraftRewriteResult;
+    if (isRewritingDraft) return;
 
-      if (!response.ok || payload.error) {
-        setDraftRewriteError(payload.error ?? "AI 改写文章失败。");
-        return;
+    void (async () => {
+      setIsRewritingDraft(true);
+
+      try {
+        const response = await fetch("/api/posts/draft/rewrite", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            rawInput: rawDraftInput,
+            sourceUrl
+          })
+        });
+        const payload = await readJsonResponse<DraftRewriteResult>(
+          response,
+          "AI 改写文章失败。"
+        );
+
+        if ("error" in payload) {
+          setDraftRewriteError(payload.error ?? "AI 改写文章失败。");
+          return;
+        }
+
+        setZhTitle(payload.zh.title);
+        setZhExcerpt(payload.zh.excerpt);
+        setZhContent(payload.zh.content);
+        setEnTitle("");
+        setEnExcerpt("");
+        setEnContent("");
+        setSlug("");
+        setZhSeoTitle("");
+        setZhSeoDescription("");
+        setEnSeoTitle("");
+        setEnSeoDescription("");
+        setDraftRewriteSuccess(
+          "中文草稿已生成。英文稿和双语 SEO 正在后台生成。"
+        );
+
+        setDraftTranslationPending(true);
+        setDraftMetadataPending(false);
+        void (async () => {
+          try {
+            const translationResponse = await fetch("/api/posts/draft/translate", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                zhTitle: payload.zh.title,
+                zhExcerpt: payload.zh.excerpt,
+                zhContent: payload.zh.content
+              })
+            });
+            const translationPayload = await readJsonResponse<DraftTranslationResult>(
+              translationResponse,
+              "英文稿自动生成失败。"
+            );
+
+            if ("error" in translationPayload) {
+              setDraftTranslationError(
+                translationPayload.error ?? "英文稿自动生成失败。"
+              );
+              return;
+            }
+
+            setEnTitle(translationPayload.en.title);
+            setEnExcerpt(translationPayload.en.excerpt);
+            setEnContent(translationPayload.en.content);
+            setDraftRewriteSuccess("英文稿已生成，Slug 和双语 SEO 正在后台补齐。");
+
+            setDraftMetadataPending(true);
+            const metadataResponse = await fetch("/api/posts/draft/metadata", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                zhTitle: payload.zh.title,
+                zhExcerpt: payload.zh.excerpt,
+                zhContent: payload.zh.content,
+                enTitle: translationPayload.en.title,
+                enExcerpt: translationPayload.en.excerpt,
+                enContent: translationPayload.en.content
+              })
+            });
+            const metadataPayload = await readJsonResponse<DraftMetadataResult>(
+              metadataResponse,
+              "Slug 和 SEO 自动生成失败。"
+            );
+
+            if ("error" in metadataPayload) {
+              setDraftMetadataError(
+                metadataPayload.error ?? "Slug 和 SEO 自动生成失败。"
+              );
+              return;
+            }
+
+            syncDraftMetadata(metadataPayload);
+            setDraftRewriteSuccess(
+              "中文草稿、英文稿、Slug 和双语 SEO 都已补齐，请检查后再提交。"
+            );
+          } catch (error) {
+            setDraftTranslationError(
+              error instanceof Error ? error.message : "英文稿自动生成失败。"
+            );
+          } finally {
+            setDraftTranslationPending(false);
+            setDraftMetadataPending(false);
+          }
+        })();
+      } catch (error) {
+        setDraftRewriteError(
+          error instanceof Error ? error.message : "AI 改写文章失败。"
+        );
+      } finally {
+        setIsRewritingDraft(false);
       }
-
-      setSlug(payload.slug);
-      setZhTitle(payload.zh.title);
-      setZhExcerpt(payload.zh.excerpt);
-      setZhContent(payload.zh.content);
-      setZhSeoTitle(payload.zh.seoTitle);
-      setZhSeoDescription(payload.zh.seoDescription);
-      setEnTitle(payload.en.title);
-      setEnExcerpt(payload.en.excerpt);
-      setEnContent(payload.en.content);
-      setEnSeoTitle(payload.en.seoTitle);
-      setEnSeoDescription(payload.en.seoDescription);
-      setDraftRewriteSuccess("AI 已生成中英文草稿、Slug 和双语 SEO，请检查后再创建文章。");
-    });
+    })();
   }
 
   return (
@@ -267,8 +445,24 @@ export function PostForm({
                 ) : (
                   <Sparkles size={16} />
                 )}
-                {isRewritingDraft ? "AI 正在生成..." : "用 AI 生成中英文文章"}
+                {isRewritingDraft ? "AI 正在生成中文..." : "先生成中文草稿"}
               </button>
+              {draftTranslationPending ? (
+                <p className="text-xs text-slate-500">英文稿正在后台生成...</p>
+              ) : null}
+              {draftTranslationError ? (
+                <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                  {draftTranslationError}
+                </p>
+              ) : null}
+              {draftMetadataPending ? (
+                <p className="text-xs text-slate-500">Slug 和 SEO 正在后台生成...</p>
+              ) : null}
+              {draftMetadataError ? (
+                <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                  {draftMetadataError}
+                </p>
+              ) : null}
             </div>
           </section>
         ) : null}
@@ -322,6 +516,7 @@ export function PostForm({
                 value={enTitle}
                 onChange={(event) => setEnTitle(event.target.value)}
                 required={!generateEnglishFromChinese}
+                disabled={draftTranslationPending}
                 className={inputClassName}
               />
             </Field>
@@ -330,6 +525,7 @@ export function PostForm({
                 name="enExcerpt"
                 value={enExcerpt}
                 onChange={(event) => setEnExcerpt(event.target.value)}
+                disabled={draftTranslationPending}
                 className={textareaClassName}
               />
             </Field>
@@ -339,6 +535,7 @@ export function PostForm({
               required={!generateEnglishFromChinese}
               value={enContent}
               onChange={setEnContent}
+              disabled={draftTranslationPending}
             />
           </div>
         </section>
@@ -353,7 +550,8 @@ export function PostForm({
                 name="slug"
                 value={slug}
                 onChange={(event) => setSlug(event.target.value)}
-                required
+                required={!generateEnglishFromChinese}
+                disabled={draftMetadataPending}
                 className={inputClassName}
                 placeholder="my-article-slug"
               />
@@ -454,6 +652,7 @@ export function PostForm({
                 name="enSeoTitle"
                 value={enSeoTitle}
                 onChange={(event) => setEnSeoTitle(event.target.value)}
+                disabled={draftMetadataPending}
                 className={inputClassName}
               />
             </Field>
@@ -463,6 +662,7 @@ export function PostForm({
                 value={enSeoDescription}
                 onChange={(event) => setEnSeoDescription(event.target.value)}
                 maxLength={500}
+                disabled={draftMetadataPending}
                 className={textareaClassName}
               />
             </Field>
@@ -477,6 +677,7 @@ export function PostForm({
                 name="zhSeoTitle"
                 value={zhSeoTitle}
                 onChange={(event) => setZhSeoTitle(event.target.value)}
+                disabled={draftMetadataPending}
                 className={inputClassName}
               />
             </Field>
@@ -486,6 +687,7 @@ export function PostForm({
                 value={zhSeoDescription}
                 onChange={(event) => setZhSeoDescription(event.target.value)}
                 maxLength={500}
+                disabled={draftMetadataPending}
                 className={textareaClassName}
               />
             </Field>
