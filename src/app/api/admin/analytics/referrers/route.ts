@@ -1,0 +1,30 @@
+import { NextResponse } from "next/server";
+
+import { requireAnalyticsAccess } from "@/server/analytics/access";
+import {
+  AnalyticsQueryError,
+  getAnalyticsReferrers,
+  parseAnalyticsFilters
+} from "@/server/analytics/queries";
+
+export const runtime = "nodejs";
+
+export async function GET(request: Request) {
+  const authError = await requireAnalyticsAccess();
+  if (authError) return authError;
+
+  try {
+    const filters = parseAnalyticsFilters(new URL(request.url).searchParams);
+    const referrers = await getAnalyticsReferrers(filters);
+    return NextResponse.json(referrers);
+  } catch (error) {
+    if (error instanceof AnalyticsQueryError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    return NextResponse.json(
+      { error: "读取来源统计失败，请稍后重试。" },
+      { status: 500 }
+    );
+  }
+}

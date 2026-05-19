@@ -2,6 +2,7 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -15,6 +16,18 @@ import { relations } from "drizzle-orm";
 export type UserRole = "admin" | "editor";
 export type PostStatus = "draft" | "published" | "archived";
 export type Locale = "en" | "zh";
+export type AnalyticsEventName =
+  | "page_view"
+  | "article_view"
+  | "article_click"
+  | "category_click"
+  | "tag_click"
+  | "nav_click"
+  | "locale_switch"
+  | "section_jump"
+  | "section_view"
+  | "outbound_click"
+  | "article_depth";
 
 export const users = pgTable(
   "users",
@@ -255,6 +268,42 @@ export const postTags = pgTable(
   (table) => ({
     pk: primaryKey({ columns: [table.postId, table.tagId] }),
     tagIdx: index("post_tags_tag_idx").on(table.tagId)
+  })
+);
+
+export const analyticsEvents = pgTable(
+  "analytics_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    eventName: varchar("event_name", { length: 80 }).notNull(),
+    visitorId: varchar("visitor_id", { length: 160 }).notNull(),
+    sessionId: varchar("session_id", { length: 160 }).notNull(),
+    locale: varchar("locale", { length: 10 }),
+    path: text("path"),
+    referrer: text("referrer"),
+    href: text("href"),
+    label: text("label"),
+    targetType: varchar("target_type", { length: 80 }),
+    section: varchar("section", { length: 160 }),
+    articleSlug: varchar("article_slug", { length: 255 }),
+    categorySlug: varchar("category_slug", { length: 140 }),
+    tagSlug: varchar("tag_slug", { length: 140 }),
+    value: integer("value"),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at").defaultNow().notNull()
+  },
+  (table) => ({
+    createdAtIdx: index("analytics_events_created_at_idx").on(table.createdAt),
+    eventCreatedAtIdx: index("analytics_events_event_created_at_idx").on(
+      table.eventName,
+      table.createdAt
+    ),
+    visitorIdx: index("analytics_events_visitor_idx").on(table.visitorId),
+    sessionIdx: index("analytics_events_session_idx").on(table.sessionId),
+    articleIdx: index("analytics_events_article_idx").on(table.articleSlug),
+    categoryIdx: index("analytics_events_category_idx").on(table.categorySlug),
+    tagIdx: index("analytics_events_tag_idx").on(table.tagSlug),
+    referrerIdx: index("analytics_events_referrer_idx").on(table.referrer)
   })
 );
 
