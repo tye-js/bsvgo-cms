@@ -4,6 +4,7 @@ import type { AiWritingRoleId } from "@/lib/ai-style";
 import { getAiSettingsForGeneration } from "@/server/settings/service";
 
 type EnglishPostInput = {
+  writingRole?: AiWritingRoleId;
   title: string;
   excerpt?: string;
   content: string;
@@ -36,6 +37,7 @@ type DraftTranslationInput = {
 };
 
 type DraftMetadataInput = {
+  writingRole?: AiWritingRoleId;
   zhTitle: string;
   zhExcerpt?: string;
   zhContent: string;
@@ -452,7 +454,7 @@ async function callResponsesJson({
 export async function generateEnglishPost(
   input: EnglishPostInput
 ): Promise<EnglishPostOutput> {
-  const settings = await getAiSettingsForGeneration();
+  const settings = await getAiSettingsForGeneration(input.writingRole);
   const payload = await callResponsesJson({
     settings,
     input: [
@@ -795,7 +797,7 @@ export async function translateDraftToEnglish(
 export async function generateDraftMetadata(
   input: DraftMetadataInput
 ): Promise<DraftMetadataOutput> {
-  const settings = await getAiSettingsForGeneration();
+  const settings = await getAiSettingsForGeneration(input.writingRole);
   const payload = await callResponsesJson({
     settings,
     input: [
@@ -816,6 +818,7 @@ export async function generateDraftMetadata(
             type: "input_text",
             text: JSON.stringify({
               task: "Generate slug and bilingual SEO metadata.",
+              writingStyle: stylePayload(settings),
               seoStyle: seoStylePayload(settings),
               chinese: {
                 title: input.zhTitle,

@@ -223,6 +223,8 @@ export function PostForm({
   const [draftMetadataError, setDraftMetadataError] = useState("");
   const [draftMetadataPending, setDraftMetadataPending] = useState(false);
   const [isRewritingDraft, setIsRewritingDraft] = useState(false);
+  const aiGenerationPending =
+    isRewritingDraft || draftTranslationPending || draftMetadataPending;
   const [slug, setSlug] = useState(post?.slug ?? "");
   const [mark, setMark] = useState<PostMark>(post?.mark ?? "");
   const [zhTitle, setZhTitle] = useState(zh?.title ?? "");
@@ -260,7 +262,7 @@ export function PostForm({
     setDraftTranslationError("");
     setDraftMetadataError("");
 
-    if (isRewritingDraft) return;
+    if (aiGenerationPending) return;
 
     void (async () => {
       setIsRewritingDraft(true);
@@ -343,6 +345,7 @@ export function PostForm({
                 "Content-Type": "application/json"
               },
               body: JSON.stringify({
+                writingRole,
                 zhTitle: payload.zh.title,
                 zhExcerpt: payload.zh.excerpt,
                 zhContent: payload.zh.content,
@@ -410,33 +413,38 @@ export function PostForm({
             <div className="mb-5">
               <h2 className="font-semibold text-slate-950">AI 写作助手</h2>
               <p className="mt-1 text-sm text-slate-500">
-                把未整理的信息、链接、要点或聊天记录放在这里，AI 会按所选角色和设置页风格生成中英文稿、Slug 和双语 SEO。
+                先选择本篇文章的写作角色，再放入素材。AI 会按该角色生成中文稿，并继续生成英文稿、Slug 和双语 SEO。
               </p>
             </div>
             <div className="grid gap-4">
               {writingRoles.length ? (
-                <Field
-                  label="本次写作角色"
-                  hint={
-                    writingRoles.find((role) => role.id === writingRole)
-                      ?.description
-                  }
-                >
-                  <select
-                    value={writingRole}
-                    onChange={(event) =>
-                      setWritingRole(event.target.value as AiWritingRoleId)
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <Field
+                    label="1. 选择本篇文章的 AI 角色"
+                    hint={
+                      writingRoles.find((role) => role.id === writingRole)
+                        ?.description
                     }
-                    disabled={isRewritingDraft}
-                    className={inputClassName}
                   >
-                    {writingRoles.map((role) => (
-                      <option key={role.id} value={role.id}>
-                        {role.label}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
+                    <select
+                      value={writingRole}
+                      onChange={(event) =>
+                        setWritingRole(event.target.value as AiWritingRoleId)
+                      }
+                      disabled={aiGenerationPending}
+                      className={inputClassName}
+                    >
+                      {writingRoles.map((role) => (
+                        <option key={role.id} value={role.id}>
+                          {role.label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <p className="mt-2 text-xs leading-5 text-slate-500">
+                    角色会在点击生成时锁定，后续中文稿、英文稿和 SEO 会沿用同一个写作方向。
+                  </p>
+                </div>
               ) : null}
               <Field
                 label="网页或视频链接"
@@ -446,7 +454,7 @@ export function PostForm({
                   type="url"
                   value={sourceUrl}
                   onChange={(event) => setSourceUrl(event.target.value)}
-                  disabled={isRewritingDraft}
+                  disabled={aiGenerationPending}
                   className={inputClassName}
                   placeholder="https://..."
                 />
@@ -455,7 +463,7 @@ export function PostForm({
                 <textarea
                   value={rawDraftInput}
                   onChange={(event) => setRawDraftInput(event.target.value)}
-                  disabled={isRewritingDraft}
+                  disabled={aiGenerationPending}
                   className={`${textareaClassName} min-h-52`}
                   placeholder="粘贴资料、灵感、链接、要点、碎片化笔记..."
                 />
@@ -473,7 +481,7 @@ export function PostForm({
               <button
                 type="button"
                 disabled={
-                  isRewritingDraft ||
+                  aiGenerationPending ||
                   (!sourceUrl.trim() && rawDraftInput.trim().length < 20)
                 }
                 className={buttonClassName("secondary", "justify-self-start")}
@@ -487,7 +495,7 @@ export function PostForm({
                 ) : (
                   <Sparkles size={16} />
                 )}
-                {isRewritingDraft ? "AI 正在生成中文..." : "先生成中文草稿"}
+                {isRewritingDraft ? "AI 正在生成中文..." : "按所选角色生成中英文文章"}
               </button>
               {draftTranslationPending ? (
                 <p className="text-xs text-slate-500">英文稿正在后台生成...</p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { Field, inputClassName, textareaClassName } from "@/components/admin/Field";
 import { PendingFieldset } from "@/components/forms/PendingFieldset";
@@ -11,6 +11,8 @@ type ActionState = {
   error?: string;
   success?: string;
 };
+
+type SettingsTab = "provider" | "writing" | "roles" | "seo";
 
 export function AiSettingsForm({
   action,
@@ -46,6 +48,34 @@ export function AiSettingsForm({
   enSeoStyle: string;
 }) {
   const [state, formAction] = useActionState(action, {});
+  const [activeTab, setActiveTab] = useState<SettingsTab>("provider");
+  const [apiBaseUrlValue, setApiBaseUrlValue] = useState(apiBaseUrl);
+  const [modelValue, setModelValue] = useState(model);
+  const [timeoutMsValue, setTimeoutMsValue] = useState(timeoutMs);
+  const [writingStyleValue, setWritingStyleValue] = useState(writingStyle);
+  const [defaultWritingRoleValue, setDefaultWritingRoleValue] = useState(
+    defaultWritingRole as AiWritingRoleId
+  );
+  const [roleStyleValues, setRoleStyleValues] = useState<
+    Record<AiWritingRoleId, string>
+  >(
+    Object.fromEntries(
+      writingRoles.map((role) => [role.id, role.style])
+    ) as Record<AiWritingRoleId, string>
+  );
+  const [zhSeoStyleValue, setZhSeoStyleValue] = useState(zhSeoStyle);
+  const [enSeoStyleValue, setEnSeoStyleValue] = useState(enSeoStyle);
+  const [editingRoleId, setEditingRoleId] = useState<AiWritingRoleId>(
+    defaultWritingRole as AiWritingRoleId
+  );
+  const editingRole =
+    writingRoles.find((role) => role.id === editingRoleId) ?? writingRoles[0];
+  const tabs: Array<{ id: SettingsTab; label: string }> = [
+    { id: "provider", label: "模型连接" },
+    { id: "writing", label: "写作底线" },
+    { id: "roles", label: "AI 角色" },
+    { id: "seo", label: "SEO 风格" }
+  ];
 
   return (
     <form action={formAction} className="grid gap-5">
@@ -61,141 +91,203 @@ export function AiSettingsForm({
       ) : null}
 
       <PendingFieldset className="gap-5">
-      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-        API Key 状态：{" "}
-        <span className="font-medium text-slate-900">
-          {hasApiKey ? `已配置（${apiKeyPreview}）` : "未配置"}
-        </span>
-      </div>
-
-      <Field
-        label="API Key"
-        hint="留空会保留现有密钥。完整密钥会在服务端加密保存，不会完整显示。"
-      >
-        <input
-          name="apiKey"
-          type="password"
-          autoComplete="off"
-          className={inputClassName}
-          placeholder={hasApiKey ? "保留现有密钥" : "sk-..."}
-        />
-      </Field>
-
-      <Field
-        label="API Base URL"
-        hint="使用 OpenAI 兼容的 /v1 端点。官方 OpenAI API 可保留默认值。"
-      >
-        <input
-          name="apiBaseUrl"
-          type="url"
-          defaultValue={apiBaseUrl}
-          className={inputClassName}
-          placeholder="https://api.openai.com/v1"
-        />
-      </Field>
-
-      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px]">
-        <Field label="模型">
-          <input
-            name="model"
-            defaultValue={model}
-            required
-            className={inputClassName}
-          />
-        </Field>
-        <Field label="超时时间（毫秒）">
-          <input
-            name="timeoutMs"
-            type="number"
-            min={5000}
-            max={180000}
-            step={1000}
-            defaultValue={timeoutMs}
-            required
-            className={inputClassName}
-          />
-        </Field>
-      </div>
-
-      <Field
-        label="全局写作底线"
-        hint="所有角色都会遵守的基础要求，比如事实约束、受众、禁忌和 Markdown 结构。"
-      >
-        <textarea
-          name="writingStyle"
-          defaultValue={writingStyle}
-          maxLength={2000}
-          className={textareaClassName}
-          placeholder="例如：面向技术读者，客观清晰，短段落，多用小标题，不夸大..."
-        />
-      </Field>
-
-      <Field
-        label="默认写作角色"
-        hint="新建文章页会默认选中这个角色，每次 AI 改写前仍可临时切换。"
-      >
-        <select
-          name="defaultWritingRole"
-          defaultValue={defaultWritingRole}
-          className={inputClassName}
-        >
-          {writingRoles.map((role) => (
-            <option key={role.id} value={role.id}>
-              {role.label}
-            </option>
-          ))}
-        </select>
-      </Field>
-
-      <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-4">
-        <div>
-          <h3 className="text-sm font-semibold text-slate-950">AI 写作角色</h3>
-          <p className="mt-1 text-xs leading-5 text-slate-500">
-            每个角色会叠加到全局写作底线上。适合把技术文章、资讯分析、产品营销、科普和观点稿拆开调教。
-          </p>
-        </div>
-        <div className="grid gap-4">
-          {writingRoles.map((role) => (
-            <Field
-              key={role.id}
-              label={role.label}
-              hint={role.description}
+        <div className="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`rounded-md px-3 py-2 text-sm font-medium transition ${
+                activeTab === tab.id
+                  ? "bg-slate-950 text-white shadow-sm"
+                  : "text-slate-600 hover:bg-white hover:text-slate-950"
+              }`}
             >
-              <textarea
-                name={`writingRoleStyle.${role.id}`}
-                defaultValue={role.style}
-                maxLength={2000}
-                className={`${textareaClassName} min-h-28`}
-              />
-            </Field>
+              {tab.label}
+            </button>
           ))}
         </div>
-      </section>
 
-      <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-4">
-        <div>
-          <h3 className="text-sm font-semibold text-slate-950">AI SEO 风格</h3>
-          <p className="mt-1 text-xs leading-5 text-slate-500">
-            用于文章、分类、标签和首页的双语 SEO 生成。中文 SEO 和英文 SEO 会分别服务对应前端入口。
-          </p>
-        </div>
-        <Field label="中文 SEO 风格">
-          <textarea
-            name="zhSeoStyle"
-            defaultValue={zhSeoStyle}
-            maxLength={2000}
-            className={`${textareaClassName} min-h-28`}
-          />
-        </Field>
-        <Field label="英文 SEO 风格">
-          <textarea
-            name="enSeoStyle"
-            defaultValue={enSeoStyle}
-            maxLength={2000}
-            className={`${textareaClassName} min-h-28`}
-          />
-        </Field>
-      </section>
+        <section className="rounded-lg border border-slate-200 bg-white p-4">
+          <input type="hidden" name="apiBaseUrl" value={apiBaseUrlValue} />
+          <input type="hidden" name="model" value={modelValue} />
+          <input type="hidden" name="timeoutMs" value={timeoutMsValue} />
+          <input type="hidden" name="defaultWritingRole" value={defaultWritingRoleValue} />
+          <textarea className="hidden" name="writingStyle" value={writingStyleValue} readOnly />
+          <textarea className="hidden" name="zhSeoStyle" value={zhSeoStyleValue} readOnly />
+          <textarea className="hidden" name="enSeoStyle" value={enSeoStyleValue} readOnly />
+          {writingRoles.map((role) => (
+            <textarea
+              key={role.id}
+              className="hidden"
+              name={`writingRoleStyle.${role.id}`}
+              value={roleStyleValues[role.id] ?? role.style}
+              readOnly
+            />
+          ))}
+
+          {activeTab === "provider" ? (
+            <div className="grid gap-5">
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                API Key 状态：{" "}
+                <span className="font-medium text-slate-900">
+                  {hasApiKey ? `已配置（${apiKeyPreview}）` : "未配置"}
+                </span>
+              </div>
+
+              <Field
+                label="API Key"
+                hint="留空会保留现有密钥。完整密钥会在服务端加密保存，不会完整显示。"
+              >
+                <input
+                  name="apiKey"
+                  type="password"
+                  autoComplete="off"
+                  className={inputClassName}
+                  placeholder={hasApiKey ? "保留现有密钥" : "sk-..."}
+                />
+              </Field>
+
+              <Field
+                label="API Base URL"
+                hint="使用 OpenAI 兼容的 /v1 端点。官方 OpenAI API 可保留默认值。"
+              >
+                <input
+                  type="url"
+                  value={apiBaseUrlValue}
+                  onChange={(event) => setApiBaseUrlValue(event.target.value)}
+                  className={inputClassName}
+                  placeholder="https://api.openai.com/v1"
+                />
+              </Field>
+
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px]">
+                <Field label="模型">
+                  <input
+                    value={modelValue}
+                    onChange={(event) => setModelValue(event.target.value)}
+                    required
+                    className={inputClassName}
+                  />
+                </Field>
+                <Field label="超时时间（毫秒）">
+                  <input
+                    type="number"
+                    min={5000}
+                    max={180000}
+                    step={1000}
+                    value={timeoutMsValue}
+                    onChange={(event) => setTimeoutMsValue(event.target.value)}
+                    required
+                    className={inputClassName}
+                  />
+                </Field>
+              </div>
+            </div>
+          ) : null}
+
+          {activeTab === "writing" ? (
+            <div className="grid gap-5">
+              <Field
+                label="全局写作底线"
+                hint="所有角色都会遵守的基础要求，比如事实约束、受众、禁忌和 Markdown 结构。"
+              >
+                <textarea
+                  value={writingStyleValue}
+                  onChange={(event) => setWritingStyleValue(event.target.value)}
+                  maxLength={2000}
+                  className={textareaClassName}
+                  placeholder="例如：面向技术读者，客观清晰，短段落，多用小标题，不夸大..."
+                />
+              </Field>
+
+              <Field
+                label="默认写作角色"
+                hint="新建文章页会默认选中这个角色，每篇文章生成前仍可临时切换。"
+              >
+                <select
+                  value={defaultWritingRoleValue}
+                  onChange={(event) =>
+                    setDefaultWritingRoleValue(event.target.value as AiWritingRoleId)
+                  }
+                  className={inputClassName}
+                >
+                  {writingRoles.map((role) => (
+                    <option key={role.id} value={role.id}>
+                      {role.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          ) : null}
+
+          {activeTab === "roles" && editingRole ? (
+            <div className="grid gap-5">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-950">AI 角色设置</h3>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  先选择一个角色，再编辑该角色的具体写作要求。其他角色会保留原配置。
+                </p>
+              </div>
+              <Field label="选择角色" hint={editingRole.description}>
+                <select
+                  value={editingRoleId}
+                  onChange={(event) =>
+                    setEditingRoleId(event.target.value as AiWritingRoleId)
+                  }
+                  className={inputClassName}
+                >
+                  {writingRoles.map((role) => (
+                    <option key={role.id} value={role.id}>
+                      {role.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label={`${editingRole.label}的写作要求`}>
+                <textarea
+                  value={roleStyleValues[editingRole.id] ?? editingRole.style}
+                  onChange={(event) =>
+                    setRoleStyleValues((current) => ({
+                      ...current,
+                      [editingRole.id]: event.target.value
+                    }))
+                  }
+                  maxLength={2000}
+                  className={`${textareaClassName} min-h-44`}
+                />
+              </Field>
+            </div>
+          ) : null}
+
+          {activeTab === "seo" ? (
+            <div className="grid gap-5">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-950">AI SEO 风格</h3>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  用于文章、分类、标签和首页的双语 SEO 生成。中文 SEO 和英文 SEO 分别服务对应前端入口。
+                </p>
+              </div>
+              <Field label="中文 SEO 风格">
+                <textarea
+                  value={zhSeoStyleValue}
+                  onChange={(event) => setZhSeoStyleValue(event.target.value)}
+                  maxLength={2000}
+                  className={`${textareaClassName} min-h-32`}
+                />
+              </Field>
+              <Field label="英文 SEO 风格">
+                <textarea
+                  value={enSeoStyleValue}
+                  onChange={(event) => setEnSeoStyleValue(event.target.value)}
+                  maxLength={2000}
+                  className={`${textareaClassName} min-h-32`}
+                />
+              </Field>
+            </div>
+          ) : null}
+        </section>
 
       <div>
         <SubmitButton>保存 AI 设置</SubmitButton>

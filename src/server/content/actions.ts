@@ -319,6 +319,7 @@ export async function createPostAction(
           seoDescription: zhData.enSeoDescription ?? ""
         }
       : await generateEnglishPost({
+          writingRole: zhData.writingRole,
           title: zhData.zhTitle,
           excerpt: zhData.zhExcerpt,
           content: zhData.zhContent

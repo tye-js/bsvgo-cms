@@ -15,6 +15,7 @@ export const loginSchema = z.object({
 });
 
 export const postSchema = z.object({
+  writingRole: z.enum(aiWritingRoleIds).optional(),
   slug: slugSchema,
   categoryId: z.string().uuid("请选择分类"),
   status: z.enum(["draft", "published", "archived"]),
@@ -41,6 +42,7 @@ export const postSchema = z.object({
 });
 
 export const newPostSchema = postSchema.extend({
+  writingRole: z.enum(aiWritingRoleIds).optional(),
   slug: slugSchema.or(z.literal("")),
   enTitle: z.string().trim().max(255).optional(),
   enExcerpt: z.string().trim().optional(),
@@ -161,6 +163,7 @@ export const aiDraftTranslateSchema = z.object({
 });
 
 export const aiDraftMetadataSchema = z.object({
+  writingRole: z.enum(aiWritingRoleIds).optional(),
   zhTitle: z.string().trim().min(1, "中文标题为必填项").max(255),
   zhExcerpt: z.string().trim().optional(),
   zhContent: z.string().trim().min(1, "中文正文为必填项"),
