@@ -43,6 +43,13 @@
       "when": 1779198580000,
       "tag": "0005_hide_legacy_empty_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1779198590000,
+      "tag": "0006_post_mark",
+      "breakpoints": true
     }
   ]
 }

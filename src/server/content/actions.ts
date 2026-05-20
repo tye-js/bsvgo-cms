@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import {
   categorySchema,
@@ -27,6 +27,11 @@ import {
   users,
   type Locale
 } from "@/server/db/schema";
+import {
+  derivePostMark,
+  isPostMark,
+  postMarkFlags
+} from "@/lib/post-mark";
 import {
   getMediaAssetWithClient,
   upsertMediaAssetFromUrlWithClient
@@ -125,10 +130,12 @@ function fallbackSlug(value: string) {
 }
 
 function postDataFromForm(formData: FormData) {
+  const mark = stringValue(formData, "mark");
   return {
     slug: stringValue(formData, "slug"),
     categoryId: stringValue(formData, "categoryId"),
     status: stringValue(formData, "status"),
+    mark,
     coverImageId: stringValue(formData, "coverImageId"),
     coverImageUrl: stringValue(formData, "coverImageUrl"),
     coverImageAlt: stringValue(formData, "coverImageAlt"),
@@ -296,6 +303,12 @@ export async function createPostAction(
       parsed.data.slug.trim() ||
       fallbackSlug(parsed.data.zhTitle || parsed.data.enTitle || "draft-post")
   };
+  const normalizedMark = derivePostMark({
+    mark: zhData.mark,
+    featured: zhData.featured,
+    pinned: zhData.pinned
+  });
+  const markFlags = postMarkFlags(normalizedMark);
   const english =
     zhData.enTitle?.trim() && zhData.enContent?.trim()
       ? {
@@ -345,11 +358,12 @@ export async function createPostAction(
           categoryId: data.categoryId,
           authorId: user.id,
           status: data.status,
+          mark: normalizedMark,
           coverImage: coverImage.coverImage,
           coverImageId: coverImage.coverImageId,
           publishedAt: publishedAtValue(data.publishedAt, data.status),
-          featured: data.featured,
-          pinned: data.pinned,
+          featured: markFlags.featured,
+          pinned: markFlags.pinned,
           sortOrder: data.sortOrder
         })
         .returning({ id: posts.id });
@@ -400,6 +414,12 @@ export async function updatePostAction(
   }
 
   const data = parsed.data;
+  const normalizedMark = derivePostMark({
+    mark: data.mark,
+    featured: data.featured,
+    pinned: data.pinned
+  });
+  const markFlags = postMarkFlags(normalizedMark);
 
   try {
     await db.transaction(async (tx) => {
@@ -419,11 +439,12 @@ export async function updatePostAction(
           slug: data.slug,
           categoryId: data.categoryId,
           status: data.status,
+          mark: normalizedMark,
           coverImage: coverImage.coverImage,
           coverImageId: coverImage.coverImageId,
           publishedAt: publishedAtValue(data.publishedAt, data.status),
-          featured: data.featured,
-          pinned: data.pinned,
+          featured: markFlags.featured,
+          pinned: markFlags.pinned,
           sortOrder: data.sortOrder,
           updatedAt: new Date()
         })
@@ -460,6 +481,47 @@ export async function updatePostAction(
   revalidatePath("/posts");
   revalidatePath(`/posts/${id}/edit`);
   return { success: "文章已保存。" };
+}
+
+export async function updatePostMarkAction(
+  id: string,
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  await requireUser();
+  const mark = stringValue(formData, "mark");
+
+  if (!isPostMark(mark)) {
+    return { error: "标记数据无效。" };
+  }
+
+  try {
+    const [updated] = await db.transaction(async (tx) => {
+      await tx.execute(POST_WRITE_TIMEOUT);
+      const [post] = await tx
+        .update(posts)
+        .set({
+          mark,
+          featured: postMarkFlags(mark).featured,
+          pinned: postMarkFlags(mark).pinned,
+          updatedAt: new Date()
+        })
+        .where(and(eq(posts.id, id), isNull(posts.deletedAt)))
+        .returning({ id: posts.id });
+
+      return [post];
+    });
+
+    if (!updated) {
+      return { error: "文章不存在或已删除。" };
+    }
+  } catch (error) {
+    return { error: friendlyDatabaseError(error) };
+  }
+
+  revalidatePath("/posts");
+  revalidatePath(`/posts/${id}/edit`);
+  return { success: "标记已更新。" };
 }
 
 export async function deletePostAction(formData: FormData) {

@@ -10,7 +10,8 @@ import { MarkdownEditor } from "@/components/forms/MarkdownEditor";
 import { PendingFieldset } from "@/components/forms/PendingFieldset";
 import { SeoSuggestionButton } from "@/components/forms/SeoSuggestionButton";
 import { SubmitButton, SubmitTimeoutNotice } from "@/components/forms/SubmitButton";
-import type { Locale, PostStatus } from "@/server/db/schema";
+import type { Locale, PostMark, PostStatus } from "@/server/db/schema";
+import { postMarkOptions } from "@/lib/post-mark";
 
 type SelectOption = {
   id: string;
@@ -46,6 +47,7 @@ type PostFormValue = {
   slug: string;
   categoryId: string;
   status: PostStatus;
+  mark: PostMark;
   coverImageId: string | null;
   coverImageUrl: string | null;
   coverImageAlt?: string | null;
@@ -210,6 +212,7 @@ export function PostForm({
   const [draftMetadataPending, setDraftMetadataPending] = useState(false);
   const [isRewritingDraft, setIsRewritingDraft] = useState(false);
   const [slug, setSlug] = useState(post?.slug ?? "");
+  const [mark, setMark] = useState<PostMark>(post?.mark ?? "");
   const [zhTitle, setZhTitle] = useState(zh?.title ?? "");
   const [zhExcerpt, setZhExcerpt] = useState(zh?.excerpt ?? "");
   const [zhContent, setZhContent] = useState(zh?.content ?? "");
@@ -278,6 +281,7 @@ export function PostForm({
         setEnExcerpt("");
         setEnContent("");
         setSlug("");
+        setMark("");
         setZhSeoTitle("");
         setZhSeoDescription("");
         setEnSeoTitle("");
@@ -563,6 +567,20 @@ export function PostForm({
                 <option value="archived">已归档</option>
               </select>
             </Field>
+            <Field label="标记">
+              <select
+                name="mark"
+                value={mark}
+                onChange={(event) => setMark(event.target.value as PostMark)}
+                className={inputClassName}
+              >
+                {postMarkOptions.map((option) => (
+                  <option key={option.label} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
             <Field label="分类">
               <select
                 name="categoryId"
@@ -585,26 +603,6 @@ export function PostForm({
                 className={inputClassName}
               />
             </Field>
-            <div className="grid gap-3">
-              <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                <input
-                  type="checkbox"
-                  name="featured"
-                  defaultChecked={post?.featured ?? false}
-                  className="h-4 w-4 rounded border-slate-300 text-slate-700"
-                />
-                精选文章
-              </label>
-              <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                <input
-                  type="checkbox"
-                  name="pinned"
-                  defaultChecked={post?.pinned ?? false}
-                  className="h-4 w-4 rounded border-slate-300 text-slate-700"
-                />
-                列表置顶
-              </label>
-            </div>
           </div>
         </section>
 

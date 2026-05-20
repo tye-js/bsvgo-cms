@@ -16,6 +16,7 @@ import { relations } from "drizzle-orm";
 export type UserRole = "admin" | "editor";
 export type PostStatus = "draft" | "published" | "archived";
 export type Locale = "en" | "zh";
+export type PostMark = "" | "featured" | "pinned" | "sponsored";
 export type AnalyticsEventName =
   | "page_view"
   | "article_view"
@@ -213,6 +214,7 @@ export const posts = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
     status: varchar("status", { length: 20 }).notNull().default("draft"),
+    mark: varchar("mark", { length: 20 }).notNull().default(""),
     sortOrder: integer("sort_order").notNull().default(0),
     pinned: boolean("pinned").notNull().default(false),
     authorId: uuid("author_id").references(() => users.id, {

@@ -13,6 +13,7 @@ import {
   tags,
   tagTranslations,
   users,
+  type PostMark,
   type PostStatus
 } from "@/server/db/schema";
 
@@ -41,6 +42,7 @@ export async function getDashboardStats() {
       id: posts.id,
       slug: posts.slug,
       status: posts.status,
+      mark: posts.mark,
       updatedAt: posts.updatedAt,
       title: sql<string>`coalesce(nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'en'), ''), nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'zh'), ''), ${posts.slug})`
     })
@@ -59,6 +61,7 @@ export async function getDashboardStats() {
     tags: Number(tagCount?.total ?? 0),
     recentPosts: recentPosts.map((post) => ({
       ...post,
+      mark: post.mark as PostMark,
       status: post.status as PostStatus
     }))
   };
@@ -67,6 +70,7 @@ export async function getDashboardStats() {
 export async function listPosts(options: {
   query?: string;
   status?: PostStatus | "all";
+  mark?: PostMark | "all" | "empty";
   page?: number;
   pageSize?: number;
 }) {
@@ -74,12 +78,18 @@ export async function listPosts(options: {
   const pageSize = options.pageSize ?? 12;
   const query = options.query?.trim();
   const status = options.status ?? "all";
+  const mark = options.mark ?? "all";
   const titleExpression = sql<string>`coalesce(nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'en'), ''), nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'zh'), ''), ${posts.slug})`;
   const categoryNameExpression = sql<string>`coalesce(nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'en'), ''), nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'zh'), ''), ${categories.slug})`;
 
   const filters = [
     isNull(posts.deletedAt),
     status === "all" ? undefined : eq(posts.status, status),
+    mark === "all"
+      ? undefined
+      : mark === "empty"
+        ? eq(posts.mark, "")
+        : eq(posts.mark, mark),
     query
       ? or(ilike(posts.slug, `%${query}%`), ilike(postTranslations.title, `%${query}%`))
       : undefined
@@ -92,6 +102,7 @@ export async function listPosts(options: {
       id: posts.id,
       slug: posts.slug,
       status: posts.status,
+      mark: posts.mark,
       featured: posts.featured,
       pinned: posts.pinned,
       publishedAt: posts.publishedAt,
@@ -118,6 +129,7 @@ export async function listPosts(options: {
   return {
     rows: rows.map((post) => ({
       ...post,
+      mark: post.mark as PostMark,
       status: post.status as PostStatus
     })),
     total: Number(totalRow?.total ?? 0),
@@ -179,6 +191,7 @@ export async function getPostForEdit(id: string) {
 
   return {
     ...post,
+    mark: post.mark as PostMark,
     status: post.status as PostStatus,
     coverImageId: post.coverImageId,
     coverImageUrl: post.coverImage,
