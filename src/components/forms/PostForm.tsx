@@ -53,6 +53,13 @@ type Translation = {
   seoDescription?: string;
 };
 
+type PlacementValue = {
+  enabled: boolean;
+  sortOrder: number;
+  startsAt: Date | null;
+  endsAt: Date | null;
+};
+
 type PostFormValue = {
   slug: string;
   categoryId: string;
@@ -71,6 +78,12 @@ type PostFormValue = {
   pinned: boolean;
   readingTimeMinutes: number;
   sortOrder: number;
+  placements?: {
+    homeFeatured: PlacementValue | null;
+    homePromoted: PlacementValue | null;
+    categoryFeatured: PlacementValue | null;
+    categoryPromoted: PlacementValue | null;
+  };
   translations: Translation[];
   tagIds: string[];
 };
@@ -122,10 +135,86 @@ function toDateInputValue(date: Date | null | undefined) {
   return new Date(date).toISOString().slice(0, 16);
 }
 
+function placementDefault(
+  post: PostFormValue | undefined,
+  key: keyof NonNullable<PostFormValue["placements"]>
+) {
+  const placement = post?.placements?.[key];
+  return {
+    enabled: placement?.enabled ?? false,
+    sortOrder: placement?.sortOrder ?? post?.sortOrder ?? 0,
+    startsAt: toDateInputValue(placement?.startsAt),
+    endsAt: toDateInputValue(placement?.endsAt)
+  };
+}
+
 function optionLabel(option: SelectOption) {
   const enName = option.enName ?? option.name ?? option.slug;
   const zhName = option.zhName ?? "";
   return zhName && zhName !== enName ? `${enName} / ${zhName}` : enName;
+}
+
+function PlacementFields({
+  name,
+  label,
+  description,
+  defaults
+}: {
+  name: string;
+  label: string;
+  description: string;
+  defaults: {
+    enabled: boolean;
+    sortOrder: number;
+    startsAt: string;
+    endsAt: string;
+  };
+}) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+      <label className="flex items-start gap-2 text-sm font-medium text-slate-800">
+        <input
+          type="checkbox"
+          name={`placements.${name}.enabled`}
+          defaultChecked={defaults.enabled}
+          className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-700"
+        />
+        <span>
+          {label}
+          <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">
+            {description}
+          </span>
+        </span>
+      </label>
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <Field label="排序">
+          <input
+            name={`placements.${name}.sortOrder`}
+            type="number"
+            min={0}
+            defaultValue={defaults.sortOrder}
+            className={inputClassName}
+          />
+        </Field>
+        <Field label="开始时间">
+          <input
+            name={`placements.${name}.startsAt`}
+            type="datetime-local"
+            defaultValue={defaults.startsAt}
+            className={inputClassName}
+          />
+        </Field>
+        <Field label="结束时间">
+          <input
+            name={`placements.${name}.endsAt`}
+            type="datetime-local"
+            defaultValue={defaults.endsAt}
+            className={inputClassName}
+          />
+        </Field>
+      </div>
+    </div>
+  );
 }
 
 async function readJsonResponse<T extends object>(
@@ -217,6 +306,10 @@ export function PostForm({
   const en = getTranslation(post, "en");
   const zh = getTranslation(post, "zh");
   const submitTimeoutMs = generateEnglishFromChinese ? 30000 : undefined;
+  const homeFeaturedPlacement = placementDefault(post, "homeFeatured");
+  const homePromotedPlacement = placementDefault(post, "homePromoted");
+  const categoryFeaturedPlacement = placementDefault(post, "categoryFeatured");
+  const categoryPromotedPlacement = placementDefault(post, "categoryPromoted");
   const [rawDraftInput, setRawDraftInput] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [writingRole, setWritingRole] = useState<AiWritingRoleId>(
@@ -680,6 +773,39 @@ export function PostForm({
                 className={inputClassName}
               />
             </Field>
+          </div>
+        </section>
+
+        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-1 font-semibold text-slate-950">展示位</h2>
+          <p className="mb-4 text-xs leading-5 text-slate-500">
+            控制前端首页和当前分类页的置顶、推广区块。开始/结束时间留空表示长期生效。
+          </p>
+          <div className="grid gap-3">
+            <PlacementFields
+              name="homeFeatured"
+              label="首页置顶"
+              description="显示在首页 featured 展示位。"
+              defaults={homeFeaturedPlacement}
+            />
+            <PlacementFields
+              name="homePromoted"
+              label="首页推广"
+              description="显示在首页 promoted 推广展示位。"
+              defaults={homePromotedPlacement}
+            />
+            <PlacementFields
+              name="categoryFeatured"
+              label="当前分类页置顶"
+              description="显示在该文章所属分类页 featured 展示位。"
+              defaults={categoryFeaturedPlacement}
+            />
+            <PlacementFields
+              name="categoryPromoted"
+              label="当前分类页推广"
+              description="显示在该文章所属分类页 promoted 推广展示位。"
+              defaults={categoryPromotedPlacement}
+            />
           </div>
         </section>
 

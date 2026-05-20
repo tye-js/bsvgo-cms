@@ -20,6 +20,7 @@ import {
   categories,
   categoryTranslations,
   mediaAssets,
+  postPlacements,
   postTags,
   postTranslations,
   posts,
@@ -119,6 +120,15 @@ function booleanValue(formData: FormData, key: string) {
   return formData.get(key) === "on";
 }
 
+function placementValue(formData: FormData, key: string) {
+  return {
+    enabled: booleanValue(formData, `placements.${key}.enabled`),
+    sortOrder: stringValue(formData, `placements.${key}.sortOrder`),
+    startsAt: stringValue(formData, `placements.${key}.startsAt`),
+    endsAt: stringValue(formData, `placements.${key}.endsAt`)
+  };
+}
+
 function fallbackSlug(value: string) {
   const slug = value
     .trim()
@@ -148,6 +158,12 @@ function postDataFromForm(formData: FormData) {
     publishedAt: stringValue(formData, "publishedAt"),
     featured: booleanValue(formData, "featured"),
     pinned: booleanValue(formData, "pinned"),
+    placements: {
+      homeFeatured: placementValue(formData, "homeFeatured"),
+      homePromoted: placementValue(formData, "homePromoted"),
+      categoryFeatured: placementValue(formData, "categoryFeatured"),
+      categoryPromoted: placementValue(formData, "categoryPromoted")
+    },
     readingTimeMinutes: stringValue(formData, "readingTimeMinutes"),
     sortOrder: stringValue(formData, "sortOrder"),
     tagIds: formData.getAll("tagIds").map(String).filter(Boolean),
@@ -175,6 +191,11 @@ function publishedAtValue(value: string | undefined, status: string) {
   return null;
 }
 
+function optionalDateValue(value: string | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? new Date(trimmed) : null;
+}
+
 function aiAuthorValues(roleId: string | undefined) {
   const normalizedRoleId = roleId?.trim() ?? "";
 
@@ -195,6 +216,83 @@ function aiAuthorValues(roleId: string | undefined) {
     aiAuthorEnName: role.enName,
     aiAuthorAvatar: role.avatar
   };
+}
+
+async function replacePostPlacements(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  postId: string,
+  categoryId: string,
+  placements: {
+    homeFeatured: {
+      enabled?: boolean;
+      sortOrder: number;
+      startsAt?: string;
+      endsAt?: string;
+    };
+    homePromoted: {
+      enabled?: boolean;
+      sortOrder: number;
+      startsAt?: string;
+      endsAt?: string;
+    };
+    categoryFeatured: {
+      enabled?: boolean;
+      sortOrder: number;
+      startsAt?: string;
+      endsAt?: string;
+    };
+    categoryPromoted: {
+      enabled?: boolean;
+      sortOrder: number;
+      startsAt?: string;
+      endsAt?: string;
+    };
+  }
+) {
+  const placementRows = [
+    {
+      values: placements.homeFeatured,
+      scope: "home",
+      slot: "featured",
+      categoryId: null
+    },
+    {
+      values: placements.homePromoted,
+      scope: "home",
+      slot: "promoted",
+      categoryId: null
+    },
+    {
+      values: placements.categoryFeatured,
+      scope: "category",
+      slot: "featured",
+      categoryId
+    },
+    {
+      values: placements.categoryPromoted,
+      scope: "category",
+      slot: "promoted",
+      categoryId
+    }
+  ]
+    .filter((placement) => placement.values.enabled)
+    .map((placement) => ({
+      postId,
+      categoryId: placement.categoryId,
+      scope: placement.scope,
+      slot: placement.slot,
+      sortOrder: placement.values.sortOrder,
+      enabled: true,
+      startsAt: optionalDateValue(placement.values.startsAt),
+      endsAt: optionalDateValue(placement.values.endsAt),
+      updatedAt: new Date()
+    }));
+
+  await tx.delete(postPlacements).where(eq(postPlacements.postId, postId));
+
+  if (placementRows.length) {
+    await tx.insert(postPlacements).values(placementRows);
+  }
 }
 
 async function resolveCoverImage(
@@ -327,12 +425,18 @@ export async function createPostAction(
       parsed.data.slug.trim() ||
       fallbackSlug(parsed.data.zhTitle || parsed.data.enTitle || "draft-post")
   };
-  const normalizedMark = derivePostMark({
-    mark: zhData.mark,
-    featured: zhData.featured,
-    pinned: zhData.pinned
-  });
-  const markFlags = postMarkFlags(normalizedMark);
+  const markFlags = {
+    featured: Boolean(zhData.placements.categoryFeatured.enabled),
+    pinned: Boolean(zhData.placements.homeFeatured.enabled)
+  };
+  const normalizedMark = zhData.placements.homePromoted.enabled ||
+    zhData.placements.categoryPromoted.enabled
+    ? "sponsored"
+    : derivePostMark({
+        mark: zhData.mark,
+        featured: markFlags.featured,
+        pinned: markFlags.pinned
+      });
   const english =
     zhData.enTitle?.trim() && zhData.enContent?.trim()
       ? {
@@ -394,6 +498,8 @@ export async function createPostAction(
         })
         .returning({ id: posts.id });
 
+      await replacePostPlacements(tx, post.id, data.categoryId, data.placements);
+
       await upsertPostTranslation(tx, post.id, "en", {
         title: data.enTitle,
         excerpt: data.enExcerpt,
@@ -440,12 +546,18 @@ export async function updatePostAction(
   }
 
   const data = parsed.data;
-  const normalizedMark = derivePostMark({
-    mark: data.mark,
-    featured: data.featured,
-    pinned: data.pinned
-  });
-  const markFlags = postMarkFlags(normalizedMark);
+  const markFlags = {
+    featured: Boolean(data.placements.categoryFeatured.enabled),
+    pinned: Boolean(data.placements.homeFeatured.enabled)
+  };
+  const normalizedMark = data.placements.homePromoted.enabled ||
+    data.placements.categoryPromoted.enabled
+    ? "sponsored"
+    : derivePostMark({
+        mark: data.mark,
+        featured: markFlags.featured,
+        pinned: markFlags.pinned
+      });
 
   try {
     await db.transaction(async (tx) => {
@@ -476,6 +588,8 @@ export async function updatePostAction(
           updatedAt: new Date()
         })
         .where(eq(posts.id, id));
+
+      await replacePostPlacements(tx, id, data.categoryId, data.placements);
 
       await upsertPostTranslation(tx, id, "en", {
         title: data.enTitle,

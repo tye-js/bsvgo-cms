@@ -17,6 +17,8 @@ export type UserRole = "admin" | "editor";
 export type PostStatus = "draft" | "published" | "archived";
 export type Locale = "en" | "zh";
 export type PostMark = "" | "featured" | "pinned" | "sponsored";
+export type PostPlacementScope = "home" | "category";
+export type PostPlacementSlot = "featured" | "promoted";
 export type AnalyticsEventName =
   | "page_view"
   | "article_view"
@@ -277,6 +279,44 @@ export const postTags = pgTable(
   })
 );
 
+export const postPlacements = pgTable(
+  "post_placements",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    postId: uuid("post_id")
+      .notNull()
+      .references(() => posts.id, { onDelete: "cascade" }),
+    categoryId: uuid("category_id").references(() => categories.id, {
+      onDelete: "cascade"
+    }),
+    scope: varchar("scope", { length: 40 }).notNull(),
+    slot: varchar("slot", { length: 40 }).notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    enabled: boolean("enabled").notNull().default(true),
+    startsAt: timestamp("starts_at"),
+    endsAt: timestamp("ends_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull()
+  },
+  (table) => ({
+    postIdx: index("post_placements_post_idx").on(table.postId),
+    scopeSlotIdx: index("post_placements_scope_slot_idx").on(
+      table.scope,
+      table.slot
+    ),
+    categorySlotIdx: index("post_placements_category_slot_idx").on(
+      table.categoryId,
+      table.slot
+    ),
+    uniquePlacementIdx: uniqueIndex("post_placements_unique").on(
+      table.postId,
+      table.scope,
+      table.slot,
+      table.categoryId
+    )
+  })
+);
+
 export const analyticsEvents = pgTable(
   "analytics_events",
   {
@@ -367,7 +407,19 @@ export const postsRelations = relations(posts, ({ one, many }) => ({
     references: [mediaAssets.id]
   }),
   translations: many(postTranslations),
-  postTags: many(postTags)
+  postTags: many(postTags),
+  placements: many(postPlacements)
+}));
+
+export const postPlacementsRelations = relations(postPlacements, ({ one }) => ({
+  post: one(posts, {
+    fields: [postPlacements.postId],
+    references: [posts.id]
+  }),
+  category: one(categories, {
+    fields: [postPlacements.categoryId],
+    references: [categories.id]
+  })
 }));
 
 export const mediaAssetsRelations = relations(mediaAssets, ({ one, many }) => ({

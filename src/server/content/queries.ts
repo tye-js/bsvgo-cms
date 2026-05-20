@@ -8,6 +8,7 @@ import {
   categories,
   categoryTranslations,
   mediaAssets,
+  postPlacements,
   postTags,
   postTranslations,
   posts,
@@ -186,6 +187,11 @@ export async function getPostForEdit(id: string) {
     .from(postTags)
     .where(eq(postTags.postId, id));
 
+  const placements = await db
+    .select()
+    .from(postPlacements)
+    .where(eq(postPlacements.postId, id));
+
   const [coverAsset] = post.coverImageId
     ? await db
         .select({ altText: mediaAssets.altText })
@@ -222,6 +228,28 @@ export async function getPostForEdit(id: string) {
       ...translation,
       locale: translation.locale as "en" | "zh"
     })),
+    placements: {
+      homeFeatured:
+        placements.find(
+          (placement) =>
+            placement.scope === "home" && placement.slot === "featured"
+        ) ?? null,
+      homePromoted:
+        placements.find(
+          (placement) =>
+            placement.scope === "home" && placement.slot === "promoted"
+        ) ?? null,
+      categoryFeatured:
+        placements.find(
+          (placement) =>
+            placement.scope === "category" && placement.slot === "featured"
+        ) ?? null,
+      categoryPromoted:
+        placements.find(
+          (placement) =>
+            placement.scope === "category" && placement.slot === "promoted"
+        ) ?? null
+    },
     tagIds: selectedTags.map((tag) => tag.tagId)
   };
 }
