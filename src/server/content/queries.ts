@@ -72,7 +72,6 @@ export async function getDashboardStats() {
 export async function listPosts(options: {
   query?: string;
   status?: PostStatus | "all";
-  mark?: PostMark | "all" | "empty";
   page?: number;
   pageSize?: number;
 }) {
@@ -80,18 +79,12 @@ export async function listPosts(options: {
   const pageSize = options.pageSize ?? 12;
   const query = options.query?.trim();
   const status = options.status ?? "all";
-  const mark = options.mark ?? "all";
   const titleExpression = sql<string>`coalesce(nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'en'), ''), nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'zh'), ''), ${posts.slug})`;
   const categoryNameExpression = sql<string>`coalesce(nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'en'), ''), nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'zh'), ''), ${categories.slug})`;
 
   const filters = [
     isNull(posts.deletedAt),
     status === "all" ? undefined : eq(posts.status, status),
-    mark === "all"
-      ? undefined
-      : mark === "empty"
-        ? eq(posts.mark, "")
-        : eq(posts.mark, mark),
     query
       ? or(ilike(posts.slug, `%${query}%`), ilike(postTranslations.title, `%${query}%`))
       : undefined

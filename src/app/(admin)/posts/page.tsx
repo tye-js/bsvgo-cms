@@ -5,20 +5,14 @@ import { Badge } from "@/components/admin/Badge";
 import { ButtonLink, buttonClassName } from "@/components/admin/Button";
 import { inputClassName } from "@/components/admin/Field";
 import { ConfirmSubmitButton } from "@/components/forms/ConfirmSubmitButton";
-import { PostMarkInlineEditor } from "@/components/forms/PostMarkInlineEditor";
-import { PostMarkSelect } from "@/components/forms/PostMarkSelect";
 import { getAiWritingRole } from "@/lib/ai-style";
 import { formatDate, postStatusLabel } from "@/lib/utils";
-import type { PostMarkFilter } from "@/lib/post-mark";
 import {
   deletePostAction,
-  updatePostMarkAction,
   setPostStatusAction
 } from "@/server/content/actions";
 import { listPosts } from "@/server/content/queries";
 import type { PostStatus } from "@/server/db/schema";
-
-const postMarkFilters = ["all", "empty", "featured", "pinned", "sponsored"];
 
 export default async function PostsPage({
   searchParams
@@ -26,7 +20,6 @@ export default async function PostsPage({
   searchParams: Promise<{
     q?: string;
     status?: string;
-    mark?: string;
     page?: string;
   }>;
 }) {
@@ -35,15 +28,10 @@ export default async function PostsPage({
     params.status && ["draft", "published", "archived"].includes(params.status)
       ? (params.status as PostStatus)
       : "all";
-  const mark =
-    params.mark && postMarkFilters.includes(params.mark)
-      ? (params.mark as PostMarkFilter)
-      : "all";
   const page = Number(params.page ?? "1") || 1;
   const { rows, total, pageSize } = await listPosts({
     query: params.q,
     status,
-    mark,
     page
   });
   const pageCount = Math.max(Math.ceil(total / pageSize), 1);
@@ -52,7 +40,6 @@ export default async function PostsPage({
     const search = new URLSearchParams();
     if (params.q) search.set("q", params.q);
     if (status !== "all") search.set("status", status);
-    if (mark !== "all") search.set("mark", mark);
     search.set("page", String(nextPage));
     return `/posts?${search.toString()}`;
   };
@@ -91,15 +78,10 @@ export default async function PostsPage({
             <option value="published">已发布</option>
             <option value="archived">已归档</option>
           </select>
-          <input type="hidden" name="mark" value={mark} />
           <input type="hidden" name="page" value="1" />
           <button className={buttonClassName("secondary")} type="submit">
             筛选
           </button>
-        </div>
-        <div className="flex flex-col gap-2">
-          <p className="text-xs font-medium text-slate-500">按标记筛选</p>
-          <PostMarkSelect value={mark} />
         </div>
       </form>
 
@@ -110,7 +92,6 @@ export default async function PostsPage({
               <col className="w-[260px]" />
               <col className="w-[120px]" />
               <col className="w-[100px]" />
-              <col className="w-[210px]" />
               <col className="w-[180px]" />
               <col className="w-[170px]" />
               <col className="w-[170px]" />
@@ -121,7 +102,6 @@ export default async function PostsPage({
                 <th className="px-4 py-3 font-medium">标题</th>
                 <th className="px-4 py-3 font-medium">分类</th>
                 <th className="px-4 py-3 font-medium">状态</th>
-                <th className="px-4 py-3 font-medium">标记</th>
                 <th className="px-4 py-3 font-medium">AI 作者</th>
                 <th className="px-4 py-3 font-medium">发布时间</th>
                 <th className="px-4 py-3 font-medium">更新时间</th>
@@ -156,12 +136,6 @@ export default async function PostsPage({
                     </td>
                     <td className="px-4 py-3">
                       <Badge tone={post.status}>{postStatusLabel(post.status)}</Badge>
-                    </td>
-                    <td className="px-4 py-3 text-slate-500 align-top">
-                      <PostMarkInlineEditor
-                        currentMark={post.mark}
-                        action={updatePostMarkAction.bind(null, post.id)}
-                      />
                     </td>
                     <td className="px-4 py-3">
                       {aiAuthor && aiAuthorZhName && aiAuthorEnName && aiAuthorAvatar ? (
@@ -230,7 +204,7 @@ export default async function PostsPage({
               })}
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-10 text-center text-slate-500">
+                  <td colSpan={7} className="px-5 py-10 text-center text-slate-500">
                     未找到文章。
                   </td>
                 </tr>

@@ -12,7 +12,6 @@ import { SeoSuggestionButton } from "@/components/forms/SeoSuggestionButton";
 import { SubmitButton, SubmitTimeoutNotice } from "@/components/forms/SubmitButton";
 import type { AiWritingRoleId } from "@/lib/ai-style";
 import type { Locale, PostMark, PostStatus } from "@/server/db/schema";
-import { postMarkOptions } from "@/lib/post-mark";
 
 type SelectOption = {
   id: string;
@@ -503,6 +502,7 @@ export function PostForm({
         name="writingRole"
         value={submittedWritingRole}
       />
+      <input type="hidden" name="mark" value={mark} />
       <PendingFieldset className="grid gap-6 lg:contents">
       <div className="grid gap-6">
         {state.error ? (
@@ -735,20 +735,6 @@ export function PostForm({
                 <option value="draft">草稿</option>
                 <option value="published">已发布</option>
                 <option value="archived">已归档</option>
-              </select>
-            </Field>
-            <Field label="标记">
-              <select
-                name="mark"
-                value={mark}
-                onChange={(event) => setMark(event.target.value as PostMark)}
-                className={inputClassName}
-              >
-                {postMarkOptions.map((option) => (
-                  <option key={option.label} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
               </select>
             </Field>
             <Field label="分类">
