@@ -41,6 +41,9 @@ export function AiSettingsForm({
   writingRoles: Array<{
     id: AiWritingRoleId;
     label: string;
+    zhName: string;
+    enName: string;
+    avatar: string;
     description: string;
     style: string;
   }>;
@@ -245,6 +248,19 @@ export function AiSettingsForm({
                   ))}
                 </select>
               </Field>
+              <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <img
+                  src={editingRole.avatar}
+                  alt={editingRole.zhName}
+                  className="h-12 w-12 rounded-full bg-white"
+                />
+                <div>
+                  <p className="text-sm font-semibold text-slate-950">
+                    {editingRole.zhName}
+                  </p>
+                  <p className="text-xs text-slate-500">{editingRole.enName}</p>
+                </div>
+              </div>
               <Field label={`${editingRole.label}的写作要求`}>
                 <textarea
                   value={roleStyleValues[editingRole.id] ?? editingRole.style}

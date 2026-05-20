@@ -2,6 +2,7 @@ import "server-only";
 
 import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 
+import { isAiWritingRoleId } from "@/lib/ai-style";
 import { db } from "@/server/db";
 import {
   categories,
@@ -103,6 +104,10 @@ export async function listPosts(options: {
       slug: posts.slug,
       status: posts.status,
       mark: posts.mark,
+      aiAuthorRole: posts.aiAuthorRole,
+      aiAuthorZhName: posts.aiAuthorZhName,
+      aiAuthorEnName: posts.aiAuthorEnName,
+      aiAuthorAvatar: posts.aiAuthorAvatar,
       featured: posts.featured,
       pinned: posts.pinned,
       publishedAt: posts.publishedAt,
@@ -188,11 +193,13 @@ export async function getPostForEdit(id: string) {
         .where(eq(mediaAssets.id, post.coverImageId))
         .limit(1)
     : [];
+  const aiAuthorRole = post.aiAuthorRole ?? "";
 
   return {
     ...post,
     mark: post.mark as PostMark,
     status: post.status as PostStatus,
+    aiAuthorRole: isAiWritingRoleId(aiAuthorRole) ? aiAuthorRole : null,
     coverImageId: post.coverImageId,
     coverImageUrl: post.coverImage,
     coverImageAlt: coverAsset?.altText ?? "",

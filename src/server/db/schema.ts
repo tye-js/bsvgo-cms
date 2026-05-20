@@ -220,6 +220,10 @@ export const posts = pgTable(
     authorId: uuid("author_id").references(() => users.id, {
       onDelete: "set null"
     }),
+    aiAuthorRole: varchar("ai_author_role", { length: 80 }),
+    aiAuthorZhName: varchar("ai_author_zh_name", { length: 120 }),
+    aiAuthorEnName: varchar("ai_author_en_name", { length: 120 }),
+    aiAuthorAvatar: text("ai_author_avatar"),
     deletedAt: timestamp("deleted_at")
   },
   (table) => ({

@@ -7,6 +7,7 @@ import { inputClassName } from "@/components/admin/Field";
 import { ConfirmSubmitButton } from "@/components/forms/ConfirmSubmitButton";
 import { PostMarkInlineEditor } from "@/components/forms/PostMarkInlineEditor";
 import { PostMarkSelect } from "@/components/forms/PostMarkSelect";
+import { getAiWritingRole } from "@/lib/ai-style";
 import { formatDate, postStatusLabel } from "@/lib/utils";
 import type { PostMarkFilter } from "@/lib/post-mark";
 import {
@@ -104,12 +105,13 @@ export default async function PostsPage({
 
       <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1260px] table-fixed text-left text-sm">
+          <table className="w-full min-w-[1400px] table-fixed text-left text-sm">
             <colgroup>
               <col className="w-[260px]" />
               <col className="w-[120px]" />
               <col className="w-[100px]" />
               <col className="w-[210px]" />
+              <col className="w-[180px]" />
               <col className="w-[170px]" />
               <col className="w-[170px]" />
               <col className="w-[240px]" />
@@ -120,84 +122,115 @@ export default async function PostsPage({
                 <th className="px-4 py-3 font-medium">分类</th>
                 <th className="px-4 py-3 font-medium">状态</th>
                 <th className="px-4 py-3 font-medium">标记</th>
+                <th className="px-4 py-3 font-medium">AI 作者</th>
                 <th className="px-4 py-3 font-medium">发布时间</th>
                 <th className="px-4 py-3 font-medium">更新时间</th>
                 <th className="px-4 py-3 font-medium">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {rows.map((post) => (
-                <tr key={post.id} className="h-16 align-middle">
-                  <td className="max-w-0 px-4 py-3">
-                    <Link
-                      href={`/posts/${post.id}/edit`}
-                      className="block truncate font-medium text-slate-950 hover:text-slate-700"
-                      title={post.title}
-                    >
-                      {post.title}
-                    </Link>
-                    <p className="mt-1 truncate text-xs text-slate-500" title={post.slug}>
-                      {post.slug}
-                    </p>
-                  </td>
-                  <td className="truncate px-4 py-3 text-slate-600" title={post.categoryName}>
-                    {post.categoryName}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge tone={post.status}>{postStatusLabel(post.status)}</Badge>
-                  </td>
-                  <td className="px-4 py-3 text-slate-500 align-top">
-                    <PostMarkInlineEditor
-                      currentMark={post.mark}
-                      action={updatePostMarkAction.bind(null, post.id)}
-                    />
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-slate-500">
-                    {formatDate(post.publishedAt)}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-slate-500">
-                    {formatDate(post.updatedAt)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="grid gap-2">
-                      <div className="flex items-center gap-2 whitespace-nowrap">
-                        <Link
-                          href={`/posts/${post.id}/edit`}
-                          className={buttonClassName("secondary", "min-h-8 px-2")}
-                        >
-                          编辑
-                        </Link>
-                        <form action={setPostStatusAction}>
-                          <input type="hidden" name="id" value={post.id} />
-                          <input
-                            type="hidden"
-                            name="status"
-                            value={post.status === "published" ? "draft" : "published"}
+              {rows.map((post) => {
+                const aiAuthor = post.aiAuthorRole
+                  ? getAiWritingRole(post.aiAuthorRole)
+                  : null;
+                const aiAuthorZhName = post.aiAuthorZhName ?? aiAuthor?.zhName;
+                const aiAuthorEnName = post.aiAuthorEnName ?? aiAuthor?.enName;
+                const aiAuthorAvatar = post.aiAuthorAvatar ?? aiAuthor?.avatar;
+
+                return (
+                  <tr key={post.id} className="h-16 align-middle">
+                    <td className="max-w-0 px-4 py-3">
+                      <Link
+                        href={`/posts/${post.id}/edit`}
+                        className="block truncate font-medium text-slate-950 hover:text-slate-700"
+                        title={post.title}
+                      >
+                        {post.title}
+                      </Link>
+                      <p className="mt-1 truncate text-xs text-slate-500" title={post.slug}>
+                        {post.slug}
+                      </p>
+                    </td>
+                    <td className="truncate px-4 py-3 text-slate-600" title={post.categoryName}>
+                      {post.categoryName}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge tone={post.status}>{postStatusLabel(post.status)}</Badge>
+                    </td>
+                    <td className="px-4 py-3 text-slate-500 align-top">
+                      <PostMarkInlineEditor
+                        currentMark={post.mark}
+                        action={updatePostMarkAction.bind(null, post.id)}
+                      />
+                    </td>
+                    <td className="px-4 py-3">
+                      {aiAuthor && aiAuthorZhName && aiAuthorEnName && aiAuthorAvatar ? (
+                        <div className="flex min-w-0 items-center gap-2">
+                          <img
+                            src={aiAuthorAvatar}
+                            alt={aiAuthorZhName}
+                            className="h-8 w-8 rounded-full bg-slate-100"
                           />
-                          <button
-                            type="submit"
-                            className={buttonClassName("ghost", "min-h-8 px-2")}
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-medium text-slate-800">
+                              {aiAuthorZhName}
+                            </p>
+                            <p className="truncate text-[11px] text-slate-500">
+                              {aiAuthorEnName}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">未设置</span>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-slate-500">
+                      {formatDate(post.publishedAt)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-slate-500">
+                      {formatDate(post.updatedAt)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="grid gap-2">
+                        <div className="flex items-center gap-2 whitespace-nowrap">
+                          <Link
+                            href={`/posts/${post.id}/edit`}
+                            className={buttonClassName("secondary", "min-h-8 px-2")}
                           >
-                            {post.status === "published" ? "下架" : "发布"}
-                          </button>
-                        </form>
-                        <form action={deletePostAction}>
-                          <input type="hidden" name="id" value={post.id} />
-                          <ConfirmSubmitButton
-                            message="确定删除这篇文章吗？它会从后台列表中移除。"
-                            className="min-h-8 px-2"
-                          >
-                            删除
-                          </ConfirmSubmitButton>
-                        </form>
+                            编辑
+                          </Link>
+                          <form action={setPostStatusAction}>
+                            <input type="hidden" name="id" value={post.id} />
+                            <input
+                              type="hidden"
+                              name="status"
+                              value={post.status === "published" ? "draft" : "published"}
+                            />
+                            <button
+                              type="submit"
+                              className={buttonClassName("ghost", "min-h-8 px-2")}
+                            >
+                              {post.status === "published" ? "下架" : "发布"}
+                            </button>
+                          </form>
+                          <form action={deletePostAction}>
+                            <input type="hidden" name="id" value={post.id} />
+                            <ConfirmSubmitButton
+                              message="确定删除这篇文章吗？它会从后台列表中移除。"
+                              className="min-h-8 px-2"
+                            >
+                              删除
+                            </ConfirmSubmitButton>
+                          </form>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                );
+              })}
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center text-slate-500">
+                  <td colSpan={8} className="px-5 py-10 text-center text-slate-500">
                     未找到文章。
                   </td>
                 </tr>

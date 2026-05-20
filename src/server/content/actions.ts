@@ -11,6 +11,7 @@ import {
   tagSchema,
   userSchema
 } from "@/lib/validators";
+import { getAiWritingRole, isAiWritingRoleId } from "@/lib/ai-style";
 import { generateEnglishPost } from "@/server/ai/openai";
 import { requireRole, requireUser } from "@/server/auth/session";
 import { hashPassword } from "@/server/auth/password";
@@ -132,6 +133,7 @@ function fallbackSlug(value: string) {
 function postDataFromForm(formData: FormData) {
   const mark = stringValue(formData, "mark");
   return {
+    writingRole: stringValue(formData, "writingRole"),
     slug: stringValue(formData, "slug"),
     categoryId: stringValue(formData, "categoryId"),
     status: stringValue(formData, "status"),
@@ -171,6 +173,28 @@ function publishedAtValue(value: string | undefined, status: string) {
   if (value) return new Date(value);
   if (status === "published") return new Date();
   return null;
+}
+
+function aiAuthorValues(roleId: string | undefined) {
+  const normalizedRoleId = roleId?.trim() ?? "";
+
+  if (!isAiWritingRoleId(normalizedRoleId)) {
+    return {
+      aiAuthorRole: null,
+      aiAuthorZhName: null,
+      aiAuthorEnName: null,
+      aiAuthorAvatar: null
+    };
+  }
+
+  const role = getAiWritingRole(normalizedRoleId);
+
+  return {
+    aiAuthorRole: role.id,
+    aiAuthorZhName: role.zhName,
+    aiAuthorEnName: role.enName,
+    aiAuthorAvatar: role.avatar
+  };
 }
 
 async function resolveCoverImage(
@@ -360,6 +384,7 @@ export async function createPostAction(
           authorId: user.id,
           status: data.status,
           mark: normalizedMark,
+          ...aiAuthorValues(data.writingRole),
           coverImage: coverImage.coverImage,
           coverImageId: coverImage.coverImageId,
           publishedAt: publishedAtValue(data.publishedAt, data.status),
@@ -441,6 +466,7 @@ export async function updatePostAction(
           categoryId: data.categoryId,
           status: data.status,
           mark: normalizedMark,
+          ...aiAuthorValues(data.writingRole),
           coverImage: coverImage.coverImage,
           coverImageId: coverImage.coverImageId,
           publishedAt: publishedAtValue(data.publishedAt, data.status),

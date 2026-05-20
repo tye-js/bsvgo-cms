@@ -37,6 +37,9 @@ type MediaAssetOption = {
 type WritingRoleOption = {
   id: AiWritingRoleId;
   label: string;
+  zhName: string;
+  enName: string;
+  avatar: string;
   description: string;
 };
 
@@ -55,6 +58,7 @@ type PostFormValue = {
   categoryId: string;
   status: PostStatus;
   mark: PostMark;
+  aiAuthorRole: AiWritingRoleId | null;
   coverImageId: string | null;
   coverImageUrl: string | null;
   coverImageAlt?: string | null;
@@ -215,7 +219,10 @@ export function PostForm({
   const submitTimeoutMs = generateEnglishFromChinese ? 30000 : undefined;
   const [rawDraftInput, setRawDraftInput] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
-  const [writingRole, setWritingRole] = useState<AiWritingRoleId>(defaultWritingRole);
+  const [writingRole, setWritingRole] = useState<AiWritingRoleId>(
+    post?.aiAuthorRole ?? defaultWritingRole
+  );
+  const selectedWritingRole = writingRoles.find((role) => role.id === writingRole);
   const [draftRewriteError, setDraftRewriteError] = useState("");
   const [draftRewriteSuccess, setDraftRewriteSuccess] = useState("");
   const [draftTranslationError, setDraftTranslationError] = useState("");
@@ -225,6 +232,9 @@ export function PostForm({
   const [isRewritingDraft, setIsRewritingDraft] = useState(false);
   const aiGenerationPending =
     isRewritingDraft || draftTranslationPending || draftMetadataPending;
+  const submittedWritingRole = generateEnglishFromChinese
+    ? writingRole
+    : (post?.aiAuthorRole ?? "");
   const [slug, setSlug] = useState(post?.slug ?? "");
   const [mark, setMark] = useState<PostMark>(post?.mark ?? "");
   const [zhTitle, setZhTitle] = useState(zh?.title ?? "");
@@ -395,6 +405,11 @@ export function PostForm({
       action={formAction}
       className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]"
     >
+      <input
+        type="hidden"
+        name="writingRole"
+        value={submittedWritingRole}
+      />
       <PendingFieldset className="grid gap-6 lg:contents">
       <div className="grid gap-6">
         {state.error ? (
@@ -422,8 +437,7 @@ export function PostForm({
                   <Field
                     label="1. 选择本篇文章的 AI 角色"
                     hint={
-                      writingRoles.find((role) => role.id === writingRole)
-                        ?.description
+                      selectedWritingRole?.description
                     }
                   >
                     <select
@@ -444,6 +458,23 @@ export function PostForm({
                   <p className="mt-2 text-xs leading-5 text-slate-500">
                     角色会在点击生成时锁定，后续中文稿、英文稿和 SEO 会沿用同一个写作方向。
                   </p>
+                  {selectedWritingRole ? (
+                    <div className="mt-3 flex items-center gap-3 rounded-md bg-white px-3 py-2 ring-1 ring-slate-200">
+                      <img
+                        src={selectedWritingRole.avatar}
+                        alt={selectedWritingRole.zhName}
+                        className="h-10 w-10 rounded-full bg-slate-100"
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-slate-950">
+                          {selectedWritingRole.zhName}
+                        </p>
+                        <p className="truncate text-xs text-slate-500">
+                          {selectedWritingRole.enName}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
               <Field
