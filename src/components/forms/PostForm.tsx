@@ -10,6 +10,7 @@ import { MarkdownEditor } from "@/components/forms/MarkdownEditor";
 import { PendingFieldset } from "@/components/forms/PendingFieldset";
 import { SeoSuggestionButton } from "@/components/forms/SeoSuggestionButton";
 import { SubmitButton, SubmitTimeoutNotice } from "@/components/forms/SubmitButton";
+import type { AiWritingRoleId } from "@/lib/ai-style";
 import type { Locale, PostMark, PostStatus } from "@/server/db/schema";
 import { postMarkOptions } from "@/lib/post-mark";
 
@@ -31,6 +32,12 @@ type MediaAssetOption = {
   height: number | null;
   fileSize: number | null;
   createdAt: Date;
+};
+
+type WritingRoleOption = {
+  id: AiWritingRoleId;
+  label: string;
+  description: string;
 };
 
 type Translation = {
@@ -184,7 +191,9 @@ export function PostForm({
   mediaAssets,
   post,
   submitLabel,
-  generateEnglishFromChinese = false
+  generateEnglishFromChinese = false,
+  writingRoles = [],
+  defaultWritingRole = writingRoles[0]?.id ?? "technical_editor"
 }: {
   action: (
     previousState: ActionState,
@@ -196,6 +205,8 @@ export function PostForm({
   post?: PostFormValue;
   submitLabel: string;
   generateEnglishFromChinese?: boolean;
+  writingRoles?: WritingRoleOption[];
+  defaultWritingRole?: AiWritingRoleId;
 }) {
   const [state, formAction] = useActionState(action, {});
   const formRef = useRef<HTMLFormElement>(null);
@@ -204,6 +215,7 @@ export function PostForm({
   const submitTimeoutMs = generateEnglishFromChinese ? 30000 : undefined;
   const [rawDraftInput, setRawDraftInput] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
+  const [writingRole, setWritingRole] = useState<AiWritingRoleId>(defaultWritingRole);
   const [draftRewriteError, setDraftRewriteError] = useState("");
   const [draftRewriteSuccess, setDraftRewriteSuccess] = useState("");
   const [draftTranslationError, setDraftTranslationError] = useState("");
@@ -260,6 +272,7 @@ export function PostForm({
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
+            writingRole,
             rawInput: rawDraftInput,
             sourceUrl
           })
@@ -300,6 +313,7 @@ export function PostForm({
                 "Content-Type": "application/json"
               },
               body: JSON.stringify({
+                writingRole,
                 zhTitle: payload.zh.title,
                 zhExcerpt: payload.zh.excerpt,
                 zhContent: payload.zh.content
@@ -396,10 +410,34 @@ export function PostForm({
             <div className="mb-5">
               <h2 className="font-semibold text-slate-950">AI 写作助手</h2>
               <p className="mt-1 text-sm text-slate-500">
-                把未整理的信息、链接、要点或聊天记录放在这里，AI 会按设置页的写作风格生成中英文稿、Slug 和双语 SEO。
+                把未整理的信息、链接、要点或聊天记录放在这里，AI 会按所选角色和设置页风格生成中英文稿、Slug 和双语 SEO。
               </p>
             </div>
             <div className="grid gap-4">
+              {writingRoles.length ? (
+                <Field
+                  label="本次写作角色"
+                  hint={
+                    writingRoles.find((role) => role.id === writingRole)
+                      ?.description
+                  }
+                >
+                  <select
+                    value={writingRole}
+                    onChange={(event) =>
+                      setWritingRole(event.target.value as AiWritingRoleId)
+                    }
+                    disabled={isRewritingDraft}
+                    className={inputClassName}
+                  >
+                    {writingRoles.map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              ) : null}
               <Field
                 label="网页或视频链接"
                 hint="可选。视频页会尽量抓取字幕，优先英文字幕或英文自动字幕；抓不到时会回退到网页标题、描述和可见文本。"

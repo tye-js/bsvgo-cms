@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { AiWritingRoleId } from "@/lib/ai-style";
 import { getAiSettingsForGeneration } from "@/server/settings/service";
 
 type EnglishPostInput = {
@@ -17,6 +18,7 @@ type EnglishPostOutput = {
 };
 
 type ChineseDraftInput = {
+  writingRole?: AiWritingRoleId;
   rawInput?: string;
   sourceUrl?: string;
   sourceTitle?: string;
@@ -27,6 +29,7 @@ type ChineseDraftInput = {
 type ChineseDraftCoreInput = ChineseDraftInput;
 
 type DraftTranslationInput = {
+  writingRole?: AiWritingRoleId;
   zhTitle: string;
   zhExcerpt?: string;
   zhContent: string;
@@ -123,6 +126,24 @@ type ResponsesInput = Array<{
 }>;
 
 type AiGenerationSettings = Awaited<ReturnType<typeof getAiSettingsForGeneration>>;
+
+function stylePayload(settings: AiGenerationSettings) {
+  return {
+    baseStyle: settings.writingStyle,
+    role: {
+      id: settings.writingRole.id,
+      label: settings.writingRole.label,
+      instructions: settings.writingRoleStyle
+    }
+  };
+}
+
+function seoStylePayload(settings: AiGenerationSettings) {
+  return {
+    zh: settings.zhSeoStyle,
+    en: settings.enSeoStyle
+  };
+}
 
 export type LocalizedSeoSuggestion = {
   title: string;
@@ -431,7 +452,9 @@ async function callResponsesJson({
 export async function generateEnglishPost(
   input: EnglishPostInput
 ): Promise<EnglishPostOutput> {
+  const settings = await getAiSettingsForGeneration();
   const payload = await callResponsesJson({
+    settings,
     input: [
       {
         role: "system",
@@ -439,7 +462,7 @@ export async function generateEnglishPost(
           {
             type: "input_text",
             text:
-              "You are the BSVgo CMS English editor. Translate and adapt Chinese blog drafts into polished English Markdown for a technical audience. Preserve factual meaning, headings, links, code blocks, lists, quotes, and Markdown structure. Do not add unsupported facts."
+              "You are the BSVgo CMS English editor. Translate and adapt Chinese blog drafts into polished English Markdown for a technical audience. Follow the configured writing role and English SEO style. Preserve factual meaning, headings, links, code blocks, lists, quotes, and Markdown structure. Do not add unsupported facts."
           }
         ]
       },
@@ -452,6 +475,10 @@ export async function generateEnglishPost(
               task: "Generate the English version of this BSVgo blog post.",
               sourceLanguage: "zh",
               targetLanguage: "en",
+              writingStyle: stylePayload(settings),
+              seoStyle: {
+                en: settings.enSeoStyle
+              },
               title: input.title,
               excerpt: input.excerpt ?? "",
               content: input.content
@@ -501,7 +528,7 @@ export async function generateEnglishPost(
 export async function generateChineseDraft(
   input: ChineseDraftInput
 ): Promise<ChineseDraftOutput> {
-  const settings = await getAiSettingsForGeneration();
+  const settings = await getAiSettingsForGeneration(input.writingRole);
   const payload = await callResponsesJson({
     settings,
     input: [
@@ -522,7 +549,8 @@ export async function generateChineseDraft(
             type: "input_text",
             text: JSON.stringify({
               task: "Rewrite unstructured material into bilingual blog drafts.",
-              writingStyle: settings.writingStyle,
+              writingStyle: stylePayload(settings),
+              seoStyle: seoStylePayload(settings),
               rawInput: input.rawInput ?? "",
               source: {
                 url: input.sourceUrl ?? "",
@@ -621,7 +649,7 @@ export async function generateChineseDraft(
 export async function generateChineseDraftCore(
   input: ChineseDraftCoreInput
 ): Promise<ChineseDraftCoreOutput> {
-  const settings = await getAiSettingsForGeneration();
+  const settings = await getAiSettingsForGeneration(input.writingRole);
   const payload = await callResponsesJson({
     settings,
     input: [
@@ -642,7 +670,7 @@ export async function generateChineseDraftCore(
             type: "input_text",
             text: JSON.stringify({
               task: "Rewrite unstructured material into a Chinese blog draft.",
-              writingStyle: settings.writingStyle,
+              writingStyle: stylePayload(settings),
               rawInput: input.rawInput ?? "",
               source: {
                 url: input.sourceUrl ?? "",
@@ -695,7 +723,9 @@ export async function generateChineseDraftCore(
 export async function translateDraftToEnglish(
   input: DraftTranslationInput
 ): Promise<DraftTranslationOutput> {
+  const settings = await getAiSettingsForGeneration(input.writingRole);
   const payload = await callResponsesJson({
+    settings,
     input: [
       {
         role: "system",
@@ -703,7 +733,7 @@ export async function translateDraftToEnglish(
           {
             type: "input_text",
             text:
-              "You are the BSVgo CMS English editor. Translate the provided Simplified Chinese draft into polished English Markdown. Preserve factual meaning, headings, links, code blocks, lists, and tone. Do not add unsupported facts."
+              "You are the BSVgo CMS English editor. Translate and adapt the provided Simplified Chinese draft into polished English Markdown. Preserve factual meaning, headings, links, code blocks, lists, and tone. Follow the configured writing role, but do not add unsupported facts."
           }
         ]
       },
@@ -714,6 +744,7 @@ export async function translateDraftToEnglish(
             type: "input_text",
             text: JSON.stringify({
               task: "Translate the Chinese draft into English.",
+              writingStyle: stylePayload(settings),
               chinese: {
                 title: input.zhTitle,
                 excerpt: input.zhExcerpt ?? "",
@@ -764,7 +795,9 @@ export async function translateDraftToEnglish(
 export async function generateDraftMetadata(
   input: DraftMetadataInput
 ): Promise<DraftMetadataOutput> {
+  const settings = await getAiSettingsForGeneration();
   const payload = await callResponsesJson({
+    settings,
     input: [
       {
         role: "system",
@@ -772,7 +805,7 @@ export async function generateDraftMetadata(
           {
             type: "input_text",
             text:
-              "You are the BSVgo CMS metadata editor. Generate a concise URL slug plus SEO titles and descriptions for both Simplified Chinese and English pages. Keep them search-friendly, accurate, and natural."
+              "You are the BSVgo CMS metadata editor. Generate a concise URL slug plus SEO titles and descriptions for both Simplified Chinese and English pages. Keep them search-friendly, accurate, natural, and aligned with the configured locale-specific SEO styles."
           }
         ]
       },
@@ -783,6 +816,7 @@ export async function generateDraftMetadata(
             type: "input_text",
             text: JSON.stringify({
               task: "Generate slug and bilingual SEO metadata.",
+              seoStyle: seoStylePayload(settings),
               chinese: {
                 title: input.zhTitle,
                 excerpt: input.zhExcerpt ?? "",
@@ -853,7 +887,9 @@ export async function generateDraftMetadata(
 export async function generateSeoSuggestion(
   input: SeoSuggestionInput
 ): Promise<SeoSuggestionOutput> {
+  const settings = await getAiSettingsForGeneration();
   const payload = await callResponsesJson({
+    settings,
     input: [
       {
         role: "system",
@@ -861,7 +897,7 @@ export async function generateSeoSuggestion(
           {
             type: "input_text",
             text:
-              "You are the BSVgo CMS bilingual SEO editor. Generate concise, search-friendly SEO metadata for both English and Simplified Chinese pages. Keep each locale natural for native readers, preserve technical accuracy, and do not add facts unsupported by the source content. English SEO is for the English frontend page; Chinese SEO is for the Chinese frontend page."
+              "You are the BSVgo CMS bilingual SEO editor. Generate concise, search-friendly SEO metadata for both English and Simplified Chinese pages. Follow the configured SEO style for each locale, keep each locale natural for native readers, preserve technical accuracy, and do not add facts unsupported by the source content. English SEO is for the English frontend page; Chinese SEO is for the Chinese frontend page."
           }
         ]
       },
@@ -873,6 +909,7 @@ export async function generateSeoSuggestion(
             text: JSON.stringify({
               task: "Generate SEO metadata.",
               targetType: input.targetType,
+              seoStyle: seoStylePayload(settings),
               english: {
                 title: input.enTitle ?? "",
                 description: input.enDescription ?? "",

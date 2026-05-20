@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { Field, inputClassName, textareaClassName } from "@/components/admin/Field";
 import { PendingFieldset } from "@/components/forms/PendingFieldset";
 import { SubmitButton } from "@/components/forms/SubmitButton";
+import type { AiWritingRoleId } from "@/lib/ai-style";
 
 type ActionState = {
   error?: string;
@@ -18,7 +19,11 @@ export function AiSettingsForm({
   apiBaseUrl,
   model,
   timeoutMs,
-  writingStyle
+  writingStyle,
+  defaultWritingRole,
+  writingRoles,
+  zhSeoStyle,
+  enSeoStyle
 }: {
   action: (
     previousState: ActionState,
@@ -30,6 +35,15 @@ export function AiSettingsForm({
   model: string;
   timeoutMs: string;
   writingStyle: string;
+  defaultWritingRole: string;
+  writingRoles: Array<{
+    id: AiWritingRoleId;
+    label: string;
+    description: string;
+    style: string;
+  }>;
+  zhSeoStyle: string;
+  enSeoStyle: string;
 }) {
   const [state, formAction] = useActionState(action, {});
 
@@ -104,8 +118,8 @@ export function AiSettingsForm({
       </div>
 
       <Field
-        label="AI 写作风格"
-        hint="用于「未整理素材改写成文章」和后续文章增强。建议写清楚语气、结构、受众和禁忌。"
+        label="全局写作底线"
+        hint="所有角色都会遵守的基础要求，比如事实约束、受众、禁忌和 Markdown 结构。"
       >
         <textarea
           name="writingStyle"
@@ -115,6 +129,73 @@ export function AiSettingsForm({
           placeholder="例如：面向技术读者，客观清晰，短段落，多用小标题，不夸大..."
         />
       </Field>
+
+      <Field
+        label="默认写作角色"
+        hint="新建文章页会默认选中这个角色，每次 AI 改写前仍可临时切换。"
+      >
+        <select
+          name="defaultWritingRole"
+          defaultValue={defaultWritingRole}
+          className={inputClassName}
+        >
+          {writingRoles.map((role) => (
+            <option key={role.id} value={role.id}>
+              {role.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-4">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-950">AI 写作角色</h3>
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            每个角色会叠加到全局写作底线上。适合把技术文章、资讯分析、产品营销、科普和观点稿拆开调教。
+          </p>
+        </div>
+        <div className="grid gap-4">
+          {writingRoles.map((role) => (
+            <Field
+              key={role.id}
+              label={role.label}
+              hint={role.description}
+            >
+              <textarea
+                name={`writingRoleStyle.${role.id}`}
+                defaultValue={role.style}
+                maxLength={2000}
+                className={`${textareaClassName} min-h-28`}
+              />
+            </Field>
+          ))}
+        </div>
+      </section>
+
+      <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-4">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-950">AI SEO 风格</h3>
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            用于文章、分类、标签和首页的双语 SEO 生成。中文 SEO 和英文 SEO 会分别服务对应前端入口。
+          </p>
+        </div>
+        <Field label="中文 SEO 风格">
+          <textarea
+            name="zhSeoStyle"
+            defaultValue={zhSeoStyle}
+            maxLength={2000}
+            className={`${textareaClassName} min-h-28`}
+          />
+        </Field>
+        <Field label="英文 SEO 风格">
+          <textarea
+            name="enSeoStyle"
+            defaultValue={enSeoStyle}
+            maxLength={2000}
+            className={`${textareaClassName} min-h-28`}
+          />
+        </Field>
+      </section>
 
       <div>
         <SubmitButton>保存 AI 设置</SubmitButton>

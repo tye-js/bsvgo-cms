@@ -48,6 +48,7 @@ export async function POST(request: Request) {
   try {
     const source = await fetchAiDraftSource(parsed.data.sourceUrl?.trim() ?? "");
     const draft = await generateChineseDraftCore({
+      writingRole: parsed.data.writingRole,
       rawInput: parsed.data.rawInput,
       ...source
     });

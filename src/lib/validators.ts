@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { aiWritingRoleIds } from "@/lib/ai-style";
+
 export const slugSchema = z
   .string()
   .trim()
@@ -101,11 +103,27 @@ export const aiSettingsSchema = z.object({
 });
 
 export const writingStyleSchema = z.object({
-  writingStyle: z.string().trim().max(2000, "写作风格不能超过 2000 个字符").optional()
+  writingStyle: z.string().trim().max(2000, "写作风格不能超过 2000 个字符").optional(),
+  defaultWritingRole: z.enum(aiWritingRoleIds),
+  zhSeoStyle: z
+    .string()
+    .trim()
+    .max(2000, "中文 SEO 风格不能超过 2000 个字符")
+    .optional(),
+  enSeoStyle: z
+    .string()
+    .trim()
+    .max(2000, "英文 SEO 风格不能超过 2000 个字符")
+    .optional(),
+  writingRoleStyles: z.record(
+    z.enum(aiWritingRoleIds),
+    z.string().trim().max(2000, "角色风格不能超过 2000 个字符")
+  )
 });
 
 export const aiDraftRewriteSchema = z
   .object({
+    writingRole: z.enum(aiWritingRoleIds).optional(),
     rawInput: z.string().trim().max(20000, "原始素材不能超过 20000 个字符").optional(),
     sourceUrl: z
       .string()
@@ -136,6 +154,7 @@ export const aiDraftRewriteSchema = z
   );
 
 export const aiDraftTranslateSchema = z.object({
+  writingRole: z.enum(aiWritingRoleIds).optional(),
   zhTitle: z.string().trim().min(1, "中文标题为必填项").max(255),
   zhExcerpt: z.string().trim().optional(),
   zhContent: z.string().trim().min(1, "中文正文为必填项")

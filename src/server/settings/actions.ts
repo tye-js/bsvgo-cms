@@ -7,6 +7,7 @@ import {
   homepageSeoSchema,
   writingStyleSchema
 } from "@/lib/validators";
+import { aiWritingRoles } from "@/lib/ai-style";
 import { generateSeoSuggestion } from "@/server/ai/openai";
 import { requireRole } from "@/server/auth/session";
 import {
@@ -35,7 +36,16 @@ export async function updateAiSettingsAction(
     timeoutMs: stringValue(formData, "timeoutMs")
   });
   const parsedStyle = writingStyleSchema.safeParse({
-    writingStyle: stringValue(formData, "writingStyle")
+    writingStyle: stringValue(formData, "writingStyle"),
+    defaultWritingRole: stringValue(formData, "defaultWritingRole"),
+    zhSeoStyle: stringValue(formData, "zhSeoStyle"),
+    enSeoStyle: stringValue(formData, "enSeoStyle"),
+    writingRoleStyles: Object.fromEntries(
+      aiWritingRoles.map((role) => [
+        role.id,
+        stringValue(formData, `writingRoleStyle.${role.id}`)
+      ])
+    )
   });
 
   if (!parsed.success) {
@@ -51,6 +61,10 @@ export async function updateAiSettingsAction(
     model: parsed.data.model,
     timeoutMs: parsed.data.timeoutMs,
     writingStyle: parsedStyle.data.writingStyle,
+    defaultWritingRole: parsedStyle.data.defaultWritingRole,
+    writingRoleStyles: parsedStyle.data.writingRoleStyles,
+    zhSeoStyle: parsedStyle.data.zhSeoStyle,
+    enSeoStyle: parsedStyle.data.enSeoStyle,
     userId: user.id
   });
 

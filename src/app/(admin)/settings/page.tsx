@@ -41,6 +41,10 @@ export default async function SettingsPage() {
           model={settings.ai.model}
           timeoutMs={settings.ai.timeoutMs}
           writingStyle={settings.ai.writingStyle}
+          defaultWritingRole={settings.ai.defaultWritingRole}
+          writingRoles={settings.ai.writingRoles}
+          zhSeoStyle={settings.ai.zhSeoStyle}
+          enSeoStyle={settings.ai.enSeoStyle}
         />
       </section>
 

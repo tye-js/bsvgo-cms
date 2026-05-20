@@ -2,6 +2,15 @@ import "server-only";
 
 import { inArray } from "drizzle-orm";
 
+import {
+  DEFAULT_AI_EN_SEO_STYLE,
+  DEFAULT_AI_WRITING_ROLE_ID,
+  DEFAULT_AI_ZH_SEO_STYLE,
+  aiWritingRoles,
+  getAiWritingRole,
+  isAiWritingRoleId,
+  type AiWritingRoleId
+} from "@/lib/ai-style";
 import { decryptSettingValue, encryptSettingValue } from "@/server/settings/crypto";
 import { db } from "@/server/db";
 import { appSettings } from "@/server/db/schema";
@@ -11,7 +20,10 @@ export const AI_SETTING_KEYS = {
   apiBaseUrl: "ai.openai.api_base_url",
   model: "ai.openai.model",
   timeoutMs: "ai.openai.timeout_ms",
-  writingStyle: "ai.openai.writing_style"
+  writingStyle: "ai.openai.writing_style",
+  defaultWritingRole: "ai.openai.default_writing_role",
+  zhSeoStyle: "ai.openai.zh_seo_style",
+  enSeoStyle: "ai.openai.en_seo_style"
 } as const;
 
 export const HOMEPAGE_SEO_SETTING_KEYS = {
@@ -47,6 +59,10 @@ export const DEFAULT_AI_TIMEOUT_MS = 60000;
 export const DEFAULT_AI_WRITING_STYLE =
   "面向 BSVgo 技术读者，语言清晰、克制、可信。优先使用结构化小标题和短段落，保留关键事实、数据、链接和代码，不夸大、不营销腔。中文正文自然专业，必要时补充背景但不添加未经素材支持的事实。";
 
+function roleStyleSettingKey(roleId: AiWritingRoleId) {
+  return `ai.openai.writing_role.${roleId}.style`;
+}
+
 type SettingRow = typeof appSettings.$inferSelect;
 
 function decryptIfNeeded(row: SettingRow | undefined) {
@@ -71,8 +87,15 @@ function homepageSeoSettingKeys() {
   ];
 }
 
-export async function getAiSettingsForGeneration() {
-  const rows = await getSettings(Object.values(AI_SETTING_KEYS));
+function aiSettingKeys() {
+  return [
+    ...Object.values(AI_SETTING_KEYS),
+    ...aiWritingRoles.map((role) => roleStyleSettingKey(role.id))
+  ];
+}
+
+export async function getAiSettingsForGeneration(roleId?: string) {
+  const rows = await getSettings(aiSettingKeys());
   const byKey = new Map(rows.map((row) => [row.key, row]));
   const apiKey = decryptIfNeeded(byKey.get(AI_SETTING_KEYS.apiKey)).trim();
 
@@ -91,12 +114,29 @@ export async function getAiSettingsForGeneration() {
   const writingStyle =
     decryptIfNeeded(byKey.get(AI_SETTING_KEYS.writingStyle)).trim() ||
     DEFAULT_AI_WRITING_STYLE;
+  const defaultWritingRole =
+    decryptIfNeeded(byKey.get(AI_SETTING_KEYS.defaultWritingRole)).trim() ||
+    DEFAULT_AI_WRITING_ROLE_ID;
+  const writingRole = getAiWritingRole(roleId || defaultWritingRole);
+  const writingRoleStyle =
+    decryptIfNeeded(byKey.get(roleStyleSettingKey(writingRole.id))).trim() ||
+    writingRole.defaultStyle;
+  const zhSeoStyle =
+    decryptIfNeeded(byKey.get(AI_SETTING_KEYS.zhSeoStyle)).trim() ||
+    DEFAULT_AI_ZH_SEO_STYLE;
+  const enSeoStyle =
+    decryptIfNeeded(byKey.get(AI_SETTING_KEYS.enSeoStyle)).trim() ||
+    DEFAULT_AI_EN_SEO_STYLE;
 
   return {
     apiKey,
     apiBaseUrl,
     model,
     writingStyle,
+    writingRole,
+    writingRoleStyle,
+    zhSeoStyle,
+    enSeoStyle,
     timeoutMs:
       Number.isFinite(timeoutValue) && timeoutValue > 0
         ? timeoutValue
@@ -106,7 +146,7 @@ export async function getAiSettingsForGeneration() {
 
 export async function getSettingsPageData() {
   const rows = await getSettings([
-    ...Object.values(AI_SETTING_KEYS),
+    ...aiSettingKeys(),
     ...homepageSeoSettingKeys()
   ]);
   const byKey = new Map(rows.map((row) => [row.key, row]));
@@ -122,6 +162,21 @@ export async function getSettingsPageData() {
   const writingStyle =
     decryptIfNeeded(byKey.get(AI_SETTING_KEYS.writingStyle)).trim() ||
     DEFAULT_AI_WRITING_STYLE;
+  const defaultWritingRole =
+    decryptIfNeeded(byKey.get(AI_SETTING_KEYS.defaultWritingRole)).trim() ||
+    DEFAULT_AI_WRITING_ROLE_ID;
+  const zhSeoStyle =
+    decryptIfNeeded(byKey.get(AI_SETTING_KEYS.zhSeoStyle)).trim() ||
+    DEFAULT_AI_ZH_SEO_STYLE;
+  const enSeoStyle =
+    decryptIfNeeded(byKey.get(AI_SETTING_KEYS.enSeoStyle)).trim() ||
+    DEFAULT_AI_EN_SEO_STYLE;
+  const writingRoles = aiWritingRoles.map((role) => ({
+    ...role,
+    style:
+      decryptIfNeeded(byKey.get(roleStyleSettingKey(role.id))).trim() ||
+      role.defaultStyle
+  }));
 
   const homepageSeo = {
     enTitle: (
@@ -170,7 +225,13 @@ export async function getSettingsPageData() {
       apiBaseUrl,
       model,
       timeoutMs: timeoutValue,
-      writingStyle
+      writingStyle,
+      defaultWritingRole: isAiWritingRoleId(defaultWritingRole)
+        ? defaultWritingRole
+        : DEFAULT_AI_WRITING_ROLE_ID,
+      writingRoles,
+      zhSeoStyle,
+      enSeoStyle
     },
     homepageSeo
   };
@@ -295,6 +356,10 @@ export async function saveAiSettings({
   model,
   timeoutMs,
   writingStyle,
+  defaultWritingRole,
+  writingRoleStyles,
+  zhSeoStyle,
+  enSeoStyle,
   userId
 }: {
   apiKey?: string;
@@ -302,6 +367,10 @@ export async function saveAiSettings({
   model: string;
   timeoutMs: number;
   writingStyle?: string;
+  defaultWritingRole?: string;
+  writingRoleStyles?: Partial<Record<AiWritingRoleId, string>>;
+  zhSeoStyle?: string;
+  enSeoStyle?: string;
   userId: string;
 }) {
   const now = new Date();
@@ -330,8 +399,33 @@ export async function saveAiSettings({
       key: AI_SETTING_KEYS.writingStyle,
       value: writingStyle?.trim() || DEFAULT_AI_WRITING_STYLE,
       encrypted: false
+    },
+    {
+      key: AI_SETTING_KEYS.defaultWritingRole,
+      value: getAiWritingRole(defaultWritingRole).id,
+      encrypted: false
+    },
+    {
+      key: AI_SETTING_KEYS.zhSeoStyle,
+      value: zhSeoStyle?.trim() || DEFAULT_AI_ZH_SEO_STYLE,
+      encrypted: false
+    },
+    {
+      key: AI_SETTING_KEYS.enSeoStyle,
+      value: enSeoStyle?.trim() || DEFAULT_AI_EN_SEO_STYLE,
+      encrypted: false
     }
   ];
+
+  for (const role of aiWritingRoles) {
+    values.push({
+      key: roleStyleSettingKey(role.id),
+      value:
+        writingRoleStyles?.[role.id]?.trim() ||
+        role.defaultStyle,
+      encrypted: false
+    });
+  }
 
   if (apiKey?.trim()) {
     values.push({
