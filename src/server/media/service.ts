@@ -1,15 +1,16 @@
 import "server-only";
 
-import { and, count, desc, eq, ilike, isNull, or } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "@/server/db";
-import { mediaAssets } from "@/server/db/schema";
+import { mediaAssets, postTranslations, posts } from "@/server/db/schema";
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export async function listMediaAssets(options: {
   query?: string;
   provider?: "all" | "local" | "external_url";
+  usage?: "all" | "used" | "unused";
   page?: number;
   pageSize?: number;
 } = {}) {
@@ -19,9 +20,17 @@ export async function listMediaAssets(options: {
     : 24;
   const query = options.query?.trim();
   const provider = options.provider ?? "all";
+  const usage = options.usage ?? "all";
+  const isUsedExpression = sql<boolean>`exists (
+    select 1 from ${posts}
+    where ${posts.coverImageId} = ${mediaAssets.id}
+      and ${posts.deletedAt} is null
+  )`;
   const filters = [
     isNull(mediaAssets.deletedAt),
     provider === "all" ? undefined : eq(mediaAssets.storageProvider, provider),
+    usage === "used" ? isUsedExpression : undefined,
+    usage === "unused" ? sql`not ${isUsedExpression}` : undefined,
     query
       ? or(
           ilike(mediaAssets.url, `%${query}%`),
@@ -34,7 +43,31 @@ export async function listMediaAssets(options: {
   const where = filters.length ? and(...filters) : undefined;
 
   const rows = await db
-    .select()
+    .select({
+      id: mediaAssets.id,
+      url: mediaAssets.url,
+      altText: mediaAssets.altText,
+      caption: mediaAssets.caption,
+      storageProvider: mediaAssets.storageProvider,
+      storageKey: mediaAssets.storageKey,
+      originalFilename: mediaAssets.originalFilename,
+      checksum: mediaAssets.checksum,
+      mimeType: mediaAssets.mimeType,
+      width: mediaAssets.width,
+      height: mediaAssets.height,
+      fileSize: mediaAssets.fileSize,
+      variants: mediaAssets.variants,
+      metadata: mediaAssets.metadata,
+      createdBy: mediaAssets.createdBy,
+      createdAt: mediaAssets.createdAt,
+      updatedAt: mediaAssets.updatedAt,
+      deletedAt: mediaAssets.deletedAt,
+      usageCount: sql<number>`(
+        select count(*)::int from ${posts}
+        where ${posts.coverImageId} = ${mediaAssets.id}
+          and ${posts.deletedAt} is null
+      )`
+    })
     .from(mediaAssets)
     .where(where)
     .orderBy(desc(mediaAssets.createdAt))
@@ -65,6 +98,7 @@ export async function getMediaAssetOptions(limit = 80) {
       width: mediaAssets.width,
       height: mediaAssets.height,
       fileSize: mediaAssets.fileSize,
+      variants: mediaAssets.variants,
       createdAt: mediaAssets.createdAt
     })
     .from(mediaAssets)
@@ -81,6 +115,40 @@ export async function getMediaAsset(id: string) {
     .limit(1);
 
   return asset ?? null;
+}
+
+export async function getMediaAssetUsage(id: string) {
+  return db
+    .select({
+      id: posts.id,
+      slug: posts.slug,
+      status: posts.status,
+      updatedAt: posts.updatedAt,
+      title: sql<string>`coalesce(nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'zh'), ''), nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'en'), ''), ${posts.slug})`
+    })
+    .from(posts)
+    .leftJoin(postTranslations, eq(postTranslations.postId, posts.id))
+    .where(and(eq(posts.coverImageId, id), isNull(posts.deletedAt)))
+    .groupBy(posts.id)
+    .orderBy(desc(posts.updatedAt));
+}
+
+export async function getUnusedMediaAssetIds(ids: string[]) {
+  if (!ids.length) return [];
+
+  const rows = await db
+    .select({
+      id: mediaAssets.id,
+      usageCount: sql<number>`(
+        select count(*)::int from ${posts}
+        where ${posts.coverImageId} = ${mediaAssets.id}
+          and ${posts.deletedAt} is null
+      )`
+    })
+    .from(mediaAssets)
+    .where(and(inArray(mediaAssets.id, ids), isNull(mediaAssets.deletedAt)));
+
+  return rows.filter((row) => Number(row.usageCount) === 0).map((row) => row.id);
 }
 
 export async function getMediaAssetWithClient(

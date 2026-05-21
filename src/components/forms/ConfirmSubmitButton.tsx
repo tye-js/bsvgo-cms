@@ -8,18 +8,21 @@ export function ConfirmSubmitButton({
   children,
   message,
   variant = "danger",
-  className
+  className,
+  form
 }: {
   children: React.ReactNode;
   message: string;
   variant?: "danger" | "secondary" | "ghost";
   className?: string;
+  form?: string;
 }) {
   const { pending } = useFormStatus();
 
   return (
     <button
       type="submit"
+      form={form}
       disabled={pending}
       className={buttonClassName(variant, className)}
       onClick={(event) => {

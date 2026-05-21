@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ImagePlus } from "lucide-react";
 
 import { ButtonLink, buttonClassName } from "@/components/admin/Button";
@@ -5,7 +6,10 @@ import { CopyButton } from "@/components/admin/CopyButton";
 import { inputClassName } from "@/components/admin/Field";
 import { ConfirmSubmitButton } from "@/components/forms/ConfirmSubmitButton";
 import { formatDate } from "@/lib/utils";
-import { deleteMediaAssetAction } from "@/server/media/actions";
+import {
+  deleteMediaAssetAction,
+  deleteUnusedMediaAssetsAction
+} from "@/server/media/actions";
 import { listMediaAssets } from "@/server/media/service";
 
 function formatFileSize(size: number | null) {
@@ -15,6 +19,7 @@ function formatFileSize(size: number | null) {
 }
 
 const providerFilters = ["all", "local", "external_url"] as const;
+const usageFilters = ["all", "used", "unused"] as const;
 
 export default async function MediaPage({
   searchParams
@@ -22,6 +27,7 @@ export default async function MediaPage({
   searchParams: Promise<{
     q?: string;
     provider?: string;
+    usage?: string;
     page?: string;
   }>;
 }) {
@@ -31,11 +37,15 @@ export default async function MediaPage({
   )
     ? (params.provider as (typeof providerFilters)[number])
     : "all";
+  const usage = usageFilters.includes(params.usage as (typeof usageFilters)[number])
+    ? (params.usage as (typeof usageFilters)[number])
+    : "all";
   const requestedPage = Number(params.page ?? "1");
   const page = Number.isFinite(requestedPage) ? Math.max(requestedPage, 1) : 1;
   const { rows: assets, total, pageSize } = await listMediaAssets({
     query: params.q,
     provider,
+    usage,
     page
   });
   const pageCount = Math.max(Math.ceil(total / pageSize), 1);
@@ -44,6 +54,7 @@ export default async function MediaPage({
     const search = new URLSearchParams();
     if (params.q) search.set("q", params.q);
     if (provider !== "all") search.set("provider", provider);
+    if (usage !== "all") search.set("usage", usage);
     search.set("page", String(nextPage));
     return `/media?${search.toString()}`;
   };
@@ -63,7 +74,7 @@ export default async function MediaPage({
         </ButtonLink>
       </div>
 
-      <form className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_180px_auto]">
+      <form className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_180px_180px_auto]">
         <input
           name="q"
           defaultValue={params.q ?? ""}
@@ -75,6 +86,11 @@ export default async function MediaPage({
           <option value="local">已上传</option>
           <option value="external_url">外部 URL</option>
         </select>
+        <select name="usage" defaultValue={usage} className={inputClassName}>
+          <option value="all">全部使用状态</option>
+          <option value="used">已使用</option>
+          <option value="unused">未使用</option>
+        </select>
         <input type="hidden" name="page" value="1" />
         <button type="submit" className={buttonClassName("secondary")}>
           搜索
@@ -82,13 +98,28 @@ export default async function MediaPage({
       </form>
 
       <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <form id="bulk-delete-unused-media" action={deleteUnusedMediaAssetsAction} />
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-3">
+          <p className="text-sm text-slate-500">
+            未使用图片指未作为任何未删除文章封面关联的媒体资源。
+          </p>
+          <ConfirmSubmitButton
+            form="bulk-delete-unused-media"
+            message="确定删除当前勾选的未使用图片吗？已使用图片会被自动跳过。"
+            className="min-h-9 px-3"
+          >
+            批量删除未使用图片
+          </ConfirmSubmitButton>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
+                <th className="w-12 px-5 py-3 font-medium">选择</th>
                 <th className="px-5 py-3 font-medium">预览</th>
                 <th className="px-5 py-3 font-medium">替代文本</th>
                 <th className="px-5 py-3 font-medium">来源</th>
+                <th className="px-5 py-3 font-medium">使用</th>
                 <th className="px-5 py-3 font-medium">尺寸</th>
                 <th className="px-5 py-3 font-medium">创建时间</th>
                 <th className="px-5 py-3 font-medium">操作</th>
@@ -98,6 +129,16 @@ export default async function MediaPage({
               {assets.map((asset) => (
                 <tr key={asset.id}>
                   <td className="px-5 py-4">
+                    <input
+                      type="checkbox"
+                      name="ids"
+                      value={asset.id}
+                      form="bulk-delete-unused-media"
+                      disabled={Number(asset.usageCount) > 0}
+                      className="h-4 w-4 rounded border-slate-300 text-slate-700 disabled:opacity-40"
+                    />
+                  </td>
+                  <td className="px-5 py-4">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={asset.url}
@@ -106,7 +147,12 @@ export default async function MediaPage({
                     />
                   </td>
                   <td className="max-w-[220px] px-5 py-4 font-medium text-slate-900">
-                    {asset.altText}
+                    <Link
+                      href={`/media/${asset.id}`}
+                      className="hover:text-slate-600 hover:underline"
+                    >
+                      {asset.altText || asset.originalFilename || "未命名图片"}
+                    </Link>
                     {asset.caption ? (
                       <p className="mt-1 line-clamp-2 text-xs font-normal text-slate-500">
                         {asset.caption}
@@ -118,6 +164,11 @@ export default async function MediaPage({
                       {asset.storageProvider === "local" ? "已上传" : "外部 URL"}
                     </span>
                     <span className="line-clamp-2 break-all">{asset.url}</span>
+                  </td>
+                  <td className="px-5 py-4 text-slate-500">
+                    {Number(asset.usageCount) > 0
+                      ? `${asset.usageCount} 篇文章`
+                      : "未使用"}
                   </td>
                   <td className="px-5 py-4 text-slate-500">
                     <span className="block">
@@ -135,6 +186,12 @@ export default async function MediaPage({
                         label="复制来源"
                         className="min-h-8 px-2"
                       />
+                      <a
+                        href={`/media/${asset.id}`}
+                        className={buttonClassName("secondary", "min-h-8 px-2")}
+                      >
+                        详情
+                      </a>
                       <form action={deleteMediaAssetAction}>
                         <input type="hidden" name="id" value={asset.id} />
                         <ConfirmSubmitButton
@@ -150,7 +207,7 @@ export default async function MediaPage({
               ))}
               {assets.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
+                  <td colSpan={8} className="px-5 py-10 text-center text-slate-500">
                     没有找到匹配的媒体资源。
                   </td>
                 </tr>

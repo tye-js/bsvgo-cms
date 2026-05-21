@@ -105,6 +105,20 @@ type SeoSuggestionInput = {
   keywords?: string;
 };
 
+type MediaMetadataInput = {
+  url: string;
+  originalFilename?: string | null;
+  width?: number | null;
+  height?: number | null;
+  currentAltText?: string;
+  currentCaption?: string;
+};
+
+export type MediaMetadataOutput = {
+  altText: string;
+  caption: string;
+};
+
 type ResponsesJsonSchema = {
   type: "object";
   additionalProperties: false;
@@ -370,6 +384,19 @@ function parseSeoSuggestion(payload: unknown): SeoSuggestionOutput {
   }
 
   return output;
+}
+
+function parseMediaMetadata(payload: unknown): MediaMetadataOutput {
+  const text = outputText(payload);
+  if (!text) {
+    throw new Error("AI provider did not return media metadata.");
+  }
+
+  const parsed = JSON.parse(text) as Partial<MediaMetadataOutput>;
+  return {
+    altText: clean(parsed.altText, 255),
+    caption: clean(parsed.caption, 500)
+  };
 }
 
 const localizedSeoSchema = {
@@ -947,4 +974,68 @@ export async function generateSeoSuggestion(
   });
 
   return parseSeoSuggestion(payload);
+}
+
+export async function generateMediaMetadata(
+  input: MediaMetadataInput
+): Promise<MediaMetadataOutput> {
+  const settings = await getAiSettingsForGeneration();
+  const payload = await callResponsesJson({
+    settings,
+    input: [
+      {
+        role: "system",
+        content: [
+          {
+            type: "input_text",
+            text:
+              "You are the BSVgo CMS media metadata editor. Generate concise, factual image alt text and a short caption for a technical blog CMS. Use only the URL, filename, dimensions, and existing metadata. Do not claim visual details that are not inferable. Prefer Chinese output for this admin UI."
+          }
+        ]
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: JSON.stringify({
+              task: "Generate image alt text and caption.",
+              writingStyle: stylePayload(settings),
+              image: {
+                url: input.url,
+                originalFilename: input.originalFilename ?? "",
+                width: input.width ?? null,
+                height: input.height ?? null,
+                currentAltText: input.currentAltText ?? "",
+                currentCaption: input.currentCaption ?? ""
+              }
+            })
+          }
+        ]
+      }
+    ],
+    format: {
+      type: "json_schema",
+      name: "media_metadata",
+      strict: true,
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          altText: {
+            type: "string",
+            description: "Concise image alt text, under 125 Chinese characters."
+          },
+          caption: {
+            type: "string",
+            description: "Short image caption for a CMS media library."
+          }
+        },
+        required: ["altText", "caption"]
+      }
+    },
+    timeoutMessage: "media metadata generation timed out."
+  });
+
+  return parseMediaMetadata(payload);
 }

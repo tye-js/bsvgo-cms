@@ -2,13 +2,19 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { mediaAssetSchema } from "@/lib/validators";
+import { generateMediaMetadata } from "@/server/ai/openai";
 import { requireUser } from "@/server/auth/session";
 import { db } from "@/server/db";
 import { mediaAssets } from "@/server/db/schema";
-import { upsertMediaAssetFromUrl } from "@/server/media/service";
+import {
+  getMediaAsset,
+  getUnusedMediaAssetIds,
+  upsertMediaAssetFromUrl
+} from "@/server/media/service";
+import { regenerateMediaAssetVariants } from "@/server/media/upload";
 
 type ActionState = {
   error?: string;
@@ -55,4 +61,74 @@ export async function deleteMediaAssetAction(formData: FormData) {
     .where(eq(mediaAssets.id, id));
 
   revalidatePath("/media");
+  redirect("/media");
+}
+
+export async function deleteUnusedMediaAssetsAction(formData: FormData) {
+  await requireUser();
+  const requestedIds = formData.getAll("ids").map(String).filter(Boolean);
+  const ids = await getUnusedMediaAssetIds(requestedIds);
+
+  if (!ids.length) {
+    revalidatePath("/media");
+    return;
+  }
+
+  await db
+    .update(mediaAssets)
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .where(and(inArray(mediaAssets.id, ids), isNull(mediaAssets.deletedAt)));
+
+  revalidatePath("/media");
+}
+
+export async function regenerateMediaVariantsAction(formData: FormData) {
+  await requireUser();
+  const id = stringValue(formData, "id");
+  const asset = await getMediaAsset(id);
+
+  if (!asset || asset.storageProvider !== "local" || !asset.storageKey) {
+    revalidatePath("/media");
+    return;
+  }
+
+  const variants = await regenerateMediaAssetVariants({
+    storageKey: asset.storageKey
+  });
+
+  await db
+    .update(mediaAssets)
+    .set({ variants, updatedAt: new Date() })
+    .where(eq(mediaAssets.id, id));
+
+  revalidatePath("/media");
+  revalidatePath(`/media/${id}`);
+}
+
+export async function generateMediaMetadataAction(formData: FormData) {
+  await requireUser();
+  const id = stringValue(formData, "id");
+  const asset = await getMediaAsset(id);
+  if (!asset) return;
+
+  const metadata = await generateMediaMetadata({
+    url: asset.url,
+    originalFilename: asset.originalFilename,
+    width: asset.width,
+    height: asset.height,
+    currentAltText: asset.altText,
+    currentCaption: asset.caption
+  });
+
+  await db
+    .update(mediaAssets)
+    .set({
+      altText: metadata.altText || asset.altText,
+      caption: metadata.caption || asset.caption,
+      updatedAt: new Date()
+    })
+    .where(eq(mediaAssets.id, id));
+
+  revalidatePath("/media");
+  revalidatePath(`/media/${id}`);
 }

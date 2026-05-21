@@ -33,6 +33,15 @@ export type AnalyticsEventName =
   | "outbound_click"
   | "article_depth";
 
+export type MediaAssetVariant = {
+  url: string;
+  storageKey: string;
+  format: "webp" | "avif";
+  width: number;
+  height: number;
+  fileSize: number;
+};
+
 export const users = pgTable(
   "users",
   {
@@ -187,6 +196,8 @@ export const mediaAssets = pgTable(
     width: integer("width"),
     height: integer("height"),
     fileSize: integer("file_size"),
+    variants: jsonb("variants").$type<MediaAssetVariant[]>().notNull().default([]),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
     createdBy: uuid("created_by").references(() => users.id, {
       onDelete: "set null"
     }),
