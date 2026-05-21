@@ -253,6 +253,9 @@ export const postTranslations = pgTable(
     seoDescription: varchar("seo_description", { length: 500 })
       .notNull()
       .default(""),
+    canonicalUrl: text("canonical_url").notNull().default(""),
+    ogImage: text("og_image").notNull().default(""),
+    structuredData: jsonb("structured_data").notNull().default({}),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull()
   },
@@ -260,6 +263,10 @@ export const postTranslations = pgTable(
     postLocaleIdx: uniqueIndex("post_translations_post_locale_unique").on(
       table.postId,
       table.locale
+    ),
+    seoTitleIdx: index("post_translations_seo_title_idx").on(table.seoTitle),
+    canonicalUrlIdx: index("post_translations_canonical_url_idx").on(
+      table.canonicalUrl
     )
   })
 );

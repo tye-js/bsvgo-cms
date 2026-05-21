@@ -15,6 +15,7 @@ import {
   tags,
   tagTranslations,
   users,
+  type Locale,
   type PostMark,
   type PostStatus
 } from "@/server/db/schema";
@@ -203,12 +204,36 @@ export async function getPostForEdit(id: string) {
     enSeoDescription:
       translations.find((translation) => translation.locale === "en")
         ?.seoDescription ?? "",
+    enCanonicalUrl:
+      translations.find((translation) => translation.locale === "en")
+        ?.canonicalUrl ?? "",
+    enOgImage:
+      translations.find((translation) => translation.locale === "en")?.ogImage ??
+      "",
+    enStructuredData: JSON.stringify(
+      translations.find((translation) => translation.locale === "en")
+        ?.structuredData ?? {},
+      null,
+      2
+    ),
     zhSeoTitle:
       translations.find((translation) => translation.locale === "zh")?.seoTitle ??
       "",
     zhSeoDescription:
       translations.find((translation) => translation.locale === "zh")
         ?.seoDescription ?? "",
+    zhCanonicalUrl:
+      translations.find((translation) => translation.locale === "zh")
+        ?.canonicalUrl ?? "",
+    zhOgImage:
+      translations.find((translation) => translation.locale === "zh")?.ogImage ??
+      "",
+    zhStructuredData: JSON.stringify(
+      translations.find((translation) => translation.locale === "zh")
+        ?.structuredData ?? {},
+      null,
+      2
+    ),
     readingTimeMinutes:
       translations.find((translation) => translation.locale === "en")
         ?.readingMinutes ?? 1,
@@ -217,6 +242,135 @@ export async function getPostForEdit(id: string) {
       locale: translation.locale as "en" | "zh"
     })),
     tagIds: selectedTags.map((tag) => tag.tagId)
+  };
+}
+
+export type SeoAuditIssue =
+  | "missing_title"
+  | "missing_description"
+  | "description_short"
+  | "description_long"
+  | "duplicate_seo";
+
+const seoIssueLabels: Record<SeoAuditIssue, string> = {
+  missing_title: "缺 title",
+  missing_description: "缺 description",
+  description_short: "描述过短",
+  description_long: "描述过长",
+  duplicate_seo: "重复 SEO"
+};
+
+function normalizedSeoKey(title: string, description: string) {
+  return `${title.trim().toLowerCase()}:::${description.trim().toLowerCase()}`;
+}
+
+function descriptionRange(locale: string) {
+  return locale === "zh" ? { min: 50, max: 160 } : { min: 80, max: 170 };
+}
+
+export async function listSeoAuditPosts(options: {
+  issue?: SeoAuditIssue | "all";
+  locale?: Locale | "all";
+  query?: string;
+  page?: number;
+  pageSize?: number;
+} = {}) {
+  const issue = options.issue ?? "all";
+  const locale = options.locale ?? "all";
+  const query = options.query?.trim().toLowerCase();
+  const page = Math.max(options.page ?? 1, 1);
+  const pageSize = options.pageSize ?? 20;
+
+  const rows = await db
+    .select({
+      postId: posts.id,
+      slug: posts.slug,
+      status: posts.status,
+      updatedAt: posts.updatedAt,
+      locale: postTranslations.locale,
+      title: postTranslations.title,
+      seoTitle: postTranslations.seoTitle,
+      seoDescription: postTranslations.seoDescription,
+      canonicalUrl: postTranslations.canonicalUrl,
+      ogImage: postTranslations.ogImage,
+      structuredData: postTranslations.structuredData
+    })
+    .from(posts)
+    .innerJoin(postTranslations, eq(postTranslations.postId, posts.id))
+    .where(isNull(posts.deletedAt))
+    .orderBy(desc(posts.updatedAt));
+
+  const duplicateCounts = new Map<string, number>();
+  for (const row of rows) {
+    if (!row.seoTitle.trim() || !row.seoDescription.trim()) continue;
+    const key = `${row.locale}:${normalizedSeoKey(row.seoTitle, row.seoDescription)}`;
+    duplicateCounts.set(key, (duplicateCounts.get(key) ?? 0) + 1);
+  }
+
+  const auditedRows = rows.map((row) => {
+    const range = descriptionRange(row.locale);
+    const descriptionLength = row.seoDescription.trim().length;
+    const issues: SeoAuditIssue[] = [];
+
+    if (!row.seoTitle.trim()) issues.push("missing_title");
+    if (!row.seoDescription.trim()) issues.push("missing_description");
+    if (row.seoDescription.trim() && descriptionLength < range.min) {
+      issues.push("description_short");
+    }
+    if (descriptionLength > range.max) issues.push("description_long");
+    if (
+      row.seoTitle.trim() &&
+      row.seoDescription.trim() &&
+      (duplicateCounts.get(
+        `${row.locale}:${normalizedSeoKey(row.seoTitle, row.seoDescription)}`
+      ) ?? 0) > 1
+    ) {
+      issues.push("duplicate_seo");
+    }
+
+    return {
+      ...row,
+      locale: row.locale as Locale,
+      status: row.status as PostStatus,
+      descriptionLength,
+      issues,
+      issueLabels: issues.map((item) => seoIssueLabels[item])
+    };
+  });
+
+  const filteredRows = auditedRows.filter((row) => {
+    if (locale !== "all" && row.locale !== locale) return false;
+    if (issue !== "all" && !row.issues.includes(issue)) return false;
+    if (!query) return true;
+    return (
+      row.slug.toLowerCase().includes(query) ||
+      row.title.toLowerCase().includes(query) ||
+      row.seoTitle.toLowerCase().includes(query) ||
+      row.seoDescription.toLowerCase().includes(query)
+    );
+  });
+
+  const issueCounts = auditedRows.reduce(
+    (counts, row) => {
+      for (const rowIssue of row.issues) counts[rowIssue] += 1;
+      return counts;
+    },
+    {
+      missing_title: 0,
+      missing_description: 0,
+      description_short: 0,
+      description_long: 0,
+      duplicate_seo: 0
+    } satisfies Record<SeoAuditIssue, number>
+  );
+
+  return {
+    rows: filteredRows.slice((page - 1) * pageSize, page * pageSize),
+    total: filteredRows.length,
+    page,
+    pageSize,
+    issueCounts,
+    issueLabels: seoIssueLabels
   };
 }
 

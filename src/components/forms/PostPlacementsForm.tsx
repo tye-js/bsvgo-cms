@@ -133,7 +133,6 @@ function PlacementCard({
   return (
     <form action={formAction} className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <input type="hidden" name="postId" value={post.id} />
-      <input type="hidden" name="categoryId" value={post.categoryId} />
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">

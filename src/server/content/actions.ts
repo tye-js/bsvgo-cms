@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import {
+  bulkPostSeoSchema,
   categorySchema,
   newPostSchema,
   postPlacementSchema,
@@ -12,14 +13,16 @@ import {
   tagSchema,
   userSchema
 } from "@/lib/validators";
-import { generateEnglishPost } from "@/server/ai/openai";
+import { generateEnglishPost, generateSeoSuggestion } from "@/server/ai/openai";
 import { requireRole, requireUser } from "@/server/auth/session";
 import { hashPassword } from "@/server/auth/password";
 import { db } from "@/server/db";
 import {
   categories,
   categoryTranslations,
+  postPlacements,
   postTags,
+  postTranslations,
   posts,
   tagTranslations,
   tags,
@@ -52,6 +55,20 @@ type ActionState = {
 };
 
 const POST_WRITE_TIMEOUT = sql`set local statement_timeout = '15s'`;
+
+function structuredDataString(value: string | undefined) {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) return "";
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? JSON.stringify(parsed)
+      : "";
+  } catch {
+    return "";
+  }
+}
 
 export async function createPostAction(
   _previousState: ActionState,
@@ -137,7 +154,10 @@ export async function createPostAction(
         content: data.enContent,
         readingMinutes: data.readingTimeMinutes,
         seoTitle: data.enSeoTitle,
-        seoDescription: data.enSeoDescription
+        seoDescription: data.enSeoDescription,
+        canonicalUrl: data.enCanonicalUrl,
+        ogImage: data.enOgImage,
+        structuredData: structuredDataString(data.enStructuredData)
       });
       await upsertPostTranslation(tx, post.id, "zh", {
         title: data.zhTitle,
@@ -145,7 +165,10 @@ export async function createPostAction(
         content: data.zhContent,
         readingMinutes: data.readingTimeMinutes,
         seoTitle: data.zhSeoTitle,
-        seoDescription: data.zhSeoDescription
+        seoDescription: data.zhSeoDescription,
+        canonicalUrl: data.zhCanonicalUrl,
+        ogImage: data.zhOgImage,
+        structuredData: structuredDataString(data.zhStructuredData)
       });
 
       if (data.tagIds.length) {
@@ -177,7 +200,6 @@ export async function updatePostAction(
   }
 
   const data = parsed.data;
-  const legacyFlags = deriveLegacyPostFlags(emptyPostPlacements(), data.mark);
 
   try {
     await db.transaction(async (tx) => {
@@ -197,13 +219,10 @@ export async function updatePostAction(
           slug: data.slug,
           categoryId: data.categoryId,
           status: data.status,
-          mark: legacyFlags.mark,
           ...aiAuthorValues(data.writingRole),
           coverImage: coverImage.coverImage,
           coverImageId: coverImage.coverImageId,
           publishedAt: publishedAtValue(data.publishedAt, data.status),
-          featured: legacyFlags.featured,
-          pinned: legacyFlags.pinned,
           sortOrder: data.sortOrder,
           updatedAt: new Date()
         })
@@ -215,7 +234,10 @@ export async function updatePostAction(
         content: data.enContent,
         readingMinutes: data.readingTimeMinutes,
         seoTitle: data.enSeoTitle,
-        seoDescription: data.enSeoDescription
+        seoDescription: data.enSeoDescription,
+        canonicalUrl: data.enCanonicalUrl,
+        ogImage: data.enOgImage,
+        structuredData: structuredDataString(data.enStructuredData)
       });
       await upsertPostTranslation(tx, id, "zh", {
         title: data.zhTitle,
@@ -223,8 +245,16 @@ export async function updatePostAction(
         content: data.zhContent,
         readingMinutes: data.readingTimeMinutes,
         seoTitle: data.zhSeoTitle,
-        seoDescription: data.zhSeoDescription
+        seoDescription: data.zhSeoDescription,
+        canonicalUrl: data.zhCanonicalUrl,
+        ogImage: data.zhOgImage,
+        structuredData: structuredDataString(data.zhStructuredData)
       });
+
+      await tx
+        .update(postPlacements)
+        .set({ categoryId: data.categoryId, updatedAt: new Date() })
+        .where(and(eq(postPlacements.postId, id), eq(postPlacements.scope, "category")));
 
       await tx.delete(postTags).where(eq(postTags.postId, id));
       if (data.tagIds.length) {
@@ -238,7 +268,9 @@ export async function updatePostAction(
   }
 
   revalidatePath("/posts");
+  revalidatePath("/placements");
   revalidatePath(`/posts/${id}/edit`);
+  revalidatePath("/seo");
   return { success: "文章已保存。" };
 }
 
@@ -250,7 +282,6 @@ export async function updatePostPlacementsAction(
 
   const parsed = postPlacementSchema.safeParse({
     postId: stringValue(formData, "postId"),
-    categoryId: stringValue(formData, "categoryId"),
     placements: placementsFromForm(formData)
   });
 
@@ -264,7 +295,17 @@ export async function updatePostPlacementsAction(
   try {
     await db.transaction(async (tx) => {
       await tx.execute(POST_WRITE_TIMEOUT);
-      await replacePostPlacements(tx, data.postId, data.categoryId, data.placements);
+      const [post] = await tx
+        .select({ categoryId: posts.categoryId })
+        .from(posts)
+        .where(and(eq(posts.id, data.postId), isNull(posts.deletedAt)))
+        .limit(1);
+
+      if (!post) {
+        throw new Error("Post not found");
+      }
+
+      await replacePostPlacements(tx, data.postId, post.categoryId, data.placements);
       await tx
         .update(posts)
         .set({
@@ -288,11 +329,16 @@ export async function updatePostPlacementsAction(
 export async function deletePostAction(formData: FormData) {
   await requireUser();
   const id = stringValue(formData, "id");
-  await db
-    .update(posts)
-    .set({ deletedAt: new Date(), updatedAt: new Date() })
-    .where(eq(posts.id, id));
+  await db.transaction(async (tx) => {
+    await tx.delete(postPlacements).where(eq(postPlacements.postId, id));
+    await tx
+      .update(posts)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(eq(posts.id, id));
+  });
   revalidatePath("/posts");
+  revalidatePath("/placements");
+  revalidatePath("/seo");
 }
 
 export async function setPostStatusAction(formData: FormData) {
@@ -312,6 +358,129 @@ export async function setPostStatusAction(formData: FormData) {
     .where(eq(posts.id, id));
 
   revalidatePath("/posts");
+  revalidatePath("/placements");
+  revalidatePath("/seo");
+}
+
+export async function bulkGeneratePostSeoAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  await requireUser();
+  const parsed = bulkPostSeoSchema.safeParse({
+    postIds: formData.getAll("postIds").map(String).filter(Boolean)
+  });
+
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "请选择需要生成 SEO 的文章" };
+  }
+
+  const postIds = parsed.data.postIds;
+  const rows = await db
+    .select({
+      postId: posts.id,
+      slug: posts.slug,
+      locale: postTranslations.locale,
+      title: postTranslations.title,
+      excerpt: postTranslations.excerpt,
+      content: postTranslations.content,
+      coverImage: posts.coverImage,
+      canonicalUrl: postTranslations.canonicalUrl,
+      ogImage: postTranslations.ogImage,
+      structuredData: postTranslations.structuredData
+    })
+    .from(posts)
+    .innerJoin(postTranslations, eq(postTranslations.postId, posts.id))
+    .where(and(inArray(posts.id, postIds), isNull(posts.deletedAt)));
+
+  if (!rows.length) {
+    return { error: "没有找到可处理的文章。" };
+  }
+
+  let updated = 0;
+
+  for (const postId of postIds) {
+    const translations = rows.filter((row) => row.postId === postId);
+    const en = translations.find((row) => row.locale === "en");
+    const zh = translations.find((row) => row.locale === "zh");
+    if (!en && !zh) continue;
+
+    try {
+      const suggestion = await generateSeoSuggestion({
+        targetType: "post",
+        enTitle: en?.title ?? "",
+        enDescription: en?.excerpt ?? "",
+        enContent: en?.content ?? "",
+        zhTitle: zh?.title ?? "",
+        zhDescription: zh?.excerpt ?? "",
+        zhContent: zh?.content ?? ""
+      });
+
+      await db.transaction(async (tx) => {
+        if (en) {
+          await tx
+            .update(postTranslations)
+            .set({
+              seoTitle: suggestion.en.title,
+              seoDescription: suggestion.en.description,
+              ogImage: en.ogImage || en.coverImage || "",
+              structuredData:
+                en.structuredData && Object.keys(en.structuredData).length
+                  ? en.structuredData
+                  : {
+                      "@context": "https://schema.org",
+                      "@type": "Article",
+                      headline: suggestion.en.title,
+                      description: suggestion.en.description
+                    },
+              updatedAt: new Date()
+            })
+            .where(
+              and(
+                eq(postTranslations.postId, postId),
+                eq(postTranslations.locale, "en")
+              )
+            );
+        }
+
+        if (zh) {
+          await tx
+            .update(postTranslations)
+            .set({
+              seoTitle: suggestion.zh.title,
+              seoDescription: suggestion.zh.description,
+              ogImage: zh.ogImage || zh.coverImage || "",
+              structuredData:
+                zh.structuredData && Object.keys(zh.structuredData).length
+                  ? zh.structuredData
+                  : {
+                      "@context": "https://schema.org",
+                      "@type": "Article",
+                      headline: suggestion.zh.title,
+                      description: suggestion.zh.description
+                    },
+              updatedAt: new Date()
+            })
+            .where(
+              and(
+                eq(postTranslations.postId, postId),
+                eq(postTranslations.locale, "zh")
+              )
+            );
+        }
+      });
+
+      updated += 1;
+    } catch (error) {
+      return {
+        error: `已处理 ${updated} 篇，后续 AI 生成失败：${friendlyAiError(error)}`
+      };
+    }
+  }
+
+  revalidatePath("/seo");
+  revalidatePath("/posts");
+  return { success: `已为 ${updated} 篇文章生成 SEO，请检查后发布。` };
 }
 
 export async function updateCategoryAction(

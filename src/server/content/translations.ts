@@ -6,6 +6,23 @@ import { toRequiredText } from "@/server/content/normalizers";
 
 type ContentTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+function structuredDataValue(value?: string | Record<string, unknown> | null) {
+  if (!value) return {};
+  if (typeof value !== "string") return value;
+
+  const trimmed = value.trim();
+  if (!trimmed) return {};
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
 export async function upsertPostTranslation(
   tx: ContentTransaction,
   postId: string,
@@ -17,6 +34,9 @@ export async function upsertPostTranslation(
     readingMinutes?: number;
     seoTitle?: string;
     seoDescription?: string;
+    canonicalUrl?: string;
+    ogImage?: string;
+    structuredData?: string | Record<string, unknown> | null;
   }
 ) {
   const title = values.title?.trim();
@@ -24,6 +44,9 @@ export async function upsertPostTranslation(
   const content = toRequiredText(values.content);
   const seoTitle = toRequiredText(values.seoTitle);
   const seoDescription = toRequiredText(values.seoDescription);
+  const canonicalUrl = toRequiredText(values.canonicalUrl);
+  const ogImage = toRequiredText(values.ogImage);
+  const structuredData = structuredDataValue(values.structuredData);
 
   if (!title && locale === "zh" && !excerpt && !content) {
     await tx
@@ -47,7 +70,10 @@ export async function upsertPostTranslation(
       content,
       readingMinutes: values.readingMinutes ?? 1,
       seoTitle,
-      seoDescription
+      seoDescription,
+      canonicalUrl,
+      ogImage,
+      structuredData
     })
     .onConflictDoUpdate({
       target: [postTranslations.postId, postTranslations.locale],
@@ -58,6 +84,9 @@ export async function upsertPostTranslation(
         readingMinutes: values.readingMinutes ?? 1,
         seoTitle,
         seoDescription,
+        canonicalUrl,
+        ogImage,
+        structuredData,
         updatedAt: new Date()
       }
     });

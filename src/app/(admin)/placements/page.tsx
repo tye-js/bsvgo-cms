@@ -20,7 +20,8 @@ export default async function PlacementsPage({
     params.status && ["draft", "published", "archived"].includes(params.status)
       ? (params.status as PostStatus)
       : "all";
-  const page = Number(params.page ?? "1") || 1;
+  const requestedPage = Number(params.page ?? "1");
+  const page = Number.isFinite(requestedPage) ? Math.max(requestedPage, 1) : 1;
   const { categories } = await getPostEditorOptions();
   const selectedCategoryId = params.categoryId ?? "";
   const categoryId = categories.some((category) => category.id === selectedCategoryId)

@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   LogOut,
   Pin,
+  SearchCheck,
   Settings,
   Tags,
   Users
@@ -22,6 +23,7 @@ const navItems = [
   { href: "/dashboard", label: "概览", icon: LayoutDashboard },
   { href: "/posts", label: "文章", icon: FileText },
   { href: "/placements", label: "展示位", icon: Pin },
+  { href: "/seo", label: "SEO 管理", icon: SearchCheck },
   { href: "/media", label: "媒体库", icon: Image },
   { href: "/categories", label: "分类", icon: FolderTree },
   { href: "/tags", label: "标签", icon: Tags },

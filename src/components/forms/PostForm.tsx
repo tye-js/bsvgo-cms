@@ -62,8 +62,14 @@ type PostFormValue = {
   coverImageAlt?: string | null;
   enSeoTitle: string | null;
   enSeoDescription: string | null;
+  enCanonicalUrl: string | null;
+  enOgImage: string | null;
+  enStructuredData: string | null;
   zhSeoTitle: string | null;
   zhSeoDescription: string | null;
+  zhCanonicalUrl: string | null;
+  zhOgImage: string | null;
+  zhStructuredData: string | null;
   publishedAt: Date | null;
   featured: boolean;
   pinned: boolean;
@@ -246,11 +252,21 @@ export function PostForm({
   const [enSeoDescription, setEnSeoDescription] = useState(
     post?.enSeoDescription ?? en?.seoDescription ?? ""
   );
+  const [enCanonicalUrl, setEnCanonicalUrl] = useState(post?.enCanonicalUrl ?? "");
+  const [enOgImage, setEnOgImage] = useState(post?.enOgImage ?? "");
+  const [enStructuredData, setEnStructuredData] = useState(
+    post?.enStructuredData ?? "{}"
+  );
   const [zhSeoTitle, setZhSeoTitle] = useState(
     post?.zhSeoTitle ?? zh?.seoTitle ?? ""
   );
   const [zhSeoDescription, setZhSeoDescription] = useState(
     post?.zhSeoDescription ?? zh?.seoDescription ?? ""
+  );
+  const [zhCanonicalUrl, setZhCanonicalUrl] = useState(post?.zhCanonicalUrl ?? "");
+  const [zhOgImage, setZhOgImage] = useState(post?.zhOgImage ?? "");
+  const [zhStructuredData, setZhStructuredData] = useState(
+    post?.zhStructuredData ?? "{}"
   );
   const formValue = (name: string) =>
     formRef.current ? String(new FormData(formRef.current).get(name) ?? "") : "";
@@ -724,6 +740,38 @@ export function PostForm({
                 className={textareaClassName}
               />
             </Field>
+            <Field label="英文 canonical URL">
+              <input
+                name="enCanonicalUrl"
+                type="url"
+                value={enCanonicalUrl}
+                onChange={(event) => setEnCanonicalUrl(event.target.value)}
+                className={inputClassName}
+                placeholder="https://www.bsvgo.com/en/..."
+              />
+            </Field>
+            <Field label="英文 OG 图">
+              <input
+                name="enOgImage"
+                type="url"
+                value={enOgImage}
+                onChange={(event) => setEnOgImage(event.target.value)}
+                className={inputClassName}
+                placeholder="https://www.bsvgo.com/media/og.jpg"
+              />
+            </Field>
+            <Field
+              label="英文结构化数据 JSON-LD"
+              hint="可填写 Article/BlogPosting JSON 对象。留空或 {} 表示前端使用默认结构化数据。"
+            >
+              <textarea
+                name="enStructuredData"
+                value={enStructuredData}
+                onChange={(event) => setEnStructuredData(event.target.value)}
+                className={`${textareaClassName} font-mono text-xs`}
+                placeholder='{"@context":"https://schema.org","@type":"Article"}'
+              />
+            </Field>
             <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
               <p className="text-sm font-semibold text-slate-800">中文页面 SEO</p>
               <p className="mt-1 text-xs leading-5 text-slate-500">
@@ -747,6 +795,38 @@ export function PostForm({
                 maxLength={500}
                 disabled={draftMetadataPending}
                 className={textareaClassName}
+              />
+            </Field>
+            <Field label="中文 canonical URL">
+              <input
+                name="zhCanonicalUrl"
+                type="url"
+                value={zhCanonicalUrl}
+                onChange={(event) => setZhCanonicalUrl(event.target.value)}
+                className={inputClassName}
+                placeholder="https://www.bsvgo.com/zh/..."
+              />
+            </Field>
+            <Field label="中文 OG 图">
+              <input
+                name="zhOgImage"
+                type="url"
+                value={zhOgImage}
+                onChange={(event) => setZhOgImage(event.target.value)}
+                className={inputClassName}
+                placeholder="https://www.bsvgo.com/media/og.jpg"
+              />
+            </Field>
+            <Field
+              label="中文结构化数据 JSON-LD"
+              hint="可填写 Article/BlogPosting JSON 对象。留空或 {} 表示前端使用默认结构化数据。"
+            >
+              <textarea
+                name="zhStructuredData"
+                value={zhStructuredData}
+                onChange={(event) => setZhStructuredData(event.target.value)}
+                className={`${textareaClassName} font-mono text-xs`}
+                placeholder='{"@context":"https://schema.org","@type":"Article"}'
               />
             </Field>
             <SeoSuggestionButton

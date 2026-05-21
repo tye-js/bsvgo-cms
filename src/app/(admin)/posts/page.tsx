@@ -28,7 +28,8 @@ export default async function PostsPage({
     params.status && ["draft", "published", "archived"].includes(params.status)
       ? (params.status as PostStatus)
       : "all";
-  const page = Number(params.page ?? "1") || 1;
+  const requestedPage = Number(params.page ?? "1");
+  const page = Number.isFinite(requestedPage) ? Math.max(requestedPage, 1) : 1;
   const { rows, total, pageSize } = await listPosts({
     query: params.q,
     status,

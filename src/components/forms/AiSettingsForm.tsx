@@ -193,16 +193,20 @@ export function AiSettingsForm({
             <div className="grid gap-5">
               <Field
                 label="全局写作底线"
-                hint="所有角色都会遵守的基础要求，比如事实约束、受众、禁忌和 Markdown 结构。"
+                hint="所有角色都会遵守的硬规则。建议覆盖事实约束、受众、Markdown、营销边界、双语语气、Slug 和 SEO。"
               >
                 <textarea
                   value={writingStyleValue}
                   onChange={(event) => setWritingStyleValue(event.target.value)}
                   maxLength={2000}
                   className={textareaClassName}
-                  placeholder="例如：面向技术读者，客观清晰，短段落，多用小标题，不夸大..."
+                  placeholder="例如：面向 BSVgo 技术读者；只基于素材写作；Markdown 正文；适度营销但不夸大；Slug 简短准确；中英文 SEO 分别优化..."
                 />
               </Field>
+
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
+                建议写作底线包含：事实来源、禁止编造、读者画像、文章结构、营销尺度、Markdown 格式、中文/英文语气、Slug 规则、SEO 关键词规则。
+              </div>
 
               <Field
                 label="默认写作角色"
@@ -274,6 +278,9 @@ export function AiSettingsForm({
                   className={`${textareaClassName} min-h-44`}
                 />
               </Field>
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
+                角色配置只写该角色的差异化风格，不要重复全局底线。建议明确：适合内容类型、开头方式、结构重点、语气、证据使用方式、营销或观点尺度。
+              </div>
             </div>
           ) : null}
 

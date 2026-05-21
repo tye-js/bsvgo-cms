@@ -1,19 +1,57 @@
 import "server-only";
 
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, count, desc, eq, ilike, isNull, or } from "drizzle-orm";
 
 import { db } from "@/server/db";
 import { mediaAssets } from "@/server/db/schema";
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-export async function listMediaAssets() {
-  return db
+export async function listMediaAssets(options: {
+  query?: string;
+  provider?: "all" | "local" | "external_url";
+  page?: number;
+  pageSize?: number;
+} = {}) {
+  const page = Number.isFinite(options.page) ? Math.max(options.page ?? 1, 1) : 1;
+  const pageSize = Number.isFinite(options.pageSize)
+    ? Math.min(Math.max(options.pageSize ?? 24, 1), 100)
+    : 24;
+  const query = options.query?.trim();
+  const provider = options.provider ?? "all";
+  const filters = [
+    isNull(mediaAssets.deletedAt),
+    provider === "all" ? undefined : eq(mediaAssets.storageProvider, provider),
+    query
+      ? or(
+          ilike(mediaAssets.url, `%${query}%`),
+          ilike(mediaAssets.altText, `%${query}%`),
+          ilike(mediaAssets.caption, `%${query}%`),
+          ilike(mediaAssets.originalFilename, `%${query}%`)
+        )
+      : undefined
+  ].filter(Boolean);
+  const where = filters.length ? and(...filters) : undefined;
+
+  const rows = await db
     .select()
     .from(mediaAssets)
-    .where(isNull(mediaAssets.deletedAt))
+    .where(where)
     .orderBy(desc(mediaAssets.createdAt))
-    .limit(80);
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+
+  const [totalRow] = await db
+    .select({ total: count() })
+    .from(mediaAssets)
+    .where(where);
+
+  return {
+    rows,
+    total: Number(totalRow?.total ?? 0),
+    page,
+    pageSize
+  };
 }
 
 export async function getMediaAssetOptions(limit = 80) {

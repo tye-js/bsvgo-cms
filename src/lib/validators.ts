@@ -35,8 +35,14 @@ export const postSchema = z.object({
   coverImageAlt: z.string().trim().max(255).optional(),
   enSeoTitle: z.string().trim().max(255).optional(),
   enSeoDescription: z.string().trim().max(500).optional(),
+  enCanonicalUrl: z.string().trim().url("请输入有效的英文 canonical URL").or(z.literal("")),
+  enOgImage: z.string().trim().url("请输入有效的英文 OG 图片 URL").or(z.literal("")),
+  enStructuredData: z.string().trim().max(12000, "英文结构化数据不能超过 12000 个字符").optional(),
   zhSeoTitle: z.string().trim().max(255).optional(),
   zhSeoDescription: z.string().trim().max(500).optional(),
+  zhCanonicalUrl: z.string().trim().url("请输入有效的中文 canonical URL").or(z.literal("")),
+  zhOgImage: z.string().trim().url("请输入有效的中文 OG 图片 URL").or(z.literal("")),
+  zhStructuredData: z.string().trim().max(12000, "中文结构化数据不能超过 12000 个字符").optional(),
   publishedAt: z.string().optional(),
   featured: z.boolean().optional(),
   pinned: z.boolean().optional(),
@@ -53,7 +59,6 @@ export const postSchema = z.object({
 
 export const postPlacementSchema = z.object({
   postId: z.string().uuid("请选择文章"),
-  categoryId: z.string().uuid("请选择分类"),
   placements: z.object({
     homeFeatured: placementSchema,
     homePromoted: placementSchema,
@@ -222,6 +227,10 @@ export const seoSuggestionSchema = z
   .refine((value) => value.enTitle || value.zhTitle, {
     message: "请先填写英文或中文标题/名称"
   });
+
+export const bulkPostSeoSchema = z.object({
+  postIds: z.array(z.string().uuid()).min(1, "请选择需要生成 SEO 的文章").max(20, "一次最多处理 20 篇文章")
+});
 
 export const mediaAssetSchema = z.object({
   url: z.string().trim().url("请输入有效的图片 URL"),

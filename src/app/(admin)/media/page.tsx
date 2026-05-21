@@ -1,7 +1,8 @@
 import { ImagePlus } from "lucide-react";
 
-import { ButtonLink } from "@/components/admin/Button";
+import { ButtonLink, buttonClassName } from "@/components/admin/Button";
 import { CopyButton } from "@/components/admin/CopyButton";
+import { inputClassName } from "@/components/admin/Field";
 import { ConfirmSubmitButton } from "@/components/forms/ConfirmSubmitButton";
 import { formatDate } from "@/lib/utils";
 import { deleteMediaAssetAction } from "@/server/media/actions";
@@ -13,8 +14,39 @@ function formatFileSize(size: number | null) {
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export default async function MediaPage() {
-  const assets = await listMediaAssets();
+const providerFilters = ["all", "local", "external_url"] as const;
+
+export default async function MediaPage({
+  searchParams
+}: {
+  searchParams: Promise<{
+    q?: string;
+    provider?: string;
+    page?: string;
+  }>;
+}) {
+  const params = await searchParams;
+  const provider = providerFilters.includes(
+    params.provider as (typeof providerFilters)[number]
+  )
+    ? (params.provider as (typeof providerFilters)[number])
+    : "all";
+  const requestedPage = Number(params.page ?? "1");
+  const page = Number.isFinite(requestedPage) ? Math.max(requestedPage, 1) : 1;
+  const { rows: assets, total, pageSize } = await listMediaAssets({
+    query: params.q,
+    provider,
+    page
+  });
+  const pageCount = Math.max(Math.ceil(total / pageSize), 1);
+
+  const preserveParams = (nextPage: number) => {
+    const search = new URLSearchParams();
+    if (params.q) search.set("q", params.q);
+    if (provider !== "all") search.set("provider", provider);
+    search.set("page", String(nextPage));
+    return `/media?${search.toString()}`;
+  };
 
   return (
     <div className="grid gap-6">
@@ -30,6 +62,24 @@ export default async function MediaPage() {
           新建图片
         </ButtonLink>
       </div>
+
+      <form className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_180px_auto]">
+        <input
+          name="q"
+          defaultValue={params.q ?? ""}
+          className={inputClassName}
+          placeholder="搜索 URL、替代文本、说明或文件名"
+        />
+        <select name="provider" defaultValue={provider} className={inputClassName}>
+          <option value="all">全部来源</option>
+          <option value="local">已上传</option>
+          <option value="external_url">外部 URL</option>
+        </select>
+        <input type="hidden" name="page" value="1" />
+        <button type="submit" className={buttonClassName("secondary")}>
+          搜索
+        </button>
+      </form>
 
       <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
@@ -101,7 +151,7 @@ export default async function MediaPage() {
               {assets.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
-                    暂无媒体资源。
+                    没有找到匹配的媒体资源。
                   </td>
                 </tr>
               ) : null}
@@ -109,6 +159,32 @@ export default async function MediaPage() {
           </table>
         </div>
       </section>
+
+      <div className="flex items-center justify-between text-sm text-slate-500">
+        <span>
+          第 {page} / {pageCount} 页，共 {total} 条
+        </span>
+        <div className="flex gap-2">
+          <a
+            className={buttonClassName(
+              "secondary",
+              page <= 1 ? "pointer-events-none opacity-50" : ""
+            )}
+            href={preserveParams(Math.max(page - 1, 1))}
+          >
+            上一页
+          </a>
+          <a
+            className={buttonClassName(
+              "secondary",
+              page >= pageCount ? "pointer-events-none opacity-50" : ""
+            )}
+            href={preserveParams(Math.min(page + 1, pageCount))}
+          >
+            下一页
+          </a>
+        </div>
+      </div>
     </div>
   );
 }
