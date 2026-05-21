@@ -5,13 +5,14 @@ import {
   jsonb,
   pgTable,
   primaryKey,
+  check,
   text,
   timestamp,
   uniqueIndex,
   uuid,
   varchar
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 export type UserRole = "admin" | "editor";
 export type PostStatus = "draft" | "published" | "archived";
@@ -312,7 +313,23 @@ export const postPlacements = pgTable(
       table.postId,
       table.scope,
       table.slot,
-      table.categoryId
+      sql`coalesce(${table.categoryId}, '00000000-0000-0000-0000-000000000000'::uuid)`
+    ),
+    scopeCheck: check(
+      "post_placements_scope_check",
+      sql`${table.scope} in ('home', 'category')`
+    ),
+    slotCheck: check(
+      "post_placements_slot_check",
+      sql`${table.slot} in ('featured', 'promoted')`
+    ),
+    scopeCategoryCheck: check(
+      "post_placements_scope_category_check",
+      sql`(${table.scope} = 'home' and ${table.categoryId} is null) or (${table.scope} = 'category' and ${table.categoryId} is not null)`
+    ),
+    timeWindowCheck: check(
+      "post_placements_time_window_check",
+      sql`${table.startsAt} is null or ${table.endsAt} is null or ${table.startsAt} <= ${table.endsAt}`
     )
   })
 );

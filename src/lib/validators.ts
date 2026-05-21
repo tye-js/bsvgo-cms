@@ -7,7 +7,10 @@ const placementSchema = z.object({
   sortOrder: z.coerce.number().int().min(0).max(100000),
   startsAt: z.string().optional(),
   endsAt: z.string().optional()
-});
+}).refine((value) => {
+  if (!value.startsAt || !value.endsAt) return true;
+  return new Date(value.startsAt).getTime() <= new Date(value.endsAt).getTime();
+}, "展示位开始时间不能晚于结束时间");
 
 export const slugSchema = z
   .string()

@@ -13,6 +13,30 @@ CREATE TABLE IF NOT EXISTS "post_placements" (
 );
 --> statement-breakpoint
 DO $$ BEGIN
+ ALTER TABLE "post_placements" ADD CONSTRAINT "post_placements_scope_check" CHECK ("scope" IN ('home', 'category'));
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "post_placements" ADD CONSTRAINT "post_placements_slot_check" CHECK ("slot" IN ('featured', 'promoted'));
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "post_placements" ADD CONSTRAINT "post_placements_scope_category_check" CHECK (("scope" = 'home' AND "category_id" IS NULL) OR ("scope" = 'category' AND "category_id" IS NOT NULL));
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "post_placements" ADD CONSTRAINT "post_placements_time_window_check" CHECK ("starts_at" IS NULL OR "ends_at" IS NULL OR "starts_at" <= "ends_at");
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
  ALTER TABLE "post_placements" ADD CONSTRAINT "post_placements_post_id_posts_id_fk" FOREIGN KEY ("post_id") REFERENCES "public"."posts"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
@@ -27,7 +51,7 @@ END $$;
 CREATE INDEX IF NOT EXISTS "post_placements_post_idx" ON "post_placements" USING btree ("post_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "post_placements_scope_slot_idx" ON "post_placements" USING btree ("scope","slot");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "post_placements_category_slot_idx" ON "post_placements" USING btree ("category_id","slot");--> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "post_placements_unique" ON "post_placements" USING btree ("post_id","scope","slot","category_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "post_placements_unique" ON "post_placements" USING btree ("post_id","scope","slot", coalesce("category_id", '00000000-0000-0000-0000-000000000000'::uuid));--> statement-breakpoint
 INSERT INTO "post_placements" ("post_id", "category_id", "scope", "slot", "sort_order", "enabled", "created_at", "updated_at")
 SELECT "id", NULL, 'home', 'featured', "sort_order", true, now(), now()
 FROM "posts"
