@@ -2,7 +2,7 @@ export function stringValue(formData: FormData, key: string) {
   return String(formData.get(key) ?? "");
 }
 
-export function booleanValue(formData: FormData, key: string) {
+function booleanValue(formData: FormData, key: string) {
   return formData.get(key) === "on";
 }
 
@@ -12,6 +12,15 @@ function placementValue(formData: FormData, key: string) {
     sortOrder: stringValue(formData, `placements.${key}.sortOrder`),
     startsAt: stringValue(formData, `placements.${key}.startsAt`),
     endsAt: stringValue(formData, `placements.${key}.endsAt`)
+  };
+}
+
+export function placementsFromForm(formData: FormData) {
+  return {
+    homeFeatured: placementValue(formData, "homeFeatured"),
+    homePromoted: placementValue(formData, "homePromoted"),
+    categoryFeatured: placementValue(formData, "categoryFeatured"),
+    categoryPromoted: placementValue(formData, "categoryPromoted")
   };
 }
 
@@ -30,14 +39,8 @@ export function postDataFromForm(formData: FormData) {
     zhSeoTitle: stringValue(formData, "zhSeoTitle"),
     zhSeoDescription: stringValue(formData, "zhSeoDescription"),
     publishedAt: stringValue(formData, "publishedAt"),
-    featured: booleanValue(formData, "featured"),
-    pinned: booleanValue(formData, "pinned"),
-    placements: {
-      homeFeatured: placementValue(formData, "homeFeatured"),
-      homePromoted: placementValue(formData, "homePromoted"),
-      categoryFeatured: placementValue(formData, "categoryFeatured"),
-      categoryPromoted: placementValue(formData, "categoryPromoted")
-    },
+    featured: false,
+    pinned: false,
     readingTimeMinutes: stringValue(formData, "readingTimeMinutes"),
     sortOrder: stringValue(formData, "sortOrder"),
     tagIds: formData.getAll("tagIds").map(String).filter(Boolean),

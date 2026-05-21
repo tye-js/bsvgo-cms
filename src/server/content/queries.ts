@@ -180,11 +180,6 @@ export async function getPostForEdit(id: string) {
     .from(postTags)
     .where(eq(postTags.postId, id));
 
-  const placements = await db
-    .select()
-    .from(postPlacements)
-    .where(eq(postPlacements.postId, id));
-
   const [coverAsset] = post.coverImageId
     ? await db
         .select({ altText: mediaAssets.altText })
@@ -221,30 +216,68 @@ export async function getPostForEdit(id: string) {
       ...translation,
       locale: translation.locale as "en" | "zh"
     })),
-    placements: {
-      homeFeatured:
-        placements.find(
-          (placement) =>
-            placement.scope === "home" && placement.slot === "featured"
-        ) ?? null,
-      homePromoted:
-        placements.find(
-          (placement) =>
-            placement.scope === "home" && placement.slot === "promoted"
-        ) ?? null,
-      categoryFeatured:
-        placements.find(
-          (placement) =>
-            placement.scope === "category" && placement.slot === "featured"
-        ) ?? null,
-      categoryPromoted:
-        placements.find(
-          (placement) =>
-            placement.scope === "category" && placement.slot === "promoted"
-        ) ?? null
-    },
     tagIds: selectedTags.map((tag) => tag.tagId)
   };
+}
+
+export async function listPlacementPosts() {
+  const titleExpression = sql<string>`coalesce(nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'en'), ''), nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'zh'), ''), ${posts.slug})`;
+  const categoryNameExpression = sql<string>`coalesce(nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'zh'), ''), nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'en'), ''), ${categories.slug})`;
+
+  const rows = await db
+    .select({
+      id: posts.id,
+      slug: posts.slug,
+      categoryId: posts.categoryId,
+      title: titleExpression,
+      categoryName: categoryNameExpression,
+      status: posts.status,
+      publishedAt: posts.publishedAt,
+      updatedAt: posts.updatedAt
+    })
+    .from(posts)
+    .leftJoin(postTranslations, eq(postTranslations.postId, posts.id))
+    .innerJoin(categories, eq(categories.id, posts.categoryId))
+    .leftJoin(categoryTranslations, eq(categoryTranslations.categoryId, categories.id))
+    .where(isNull(posts.deletedAt))
+    .groupBy(posts.id, categories.id)
+    .orderBy(desc(posts.updatedAt))
+    .limit(200);
+
+  const placements = await db.select().from(postPlacements);
+
+  return rows.map((post) => {
+    const postPlacements = placements.filter(
+      (placement) => placement.postId === post.id
+    );
+
+    return {
+      ...post,
+      status: post.status as PostStatus,
+      placements: {
+        homeFeatured:
+          postPlacements.find(
+            (placement) =>
+              placement.scope === "home" && placement.slot === "featured"
+          ) ?? null,
+        homePromoted:
+          postPlacements.find(
+            (placement) =>
+              placement.scope === "home" && placement.slot === "promoted"
+          ) ?? null,
+        categoryFeatured:
+          postPlacements.find(
+            (placement) =>
+              placement.scope === "category" && placement.slot === "featured"
+          ) ?? null,
+        categoryPromoted:
+          postPlacements.find(
+            (placement) =>
+              placement.scope === "category" && placement.slot === "promoted"
+          ) ?? null
+      }
+    };
+  });
 }
 
 export async function listCategories() {

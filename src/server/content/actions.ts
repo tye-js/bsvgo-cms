@@ -7,6 +7,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   categorySchema,
   newPostSchema,
+  postPlacementSchema,
   postSchema,
   tagSchema,
   userSchema
@@ -27,7 +28,11 @@ import {
 import { aiAuthorValues } from "@/server/content/ai-author";
 import { resolveCoverImage } from "@/server/content/cover-image";
 import { friendlyAiError, friendlyDatabaseError } from "@/server/content/errors";
-import { postDataFromForm, stringValue } from "@/server/content/form-data";
+import {
+  placementsFromForm,
+  postDataFromForm,
+  stringValue
+} from "@/server/content/form-data";
 import {
   fallbackSlug,
   publishedAtValue,
@@ -36,6 +41,7 @@ import {
 } from "@/server/content/normalizers";
 import {
   deriveLegacyPostFlags,
+  emptyPostPlacements,
   replacePostPlacements
 } from "@/server/content/placements";
 import { upsertPostTranslation } from "@/server/content/translations";
@@ -63,7 +69,7 @@ export async function createPostAction(
       parsed.data.slug.trim() ||
       fallbackSlug(parsed.data.zhTitle || parsed.data.enTitle || "draft-post")
   };
-  const legacyFlags = deriveLegacyPostFlags(zhData.placements, zhData.mark);
+  const legacyFlags = deriveLegacyPostFlags(emptyPostPlacements(), zhData.mark);
   const english =
     zhData.enTitle?.trim() && zhData.enContent?.trim()
       ? {
@@ -125,8 +131,6 @@ export async function createPostAction(
         })
         .returning({ id: posts.id });
 
-      await replacePostPlacements(tx, post.id, data.categoryId, data.placements);
-
       await upsertPostTranslation(tx, post.id, "en", {
         title: data.enTitle,
         excerpt: data.enExcerpt,
@@ -173,7 +177,7 @@ export async function updatePostAction(
   }
 
   const data = parsed.data;
-  const legacyFlags = deriveLegacyPostFlags(data.placements, data.mark);
+  const legacyFlags = deriveLegacyPostFlags(emptyPostPlacements(), data.mark);
 
   try {
     await db.transaction(async (tx) => {
@@ -204,8 +208,6 @@ export async function updatePostAction(
           updatedAt: new Date()
         })
         .where(eq(posts.id, id));
-
-      await replacePostPlacements(tx, id, data.categoryId, data.placements);
 
       await upsertPostTranslation(tx, id, "en", {
         title: data.enTitle,
@@ -238,6 +240,49 @@ export async function updatePostAction(
   revalidatePath("/posts");
   revalidatePath(`/posts/${id}/edit`);
   return { success: "文章已保存。" };
+}
+
+export async function updatePostPlacementsAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  await requireUser();
+
+  const parsed = postPlacementSchema.safeParse({
+    postId: stringValue(formData, "postId"),
+    categoryId: stringValue(formData, "categoryId"),
+    placements: placementsFromForm(formData)
+  });
+
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "展示位数据无效" };
+  }
+
+  const data = parsed.data;
+  const legacyFlags = deriveLegacyPostFlags(data.placements, "");
+
+  try {
+    await db.transaction(async (tx) => {
+      await tx.execute(POST_WRITE_TIMEOUT);
+      await replacePostPlacements(tx, data.postId, data.categoryId, data.placements);
+      await tx
+        .update(posts)
+        .set({
+          mark: legacyFlags.mark,
+          featured: legacyFlags.featured,
+          pinned: legacyFlags.pinned,
+          updatedAt: new Date()
+        })
+        .where(and(eq(posts.id, data.postId), isNull(posts.deletedAt)));
+    });
+  } catch (error) {
+    return { error: friendlyDatabaseError(error) };
+  }
+
+  revalidatePath("/placements");
+  revalidatePath("/posts");
+  revalidatePath(`/posts/${data.postId}/edit`);
+  return { success: "展示位已保存。" };
 }
 
 export async function deletePostAction(formData: FormData) {

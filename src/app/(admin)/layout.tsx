@@ -6,6 +6,7 @@ import {
   Image,
   LayoutDashboard,
   LogOut,
+  Pin,
   Settings,
   Tags,
   Users
@@ -20,6 +21,7 @@ export const dynamic = "force-dynamic";
 const navItems = [
   { href: "/dashboard", label: "概览", icon: LayoutDashboard },
   { href: "/posts", label: "文章", icon: FileText },
+  { href: "/placements", label: "展示位", icon: Pin },
   { href: "/media", label: "媒体库", icon: Image },
   { href: "/categories", label: "分类", icon: FolderTree },
   { href: "/tags", label: "标签", icon: Tags },

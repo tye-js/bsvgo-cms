@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { aiWritingRoleIds } from "@/lib/ai-style";
 
-const placementSchema = z.object({
+export const placementSchema = z.object({
   enabled: z.boolean().optional(),
   sortOrder: z.coerce.number().int().min(0).max(100000),
   startsAt: z.string().optional(),
@@ -40,12 +40,6 @@ export const postSchema = z.object({
   publishedAt: z.string().optional(),
   featured: z.boolean().optional(),
   pinned: z.boolean().optional(),
-  placements: z.object({
-    homeFeatured: placementSchema,
-    homePromoted: placementSchema,
-    categoryFeatured: placementSchema,
-    categoryPromoted: placementSchema
-  }),
   readingTimeMinutes: z.coerce.number().int().min(1).max(240),
   sortOrder: z.coerce.number().int().min(0).max(100000),
   tagIds: z.array(z.string().uuid()).default([]),
@@ -55,6 +49,17 @@ export const postSchema = z.object({
   zhTitle: z.string().trim().max(255).optional(),
   zhExcerpt: z.string().trim().optional(),
   zhContent: z.string().trim().optional()
+});
+
+export const postPlacementSchema = z.object({
+  postId: z.string().uuid("请选择文章"),
+  categoryId: z.string().uuid("请选择分类"),
+  placements: z.object({
+    homeFeatured: placementSchema,
+    homePromoted: placementSchema,
+    categoryFeatured: placementSchema,
+    categoryPromoted: placementSchema
+  })
 });
 
 export const newPostSchema = postSchema.extend({

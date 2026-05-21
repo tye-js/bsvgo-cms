@@ -27,6 +27,35 @@ function optionalDateValue(value: string | undefined) {
   return trimmed ? new Date(trimmed) : null;
 }
 
+export function emptyPostPlacements(): PostPlacementFormValues {
+  return {
+    homeFeatured: {
+      enabled: false,
+      sortOrder: 0,
+      startsAt: "",
+      endsAt: ""
+    },
+    homePromoted: {
+      enabled: false,
+      sortOrder: 0,
+      startsAt: "",
+      endsAt: ""
+    },
+    categoryFeatured: {
+      enabled: false,
+      sortOrder: 0,
+      startsAt: "",
+      endsAt: ""
+    },
+    categoryPromoted: {
+      enabled: false,
+      sortOrder: 0,
+      startsAt: "",
+      endsAt: ""
+    }
+  };
+}
+
 export function deriveLegacyPostFlags(
   placements: PostPlacementFormValues,
   fallbackMark: string | null | undefined
