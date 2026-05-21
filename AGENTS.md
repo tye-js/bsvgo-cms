@@ -57,6 +57,13 @@ Optional upload environment variables:
 Do not expose these values to client components. Keep production `.env` files out of git.
 AI generation settings, including the OpenAI API key, are configured in the CMS Settings page and stored in PostgreSQL. Do not add them to GitHub Actions secrets or `.env` unless explicitly asked.
 
+## Design Rules
+
+- 深模块 (Design Deep Modules) 
+- 消除错误（Define Errors Out of Existence） 
+- 向下沉淀复杂性 （Pull Complexity Downwards） 
+- 不同层不同抽象（Different Layer, Different Abstraction)
+
 ## Database Rules
 
 The database may already contain BSVgo blog data. Treat migrations as compatibility migrations:
