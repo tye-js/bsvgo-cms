@@ -1,8 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState } from "react";
 
-import { buttonClassName } from "@/components/admin/Button";
 import { Field, inputClassName } from "@/components/admin/Field";
 import { SubmitButton } from "@/components/forms/SubmitButton";
 import type { PostStatus } from "@/server/db/schema";
@@ -52,6 +51,17 @@ function placementDefault(
   };
 }
 
+function statusLabel(status: PostStatus) {
+  switch (status) {
+    case "published":
+      return "已发布";
+    case "archived":
+      return "已归档";
+    default:
+      return "草稿";
+  }
+}
+
 function PlacementFields({
   name,
   label,
@@ -77,7 +87,7 @@ function PlacementFields({
         />
         {label}
       </label>
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+      <div className="mt-3 grid gap-2 md:grid-cols-3">
         <Field label="排序">
           <input
             name={`placements.${name}.sortOrder`}
@@ -108,6 +118,76 @@ function PlacementFields({
   );
 }
 
+function PlacementCard({
+  post,
+  action
+}: {
+  post: PlacementPost;
+  action: (
+    previousState: ActionState,
+    formData: FormData
+  ) => Promise<ActionState>;
+}) {
+  const [state, formAction] = useActionState(action, {});
+
+  return (
+    <form action={formAction} className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <input type="hidden" name="postId" value={post.id} />
+      <input type="hidden" name="categoryId" value={post.categoryId} />
+
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <h2 className="truncate font-semibold text-slate-950" title={post.title}>
+            {post.title}
+          </h2>
+          <p className="mt-1 truncate text-xs text-slate-500" title={post.slug}>
+            {post.slug}
+          </p>
+          <p className="mt-2 text-xs text-slate-500">
+            {post.categoryName} · {statusLabel(post.status)}
+          </p>
+        </div>
+        <div className="grid gap-2 lg:min-w-40">
+          <SubmitButton className="w-full min-h-9">保存展示位</SubmitButton>
+          {state.error ? (
+            <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+              {state.error}
+            </p>
+          ) : null}
+          {state.success ? (
+            <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+              {state.success}
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="grid gap-3 xl:grid-cols-2">
+        <PlacementFields
+          name="homeFeatured"
+          label="首页置顶"
+          defaults={placementDefault(post, "homeFeatured")}
+        />
+        <PlacementFields
+          name="homePromoted"
+          label="首页推广"
+          defaults={placementDefault(post, "homePromoted")}
+        />
+        <PlacementFields
+          name="categoryFeatured"
+          label="分类页置顶"
+          defaults={placementDefault(post, "categoryFeatured")}
+        />
+        <PlacementFields
+          name="categoryPromoted"
+          label="分类页推广"
+          defaults={placementDefault(post, "categoryPromoted")}
+        />
+      </div>
+    </form>
+  );
+}
+
 export function PostPlacementsForm({
   posts,
   action
@@ -118,79 +198,19 @@ export function PostPlacementsForm({
     formData: FormData
   ) => Promise<ActionState>;
 }) {
-  const [state, formAction] = useActionState(action, {});
-  const [selectedPostId, setSelectedPostId] = useState(posts[0]?.id ?? "");
-  const selectedPost =
-    posts.find((post) => post.id === selectedPostId) ?? posts[0];
+  if (!posts.length) {
+    return (
+      <section className="rounded-lg border border-slate-200 bg-white p-8 text-center text-sm text-slate-500 shadow-sm">
+        没有找到匹配的文章。
+      </section>
+    );
+  }
 
   return (
-    <form
-      key={selectedPost?.id ?? "empty"}
-      action={formAction}
-      className="grid gap-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
-    >
-      {state.error ? (
-        <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-          {state.error}
-        </p>
-      ) : null}
-      {state.success ? (
-        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-          {state.success}
-        </p>
-      ) : null}
-
-      {selectedPost ? (
-        <>
-          <input type="hidden" name="categoryId" value={selectedPost.categoryId} />
-          <Field label="文章">
-            <select
-              name="postId"
-              className={inputClassName}
-              value={selectedPost.id}
-              onChange={(event) => setSelectedPostId(event.target.value)}
-            >
-              {posts.map((post) => (
-                <option key={post.id} value={post.id}>
-                  {post.title} / {post.categoryName}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <div className="grid gap-3 lg:grid-cols-2">
-            <PlacementFields
-              name="homeFeatured"
-              label="首页置顶"
-              defaults={placementDefault(selectedPost, "homeFeatured")}
-            />
-            <PlacementFields
-              name="homePromoted"
-              label="首页推广"
-              defaults={placementDefault(selectedPost, "homePromoted")}
-            />
-            <PlacementFields
-              name="categoryFeatured"
-              label="分类页置顶"
-              defaults={placementDefault(selectedPost, "categoryFeatured")}
-            />
-            <PlacementFields
-              name="categoryPromoted"
-              label="分类页推广"
-              defaults={placementDefault(selectedPost, "categoryPromoted")}
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <SubmitButton>保存展示位</SubmitButton>
-            <a href="/posts" className={buttonClassName("secondary")}>
-              返回文章
-            </a>
-          </div>
-        </>
-      ) : (
-        <p className="text-sm text-slate-500">暂无可配置展示位的文章。</p>
-      )}
-    </form>
+    <div className="grid gap-4">
+      {posts.map((post) => (
+        <PlacementCard key={post.id} post={post} action={action} />
+      ))}
+    </div>
   );
 }

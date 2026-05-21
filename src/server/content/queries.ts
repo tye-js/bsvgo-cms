@@ -220,9 +220,29 @@ export async function getPostForEdit(id: string) {
   };
 }
 
-export async function listPlacementPosts() {
+export async function listPlacementPosts(options: {
+  query?: string;
+  status?: PostStatus | "all";
+  categoryId?: string | "all";
+  page?: number;
+  pageSize?: number;
+} = {}) {
+  const page = Math.max(options.page ?? 1, 1);
+  const pageSize = options.pageSize ?? 12;
+  const query = options.query?.trim();
+  const status = options.status ?? "all";
+  const categoryId = options.categoryId ?? "all";
   const titleExpression = sql<string>`coalesce(nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'en'), ''), nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'zh'), ''), ${posts.slug})`;
   const categoryNameExpression = sql<string>`coalesce(nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'zh'), ''), nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'en'), ''), ${categories.slug})`;
+  const filters = [
+    isNull(posts.deletedAt),
+    status === "all" ? undefined : eq(posts.status, status),
+    categoryId === "all" ? undefined : eq(posts.categoryId, categoryId),
+    query
+      ? or(ilike(posts.slug, `%${query}%`), ilike(postTranslations.title, `%${query}%`))
+      : undefined
+  ].filter(Boolean);
+  const where = filters.length ? and(...filters) : undefined;
 
   const rows = await db
     .select({
@@ -239,14 +259,27 @@ export async function listPlacementPosts() {
     .leftJoin(postTranslations, eq(postTranslations.postId, posts.id))
     .innerJoin(categories, eq(categories.id, posts.categoryId))
     .leftJoin(categoryTranslations, eq(categoryTranslations.categoryId, categories.id))
-    .where(isNull(posts.deletedAt))
+    .where(where)
     .groupBy(posts.id, categories.id)
     .orderBy(desc(posts.updatedAt))
-    .limit(200);
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
 
-  const placements = await db.select().from(postPlacements);
+  const [totalRow] = await db
+    .select({ total: sql<number>`count(distinct ${posts.id})` })
+    .from(posts)
+    .leftJoin(postTranslations, eq(postTranslations.postId, posts.id))
+    .where(where);
 
-  return rows.map((post) => {
+  const placements = rows.length
+    ? await db
+        .select()
+        .from(postPlacements)
+        .where(inArray(postPlacements.postId, rows.map((post) => post.id)))
+    : [];
+
+  return {
+    rows: rows.map((post) => {
     const postPlacements = placements.filter(
       (placement) => placement.postId === post.id
     );
@@ -277,7 +310,11 @@ export async function listPlacementPosts() {
           ) ?? null
       }
     };
-  });
+  }),
+    total: Number(totalRow?.total ?? 0),
+    page,
+    pageSize
+  };
 }
 
 export async function listCategories() {
