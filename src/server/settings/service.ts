@@ -53,8 +53,8 @@ const LEGACY_HOMEPAGE_SEO_SETTING_KEYS = {
   ogDescription: "seo.home.og_description"
 } as const;
 
-export const DEFAULT_AI_API_BASE_URL = "https://api.openai.com/v1";
-export const DEFAULT_AI_MODEL = "gpt-5.3-codex";
+export const DEFAULT_AI_API_BASE_URL = "https://api.deepseek.com";
+export const DEFAULT_AI_MODEL = "deepseek-v4-pro";
 export const DEFAULT_AI_TIMEOUT_MS = 60000;
 export const DEFAULT_AI_WRITING_STYLE =
   "面向 BSVgo 技术读者，语言清晰、克制、可信。优先使用结构化小标题、短段落和 Markdown 正文，不输出 HTML。所有事实、数据、人物、时间、链接、代码、产品能力和因果判断必须来自素材或明确标注为推断；素材不足时要保守表达，不编造细节。允许适度营销，但必须具体、可验证、不过度承诺。中文正文自然专业，英文正文面向全球技术读者，避免中式直译。Slug 使用小写英文、数字和连字符，简短表达核心主题。SEO 要分别服务中文入口和英文入口，提炼真实关键词，不堆砌。";

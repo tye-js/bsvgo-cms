@@ -141,6 +141,11 @@ type ResponsesInput = Array<{
   }>;
 }>;
 
+type ChatMessage = {
+  role: "system" | "user";
+  content: string;
+};
+
 type AiGenerationSettings = Awaited<ReturnType<typeof getAiSettingsForGeneration>>;
 
 function stylePayload(settings: AiGenerationSettings) {
@@ -180,7 +185,20 @@ function responsesUrl(apiBaseUrl: string) {
   return normalized.endsWith("/responses") ? normalized : `${normalized}/responses`;
 }
 
+function chatCompletionsUrl(apiBaseUrl: string) {
+  const normalized = apiBaseUrl.trim().replace(/\/+$/, "");
+  if (normalized.endsWith("/chat/completions")) return normalized;
+  return normalized.endsWith("/v1")
+    ? `${normalized}/chat/completions`
+    : `${normalized}/v1/chat/completions`;
+}
+
+function isResponsesProvider(apiBaseUrl: string) {
+  return apiBaseUrl.includes("api.openai.com") || apiBaseUrl.endsWith("/responses");
+}
+
 function providerLabel(apiBaseUrl: string) {
+  if (apiBaseUrl.includes("deepseek.com")) return "DeepSeek";
   return apiBaseUrl.includes("api.openai.com") ? "OpenAI" : "AI provider";
 }
 
@@ -200,6 +218,18 @@ function outputText(payload: unknown) {
     ?.flatMap((item) => item.content ?? [])
     .find((item) => item.type === "output_text" && typeof item.text === "string")
     ?.text;
+}
+
+function chatOutputText(payload: unknown) {
+  const response = payload as {
+    choices?: Array<{
+      message?: {
+        content?: string;
+      };
+    }>;
+  };
+
+  return response.choices?.[0]?.message?.content;
 }
 
 function clean(value: unknown, maxLength?: number) {
@@ -450,6 +480,24 @@ const localizedSeoSchema = {
   ]
 } as const;
 
+function inputToChatMessages(input: ResponsesInput): ChatMessage[] {
+  return input.map((item) => ({
+    role: item.role,
+    content: item.content
+      .map((content) => content.text)
+      .filter(Boolean)
+      .join("\n")
+  }));
+}
+
+function schemaInstruction(format: ResponsesTextFormat) {
+  return [
+    "Return only valid JSON. Do not wrap it in Markdown fences.",
+    "The JSON must satisfy this schema:",
+    JSON.stringify(format.schema)
+  ].join("\n");
+}
+
 async function callResponsesJson({
   settings,
   input,
@@ -465,23 +513,42 @@ async function callResponsesJson({
     settings ?? (await getAiSettingsForGeneration());
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const provider = isResponsesProvider(apiBaseUrl) ? "responses" : "chat";
 
   try {
-    const response = await fetch(responsesUrl(apiBaseUrl), {
+    const response = await fetch(
+      provider === "responses"
+        ? responsesUrl(apiBaseUrl)
+        : chatCompletionsUrl(apiBaseUrl),
+      {
       method: "POST",
       signal: controller.signal,
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({
-        model,
-        input,
-        text: {
-          format
-        }
-      })
-    });
+      body:
+        provider === "responses"
+          ? JSON.stringify({
+              model,
+              input,
+              text: {
+                format
+              }
+            })
+          : JSON.stringify({
+              model,
+              messages: [
+                ...inputToChatMessages(input),
+                {
+                  role: "system",
+                  content: schemaInstruction(format)
+                }
+              ],
+              response_format: { type: "json_object" }
+            })
+      }
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -490,7 +557,12 @@ async function callResponsesJson({
       );
     }
 
-    return response.json();
+    const payload = await response.json();
+    if (provider === "responses") return payload;
+
+    return {
+      output_text: chatOutputText(payload)
+    };
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error(`${providerLabel(apiBaseUrl)} ${timeoutMessage}`);

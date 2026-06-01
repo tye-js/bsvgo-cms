@@ -14,6 +14,9 @@ type ActionState = {
 
 type SettingsTab = "provider" | "writing" | "roles" | "seo";
 
+const deepSeekBaseUrl = "https://api.deepseek.com";
+const deepSeekModel = "deepseek-v4-pro";
+
 export function AiSettingsForm({
   action,
   hasApiKey,
@@ -138,6 +141,22 @@ export function AiSettingsForm({
                 </span>
               </div>
 
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-sm text-slate-600">
+                  DeepSeek 使用 OpenAI-compatible Chat Completions。点击可快速填入 DeepSeek 连接参数。
+                </p>
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+                  onClick={() => {
+                    setApiBaseUrlValue(deepSeekBaseUrl);
+                    setModelValue(deepSeekModel);
+                  }}
+                >
+                  使用 DeepSeek
+                </button>
+              </div>
+
               <Field
                 label="API Key"
                 hint="留空会保留现有密钥。完整密钥会在服务端加密保存，不会完整显示。"
@@ -153,14 +172,14 @@ export function AiSettingsForm({
 
               <Field
                 label="API Base URL"
-                hint="使用 OpenAI 兼容的 /v1 端点。官方 OpenAI API 可保留默认值。"
+                hint="DeepSeek 填 https://api.deepseek.com；OpenAI 填 https://api.openai.com/v1。"
               >
                 <input
                   type="url"
                   value={apiBaseUrlValue}
                   onChange={(event) => setApiBaseUrlValue(event.target.value)}
                   className={inputClassName}
-                  placeholder="https://api.openai.com/v1"
+                  placeholder="https://api.deepseek.com"
                 />
               </Field>
 
