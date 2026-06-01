@@ -39,6 +39,7 @@ import {
 import {
   fallbackSlug,
   publishedAtValue,
+  readingMinutesForContent,
   toNullable,
   toRequiredText
 } from "@/server/content/normalizers";
@@ -141,7 +142,11 @@ export async function createPostAction(
           ...aiAuthorValues(data.writingRole),
           coverImage: coverImage.coverImage,
           coverImageId: coverImage.coverImageId,
-          publishedAt: publishedAtValue(data.publishedAt, data.status),
+          publishedAt: publishedAtValue(
+            data.publishedAt,
+            data.status,
+            data.publishedAtTimezoneOffset
+          ),
           featured: legacyFlags.featured,
           pinned: legacyFlags.pinned,
           sortOrder: data.sortOrder
@@ -152,7 +157,7 @@ export async function createPostAction(
         title: data.enTitle,
         excerpt: data.enExcerpt,
         content: data.enContent,
-        readingMinutes: data.readingTimeMinutes,
+        readingMinutes: readingMinutesForContent(data.enContent, "en"),
         seoTitle: data.enSeoTitle,
         seoDescription: data.enSeoDescription,
         canonicalUrl: data.enCanonicalUrl,
@@ -163,7 +168,7 @@ export async function createPostAction(
         title: data.zhTitle,
         excerpt: data.zhExcerpt,
         content: data.zhContent,
-        readingMinutes: data.readingTimeMinutes,
+        readingMinutes: readingMinutesForContent(data.zhContent, "zh"),
         seoTitle: data.zhSeoTitle,
         seoDescription: data.zhSeoDescription,
         canonicalUrl: data.zhCanonicalUrl,
@@ -222,7 +227,11 @@ export async function updatePostAction(
           ...aiAuthorValues(data.writingRole),
           coverImage: coverImage.coverImage,
           coverImageId: coverImage.coverImageId,
-          publishedAt: publishedAtValue(data.publishedAt, data.status),
+          publishedAt: publishedAtValue(
+            data.publishedAt,
+            data.status,
+            data.publishedAtTimezoneOffset
+          ),
           sortOrder: data.sortOrder,
           updatedAt: new Date()
         })
@@ -232,7 +241,7 @@ export async function updatePostAction(
         title: data.enTitle,
         excerpt: data.enExcerpt,
         content: data.enContent,
-        readingMinutes: data.readingTimeMinutes,
+        readingMinutes: readingMinutesForContent(data.enContent, "en"),
         seoTitle: data.enSeoTitle,
         seoDescription: data.enSeoDescription,
         canonicalUrl: data.enCanonicalUrl,
@@ -243,7 +252,7 @@ export async function updatePostAction(
         title: data.zhTitle,
         excerpt: data.zhExcerpt,
         content: data.zhContent,
-        readingMinutes: data.readingTimeMinutes,
+        readingMinutes: readingMinutesForContent(data.zhContent, "zh"),
         seoTitle: data.zhSeoTitle,
         seoDescription: data.zhSeoDescription,
         canonicalUrl: data.zhCanonicalUrl,
@@ -427,12 +436,7 @@ export async function bulkGeneratePostSeoAction(
               structuredData:
                 en.structuredData && Object.keys(en.structuredData).length
                   ? en.structuredData
-                  : {
-                      "@context": "https://schema.org",
-                      "@type": "Article",
-                      headline: suggestion.en.title,
-                      description: suggestion.en.description
-                    },
+                  : suggestion.en.structuredData,
               updatedAt: new Date()
             })
             .where(
@@ -453,12 +457,7 @@ export async function bulkGeneratePostSeoAction(
               structuredData:
                 zh.structuredData && Object.keys(zh.structuredData).length
                   ? zh.structuredData
-                  : {
-                      "@context": "https://schema.org",
-                      "@type": "Article",
-                      headline: suggestion.zh.title,
-                      description: suggestion.zh.description
-                    },
+                  : suggestion.zh.structuredData,
               updatedAt: new Date()
             })
             .where(

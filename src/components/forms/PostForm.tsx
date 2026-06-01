@@ -110,12 +110,19 @@ type DraftMetadataResult = {
   zh: {
     seoTitle: string;
     seoDescription: string;
+    structuredData: Record<string, unknown>;
   };
   en: {
     seoTitle: string;
     seoDescription: string;
+    structuredData: Record<string, unknown>;
   };
 };
+
+function structuredDataText(value: Record<string, unknown> | undefined) {
+  if (!value || Object.keys(value).length === 0) return "{}";
+  return JSON.stringify(value, null, 2);
+}
 
 function getTranslation(post: PostFormValue | undefined, locale: Locale) {
   return post?.translations.find((translation) => translation.locale === locale);
@@ -123,7 +130,10 @@ function getTranslation(post: PostFormValue | undefined, locale: Locale) {
 
 function toDateInputValue(date: Date | null | undefined) {
   if (!date) return "";
-  return new Date(date).toISOString().slice(0, 16);
+  const value = new Date(date);
+  if (Number.isNaN(value.getTime())) return "";
+  const localValue = new Date(value.getTime() - value.getTimezoneOffset() * 60_000);
+  return localValue.toISOString().slice(0, 16);
 }
 
 function optionLabel(option: SelectOption) {
@@ -268,6 +278,8 @@ export function PostForm({
   const [zhStructuredData, setZhStructuredData] = useState(
     post?.zhStructuredData ?? "{}"
   );
+  const [timezoneOffset, setTimezoneOffset] = useState("");
+  const [timeZone, setTimeZone] = useState("");
   const formValue = (name: string) =>
     formRef.current ? String(new FormData(formRef.current).get(name) ?? "") : "";
 
@@ -275,8 +287,19 @@ export function PostForm({
     setSlug(payload.slug);
     setZhSeoTitle(payload.zh.seoTitle);
     setZhSeoDescription(payload.zh.seoDescription);
+    setZhStructuredData(structuredDataText(payload.zh.structuredData));
     setEnSeoTitle(payload.en.seoTitle);
     setEnSeoDescription(payload.en.seoDescription);
+    setEnStructuredData(structuredDataText(payload.en.structuredData));
+  }
+
+  function syncTimeZoneFields() {
+    setTimezoneOffset(String(new Date().getTimezoneOffset()));
+    try {
+      setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone ?? "");
+    } catch {
+      setTimeZone("");
+    }
   }
 
   function rewriteDraft() {
@@ -415,6 +438,7 @@ export function PostForm({
     <form
       ref={formRef}
       action={formAction}
+      onSubmit={syncTimeZoneFields}
       className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]"
     >
       <input
@@ -422,6 +446,12 @@ export function PostForm({
         name="writingRole"
         value={submittedWritingRole}
       />
+      <input
+        type="hidden"
+        name="publishedAtTimezoneOffset"
+        value={timezoneOffset}
+      />
+      <input type="hidden" name="publishedAtTimeZone" value={timeZone} />
       <input type="hidden" name="mark" value="" />
       <PendingFieldset className="grid gap-6 lg:contents">
       <div className="grid gap-6">
@@ -678,6 +708,9 @@ export function PostForm({
                 defaultValue={toDateInputValue(post?.publishedAt)}
                 className={inputClassName}
               />
+              <p className="text-xs leading-5 text-slate-500">
+                按你当前浏览器本地时间保存。提交时会同时记录浏览器时区偏移，再由服务端转换成统一时间，避免代理或服务器时区造成偏移。
+              </p>
             </Field>
           </div>
         </section>
@@ -762,7 +795,7 @@ export function PostForm({
             </Field>
             <Field
               label="英文结构化数据 JSON-LD"
-              hint="可填写 Article/BlogPosting JSON 对象。留空或 {} 表示前端使用默认结构化数据。"
+              hint="给 Google 等搜索引擎读取的 Article/BlogPosting 结构化数据。用 AI 生成 SEO 时会自动补全，通常不需要手写。"
             >
               <textarea
                 name="enStructuredData"
@@ -819,7 +852,7 @@ export function PostForm({
             </Field>
             <Field
               label="中文结构化数据 JSON-LD"
-              hint="可填写 Article/BlogPosting JSON 对象。留空或 {} 表示前端使用默认结构化数据。"
+              hint="给 Google 等搜索引擎读取的 Article/BlogPosting 结构化数据。用 AI 生成 SEO 时会自动补全，通常不需要手写。"
             >
               <textarea
                 name="zhStructuredData"
@@ -840,20 +873,13 @@ export function PostForm({
               onApply={(suggestion) => {
                 setEnSeoTitle(suggestion.en.title);
                 setEnSeoDescription(suggestion.en.description);
+                setEnStructuredData(structuredDataText(suggestion.en.structuredData));
                 setZhSeoTitle(suggestion.zh.title);
                 setZhSeoDescription(suggestion.zh.description);
+                setZhStructuredData(structuredDataText(suggestion.zh.structuredData));
               }}
             />
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="阅读分钟">
-                <input
-                  name="readingTimeMinutes"
-                  type="number"
-                  min={1}
-                  defaultValue={post?.readingTimeMinutes ?? 5}
-                  className={inputClassName}
-                />
-              </Field>
+            <div className="grid gap-3">
               <Field label="排序值">
                 <input
                   name="sortOrder"

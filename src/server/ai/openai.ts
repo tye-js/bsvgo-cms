@@ -46,6 +46,12 @@ type DraftMetadataInput = {
   enContent: string;
 };
 
+type LocalizedStructuredSeo = {
+  seoTitle: string;
+  seoDescription: string;
+  structuredData: Record<string, unknown>;
+};
+
 export type ChineseDraftOutput = {
   slug: string;
   zh: {
@@ -82,14 +88,8 @@ export type DraftTranslationOutput = {
 
 export type DraftMetadataOutput = {
   slug: string;
-  zh: {
-    seoTitle: string;
-    seoDescription: string;
-  };
-  en: {
-    seoTitle: string;
-    seoDescription: string;
-  };
+  zh: LocalizedStructuredSeo;
+  en: LocalizedStructuredSeo;
 };
 
 export type SeoTargetType = "homepage" | "category" | "tag" | "post";
@@ -167,6 +167,7 @@ export type LocalizedSeoSuggestion = {
   keywords: string;
   ogTitle: string;
   ogDescription: string;
+  structuredData: Record<string, unknown>;
 };
 
 export type SeoSuggestionOutput = {
@@ -204,6 +205,11 @@ function outputText(payload: unknown) {
 function clean(value: unknown, maxLength?: number) {
   const text = typeof value === "string" ? value.trim() : "";
   return maxLength ? text.slice(0, maxLength) : text;
+}
+
+function cleanStructuredData(value: unknown, fallback: Record<string, unknown>) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return fallback;
+  return value as Record<string, unknown>;
 }
 
 function parseEnglishPost(payload: unknown): EnglishPostOutput {
@@ -326,11 +332,13 @@ function parseDraftMetadata(payload: unknown): DraftMetadataOutput {
       .replace(/-{2,}/g, "-"),
     zh: {
       seoTitle: clean(parsed.zh?.seoTitle, 255),
-      seoDescription: clean(parsed.zh?.seoDescription, 500)
+      seoDescription: clean(parsed.zh?.seoDescription, 500),
+      structuredData: cleanStructuredData(parsed.zh?.structuredData, {})
     },
     en: {
       seoTitle: clean(parsed.en?.seoTitle, 255),
-      seoDescription: clean(parsed.en?.seoDescription, 500)
+      seoDescription: clean(parsed.en?.seoDescription, 500),
+      structuredData: cleanStructuredData(parsed.en?.structuredData, {})
     }
   };
 
@@ -363,14 +371,16 @@ function parseSeoSuggestion(payload: unknown): SeoSuggestionOutput {
       description: clean(parsed.en?.description, 500),
       keywords: clean(parsed.en?.keywords, 500),
       ogTitle: clean(parsed.en?.ogTitle, 255),
-      ogDescription: clean(parsed.en?.ogDescription, 500)
+      ogDescription: clean(parsed.en?.ogDescription, 500),
+      structuredData: cleanStructuredData(parsed.en?.structuredData, {})
     },
     zh: {
       title: clean(parsed.zh?.title, 255),
       description: clean(parsed.zh?.description, 500),
       keywords: clean(parsed.zh?.keywords, 500),
       ogTitle: clean(parsed.zh?.ogTitle, 255),
-      ogDescription: clean(parsed.zh?.ogDescription, 500)
+      ogDescription: clean(parsed.zh?.ogDescription, 500),
+      structuredData: cleanStructuredData(parsed.zh?.structuredData, {})
     }
   };
 
@@ -422,9 +432,22 @@ const localizedSeoSchema = {
     ogDescription: {
       type: "string",
       description: "Open Graph description for social previews in this locale."
+    },
+    structuredData: {
+      type: "object",
+      additionalProperties: true,
+      description:
+        "JSON-LD Article or BlogPosting structured data object for this locale. Include @context, @type, headline, description, inLanguage, and keywords when possible. Do not include unsupported facts."
     }
   },
-  required: ["title", "description", "keywords", "ogTitle", "ogDescription"]
+  required: [
+    "title",
+    "description",
+    "keywords",
+    "ogTitle",
+    "ogDescription",
+    "structuredData"
+  ]
 } as const;
 
 async function callResponsesJson({
@@ -834,7 +857,7 @@ export async function generateDraftMetadata(
           {
             type: "input_text",
             text:
-              "You are the BSVgo CMS metadata editor. Generate a concise URL slug plus SEO titles and descriptions for both Simplified Chinese and English pages. Keep them search-friendly, accurate, natural, and aligned with the configured locale-specific SEO styles."
+              "You are the BSVgo CMS metadata editor. Generate a concise URL slug, SEO titles/descriptions, and JSON-LD structured data for both Simplified Chinese and English article pages. Keep them search-friendly, accurate, natural, and aligned with the configured locale-specific SEO styles. Structured data must be valid Article or BlogPosting JSON-LD and must not include unsupported facts."
           }
         ]
       },
@@ -885,9 +908,15 @@ export async function generateDraftMetadata(
               seoDescription: {
                 type: "string",
                 description: "Simplified Chinese SEO description."
+              },
+              structuredData: {
+                type: "object",
+                additionalProperties: true,
+                description:
+                  "JSON-LD BlogPosting object for the Simplified Chinese article. Include @context, @type, headline, description, inLanguage, and keywords when possible."
               }
             },
-            required: ["seoTitle", "seoDescription"]
+            required: ["seoTitle", "seoDescription", "structuredData"]
           },
           en: {
             type: "object",
@@ -900,9 +929,15 @@ export async function generateDraftMetadata(
               seoDescription: {
                 type: "string",
                 description: "English SEO description."
+              },
+              structuredData: {
+                type: "object",
+                additionalProperties: true,
+                description:
+                  "JSON-LD BlogPosting object for the English article. Include @context, @type, headline, description, inLanguage, and keywords when possible."
               }
             },
-            required: ["seoTitle", "seoDescription"]
+            required: ["seoTitle", "seoDescription", "structuredData"]
           }
         },
         required: ["slug", "zh", "en"]
