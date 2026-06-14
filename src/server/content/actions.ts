@@ -14,7 +14,7 @@ import {
   userSchema
 } from "@/lib/validators";
 import { generateEnglishPost, generateSeoSuggestion } from "@/server/ai/openai";
-import { requireRole, requireUser } from "@/server/auth/session";
+import { requireContentEditor, requireRole } from "@/server/auth/session";
 import { hashPassword } from "@/server/auth/password";
 import { db } from "@/server/db";
 import {
@@ -75,7 +75,7 @@ export async function createPostAction(
   _previousState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const user = await requireContentEditor();
   const parsed = newPostSchema.safeParse(postDataFromForm(formData));
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "文章数据无效" };
@@ -198,7 +198,7 @@ export async function updatePostAction(
   _previousState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const user = await requireContentEditor();
   const parsed = postSchema.safeParse(postDataFromForm(formData));
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "文章数据无效" };
@@ -287,7 +287,7 @@ export async function updatePostPlacementsAction(
   _previousState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireUser();
+  await requireContentEditor();
 
   const parsed = postPlacementSchema.safeParse({
     postId: stringValue(formData, "postId"),
@@ -336,7 +336,7 @@ export async function updatePostPlacementsAction(
 }
 
 export async function deletePostAction(formData: FormData) {
-  await requireUser();
+  await requireContentEditor();
   const id = stringValue(formData, "id");
   await db.transaction(async (tx) => {
     await tx.delete(postPlacements).where(eq(postPlacements.postId, id));
@@ -351,7 +351,7 @@ export async function deletePostAction(formData: FormData) {
 }
 
 export async function setPostStatusAction(formData: FormData) {
-  await requireUser();
+  await requireContentEditor();
   const id = stringValue(formData, "id");
   const status = stringValue(formData, "status");
 
@@ -375,7 +375,7 @@ export async function bulkGeneratePostSeoAction(
   _previousState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireUser();
+  await requireContentEditor();
   const parsed = bulkPostSeoSchema.safeParse({
     postIds: formData.getAll("postIds").map(String).filter(Boolean)
   });
@@ -487,7 +487,7 @@ export async function updateCategoryAction(
   _previousState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireUser();
+  await requireContentEditor();
   const parsed = categorySchema.safeParse({
     enSeoTitle: stringValue(formData, "enSeoTitle"),
     enSeoDescription: stringValue(formData, "enSeoDescription"),
@@ -566,7 +566,7 @@ export async function createTagAction(
   _previousState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireUser();
+  await requireContentEditor();
   const parsed = tagSchema.safeParse({
     slug: stringValue(formData, "slug"),
     enSeoTitle: stringValue(formData, "enSeoTitle"),
@@ -626,7 +626,7 @@ export async function updateTagAction(
   _previousState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireUser();
+  await requireContentEditor();
   const parsed = tagSchema.safeParse({
     slug: stringValue(formData, "slug"),
     enSeoTitle: stringValue(formData, "enSeoTitle"),
@@ -704,7 +704,7 @@ export async function updateTagAction(
 }
 
 export async function deleteTagAction(formData: FormData) {
-  await requireUser();
+  await requireContentEditor();
   const id = stringValue(formData, "id");
   await db.transaction(async (tx) => {
     await tx.delete(postTags).where(eq(postTags.tagId, id));

@@ -117,6 +117,7 @@ type MediaMetadataInput = {
 export type MediaMetadataOutput = {
   altText: string;
   caption: string;
+  seoSummary: string;
 };
 
 type ResponsesJsonSchema = {
@@ -435,7 +436,8 @@ function parseMediaMetadata(payload: unknown): MediaMetadataOutput {
   const parsed = JSON.parse(text) as Partial<MediaMetadataOutput>;
   return {
     altText: clean(parsed.altText, 255),
-    caption: clean(parsed.caption, 500)
+    caption: clean(parsed.caption, 500),
+    seoSummary: clean(parsed.seoSummary, 500)
   };
 }
 
@@ -1096,7 +1098,7 @@ export async function generateMediaMetadata(
           {
             type: "input_text",
             text:
-              "You are the BSVgo CMS media metadata editor. Generate concise, factual image alt text and a short caption for a technical blog CMS. Use only the URL, filename, dimensions, and existing metadata. Do not claim visual details that are not inferable. Prefer Chinese output for this admin UI."
+              "You are the BSVgo CMS media metadata editor. Generate concise, factual image alt text, a short caption, and an SEO summary for a technical blog CMS. Use only the URL, filename, dimensions, and existing metadata. Do not claim visual details that are not inferable. Prefer Chinese output for this admin UI."
           }
         ]
       },
@@ -1106,7 +1108,7 @@ export async function generateMediaMetadata(
           {
             type: "input_text",
             text: JSON.stringify({
-              task: "Generate image alt text and caption.",
+              task: "Generate image alt text, caption, and SEO summary.",
               writingStyle: stylePayload(settings),
               image: {
                 url: input.url,
@@ -1136,9 +1138,14 @@ export async function generateMediaMetadata(
           caption: {
             type: "string",
             description: "Short image caption for a CMS media library."
+          },
+          seoSummary: {
+            type: "string",
+            description:
+              "Concise SEO-oriented image summary for media discovery and article cover context."
           }
         },
-        required: ["altText", "caption"]
+        required: ["altText", "caption", "seoSummary"]
       }
     },
     timeoutMessage: "media metadata generation timed out."

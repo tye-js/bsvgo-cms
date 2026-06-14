@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requireUser } from "@/server/auth/session";
+import { requireContentEditor } from "@/server/auth/session";
 import { saveUploadedCoverImage } from "@/server/media/upload";
 
 export const runtime = "nodejs";
@@ -27,7 +27,7 @@ function requestOrigin(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const user = await requireUser();
+  const user = await requireContentEditor();
   const formData = await request.formData();
   const file = formData.get("file");
   const altText = formText(formData, "altText");

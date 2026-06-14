@@ -120,3 +120,7 @@ export async function requireRole(roles: UserRole[]) {
   }
   return user;
 }
+
+export async function requireContentEditor() {
+  return requireRole(["admin", "editor"]);
+}

@@ -33,6 +33,8 @@ export default async function MediaDetailPage({
   if (!asset) notFound();
 
   const canGenerateVariants = asset.storageProvider === "local" && asset.storageKey;
+  const seoSummary =
+    typeof asset.metadata?.seoSummary === "string" ? asset.metadata.seoSummary : "";
 
   return (
     <div className="grid gap-6">
@@ -55,7 +57,7 @@ export default async function MediaDetailPage({
             <input type="hidden" name="id" value={asset.id} />
             <SubmitButton pendingLabel="AI 生成中..." timeoutMs={90000}>
               <Sparkles size={16} />
-              AI 生成 alt/caption
+              AI 生成图片 SEO
             </SubmitButton>
           </form>
           {canGenerateVariants ? (
@@ -93,6 +95,14 @@ export default async function MediaDetailPage({
               </p>
               <p className="mt-1 text-sm text-slate-900">
                 {asset.caption || "未填写"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                SEO 摘要
+              </p>
+              <p className="mt-1 text-sm text-slate-900">
+                {seoSummary || "未生成"}
               </p>
             </div>
             <p className="break-all text-xs text-slate-500">{asset.url}</p>

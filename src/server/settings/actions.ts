@@ -9,7 +9,7 @@ import {
 } from "@/lib/validators";
 import { aiWritingRoles } from "@/lib/ai-style";
 import { generateSeoSuggestion } from "@/server/ai/openai";
-import { requireRole } from "@/server/auth/session";
+import { requireContentEditor, requireRole } from "@/server/auth/session";
 import {
   saveAiSettings,
   saveHomepageSeoSettings
@@ -76,7 +76,7 @@ export async function updateHomepageSeoAction(
   _previousState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  const user = await requireRole(["admin"]);
+  const user = await requireContentEditor();
   const parsed = homepageSeoSchema.safeParse({
     enTitle: stringValue(formData, "enTitle"),
     enDescription: stringValue(formData, "enDescription"),
@@ -111,7 +111,7 @@ export async function generateHomepageSeoAction(
 ): Promise<ActionState & {
   suggestion?: Awaited<ReturnType<typeof generateSeoSuggestion>>;
 }> {
-  await requireRole(["admin"]);
+  await requireContentEditor();
 
   try {
     const suggestion = await generateSeoSuggestion({

@@ -6,7 +6,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { mediaAssetSchema } from "@/lib/validators";
 import { generateMediaMetadata } from "@/server/ai/openai";
-import { requireUser } from "@/server/auth/session";
+import { requireContentEditor } from "@/server/auth/session";
 import { db } from "@/server/db";
 import { mediaAssets } from "@/server/db/schema";
 import {
@@ -29,7 +29,7 @@ export async function createMediaAssetAction(
   _previousState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const user = await requireContentEditor();
   const parsed = mediaAssetSchema.safeParse({
     url: stringValue(formData, "url"),
     altText: stringValue(formData, "altText"),
@@ -52,7 +52,7 @@ export async function createMediaAssetAction(
 }
 
 export async function deleteMediaAssetAction(formData: FormData) {
-  await requireUser();
+  await requireContentEditor();
   const id = stringValue(formData, "id");
 
   await db
@@ -65,7 +65,7 @@ export async function deleteMediaAssetAction(formData: FormData) {
 }
 
 export async function deleteUnusedMediaAssetsAction(formData: FormData) {
-  await requireUser();
+  await requireContentEditor();
   const requestedIds = formData.getAll("ids").map(String).filter(Boolean);
   const ids = await getUnusedMediaAssetIds(requestedIds);
 
@@ -83,7 +83,7 @@ export async function deleteUnusedMediaAssetsAction(formData: FormData) {
 }
 
 export async function regenerateMediaVariantsAction(formData: FormData) {
-  await requireUser();
+  await requireContentEditor();
   const id = stringValue(formData, "id");
   const asset = await getMediaAsset(id);
 
@@ -106,7 +106,7 @@ export async function regenerateMediaVariantsAction(formData: FormData) {
 }
 
 export async function generateMediaMetadataAction(formData: FormData) {
-  await requireUser();
+  await requireContentEditor();
   const id = stringValue(formData, "id");
   const asset = await getMediaAsset(id);
   if (!asset) return;
@@ -125,6 +125,12 @@ export async function generateMediaMetadataAction(formData: FormData) {
     .set({
       altText: metadata.altText || asset.altText,
       caption: metadata.caption || asset.caption,
+      metadata: {
+        ...(asset.metadata ?? {}),
+        seoSummary: metadata.seoSummary,
+        generatedBy: "ai",
+        generatedAt: new Date().toISOString()
+      },
       updatedAt: new Date()
     })
     .where(eq(mediaAssets.id, id));

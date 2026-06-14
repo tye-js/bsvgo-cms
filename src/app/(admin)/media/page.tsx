@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ImagePlus } from "lucide-react";
+import { ImagePlus, Sparkles } from "lucide-react";
 
 import { ButtonLink, buttonClassName } from "@/components/admin/Button";
 import { CopyButton } from "@/components/admin/CopyButton";
@@ -8,7 +8,8 @@ import { ConfirmSubmitButton } from "@/components/forms/ConfirmSubmitButton";
 import { formatDate } from "@/lib/utils";
 import {
   deleteMediaAssetAction,
-  deleteUnusedMediaAssetsAction
+  deleteUnusedMediaAssetsAction,
+  generateMediaMetadataAction
 } from "@/server/media/actions";
 import { listMediaAssets } from "@/server/media/service";
 
@@ -158,6 +159,12 @@ export default async function MediaPage({
                         {asset.caption}
                       </p>
                     ) : null}
+                    {typeof asset.metadata?.seoSummary === "string" &&
+                    asset.metadata.seoSummary ? (
+                      <p className="mt-1 line-clamp-2 text-[11px] font-normal text-slate-400">
+                        SEO: {asset.metadata.seoSummary}
+                      </p>
+                    ) : null}
                   </td>
                   <td className="max-w-[300px] px-5 py-4 text-slate-500">
                     <span className="mb-1 inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-600">
@@ -186,6 +193,16 @@ export default async function MediaPage({
                         label="复制来源"
                         className="min-h-8 px-2"
                       />
+                      <form action={generateMediaMetadataAction}>
+                        <input type="hidden" name="id" value={asset.id} />
+                        <button
+                          type="submit"
+                          className={buttonClassName("secondary", "min-h-8 px-2")}
+                        >
+                          <Sparkles size={14} />
+                          生成 SEO
+                        </button>
+                      </form>
                       <a
                         href={`/media/${asset.id}`}
                         className={buttonClassName("secondary", "min-h-8 px-2")}

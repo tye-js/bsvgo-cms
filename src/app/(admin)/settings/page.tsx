@@ -7,10 +7,13 @@ import {
   updateAiSettingsAction,
   updateHomepageSeoAction
 } from "@/server/settings/actions";
+import { requireContentEditor } from "@/server/auth/session";
 import { getSettingsPageData } from "@/server/settings/service";
 
 export default async function SettingsPage() {
+  const user = await requireContentEditor();
   const settings = await getSettingsPageData();
+  const canManageAiSettings = user.role === "admin";
 
   return (
     <div className="grid gap-6">
@@ -21,32 +24,34 @@ export default async function SettingsPage() {
         </p>
       </div>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-5 flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-100 text-slate-600">
-            <Bot size={20} />
+      {canManageAiSettings ? (
+        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-5 flex items-start gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-100 text-slate-600">
+              <Bot size={20} />
+            </div>
+            <div>
+              <h2 className="font-semibold text-slate-950">AI 内容与 SEO 生成</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                用于从中文草稿创建英文内容，也用于生成中英文 SEO 建议。仅管理员可以修改此配置。
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="font-semibold text-slate-950">AI 内容与 SEO 生成</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              用于从中文草稿创建英文内容，也用于生成中英文 SEO 建议。仅管理员可以修改此配置。
-            </p>
-          </div>
-        </div>
-        <AiSettingsForm
-          action={updateAiSettingsAction}
-          hasApiKey={settings.ai.hasApiKey}
-          apiKeyPreview={settings.ai.apiKeyPreview}
-          apiBaseUrl={settings.ai.apiBaseUrl}
-          model={settings.ai.model}
-          timeoutMs={settings.ai.timeoutMs}
-          writingStyle={settings.ai.writingStyle}
-          defaultWritingRole={settings.ai.defaultWritingRole}
-          writingRoles={settings.ai.writingRoles}
-          zhSeoStyle={settings.ai.zhSeoStyle}
-          enSeoStyle={settings.ai.enSeoStyle}
-        />
-      </section>
+          <AiSettingsForm
+            action={updateAiSettingsAction}
+            hasApiKey={settings.ai.hasApiKey}
+            apiKeyPreview={settings.ai.apiKeyPreview}
+            apiBaseUrl={settings.ai.apiBaseUrl}
+            model={settings.ai.model}
+            timeoutMs={settings.ai.timeoutMs}
+            writingStyle={settings.ai.writingStyle}
+            defaultWritingRole={settings.ai.defaultWritingRole}
+            writingRoles={settings.ai.writingRoles}
+            zhSeoStyle={settings.ai.zhSeoStyle}
+            enSeoStyle={settings.ai.enSeoStyle}
+          />
+        </section>
+      ) : null}
 
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-5 flex items-start gap-3">
