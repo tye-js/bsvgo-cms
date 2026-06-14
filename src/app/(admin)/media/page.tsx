@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { ImagePlus, Sparkles } from "lucide-react";
+import { ImagePlus } from "lucide-react";
 
 import { ButtonLink, buttonClassName } from "@/components/admin/Button";
 import { CopyButton } from "@/components/admin/CopyButton";
 import { inputClassName } from "@/components/admin/Field";
+import { AiJobSubmitButton } from "@/components/forms/AiJobSubmitButton";
 import { ConfirmSubmitButton } from "@/components/forms/ConfirmSubmitButton";
 import { formatDate } from "@/lib/utils";
 import {
@@ -193,16 +194,15 @@ export default async function MediaPage({
                         label="复制来源"
                         className="min-h-8 px-2"
                       />
-                      <form action={generateMediaMetadataAction}>
+                      <AiJobSubmitButton
+                        action={generateMediaMetadataAction}
+                        label="生成 SEO"
+                        pendingLabel="生成中..."
+                        completedMessage="图片 SEO 已生成。"
+                        className="min-h-8 px-2"
+                      >
                         <input type="hidden" name="id" value={asset.id} />
-                        <button
-                          type="submit"
-                          className={buttonClassName("secondary", "min-h-8 px-2")}
-                        >
-                          <Sparkles size={14} />
-                          生成 SEO
-                        </button>
-                      </form>
+                      </AiJobSubmitButton>
                       <a
                         href={`/media/${asset.id}`}
                         className={buttonClassName("secondary", "min-h-8 px-2")}

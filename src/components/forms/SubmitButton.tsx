@@ -53,7 +53,8 @@ export function SubmitButton({
   timeoutLabel = "保存超时",
   timeoutMs = DEFAULT_TIMEOUT_MS,
   variant = "primary",
-  className
+  className,
+  disabled = false
 }: {
   children: React.ReactNode;
   pendingLabel?: string;
@@ -61,11 +62,16 @@ export function SubmitButton({
   timeoutMs?: number;
   variant?: "primary" | "secondary" | "danger" | "ghost";
   className?: string;
+  disabled?: boolean;
 }) {
   const { pending } = useFormStatus();
 
   return (
-    <button type="submit" disabled={pending} className={buttonClassName(variant, className)}>
+    <button
+      type="submit"
+      disabled={pending || disabled}
+      className={buttonClassName(variant, className)}
+    >
       {pending ? (
         <PendingButtonContent
           pendingLabel={pendingLabel}

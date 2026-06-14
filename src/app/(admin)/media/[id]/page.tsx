@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
-import { ArrowLeft, RefreshCcw, Sparkles } from "lucide-react";
+import { ArrowLeft, RefreshCcw } from "lucide-react";
 
 import { ButtonLink, buttonClassName } from "@/components/admin/Button";
 import { CopyButton } from "@/components/admin/CopyButton";
+import { AiJobSubmitButton } from "@/components/forms/AiJobSubmitButton";
 import { ConfirmSubmitButton } from "@/components/forms/ConfirmSubmitButton";
 import { SubmitButton } from "@/components/forms/SubmitButton";
 import { formatDate } from "@/lib/utils";
@@ -53,13 +54,14 @@ export default async function MediaDetailPage({
         </div>
         <div className="flex flex-wrap gap-2">
           <CopyButton value={asset.url} label="复制来源" />
-          <form action={generateMediaMetadataAction}>
+          <AiJobSubmitButton
+            action={generateMediaMetadataAction}
+            label="AI 生成图片 SEO"
+            pendingLabel="AI 生成中..."
+            completedMessage="图片 SEO 已生成。"
+          >
             <input type="hidden" name="id" value={asset.id} />
-            <SubmitButton pendingLabel="AI 生成中..." timeoutMs={90000}>
-              <Sparkles size={16} />
-              AI 生成图片 SEO
-            </SubmitButton>
-          </form>
+          </AiJobSubmitButton>
           {canGenerateVariants ? (
             <form action={regenerateMediaVariantsAction}>
               <input type="hidden" name="id" value={asset.id} />

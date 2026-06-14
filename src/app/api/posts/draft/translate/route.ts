@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { aiDraftTranslateSchema } from "@/lib/validators";
-import { translateDraftToEnglish } from "@/server/ai/openai";
+import { createAiJob } from "@/server/ai/jobs";
 import { getCurrentUser } from "@/server/auth/session";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -41,18 +40,11 @@ export async function POST(request: Request) {
     );
   }
 
-  try {
-    const draft = await translateDraftToEnglish(parsed.data);
-    return NextResponse.json(draft);
-  } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error && error.message.includes("timed out")
-            ? "英文稿生成超时。可以稍后重试。"
-            : "英文稿自动生成失败。请检查 AI 设置后重试。"
-      },
-      { status: 500 }
-    );
-  }
+  const job = await createAiJob({
+    type: "post_draft_translate",
+    input: parsed.data,
+    userId: user.id
+  });
+
+  return NextResponse.json({ job });
 }

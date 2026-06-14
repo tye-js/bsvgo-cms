@@ -27,16 +27,16 @@ type ChineseDraftInput = {
   sourceContent?: string;
 };
 
-type ChineseDraftCoreInput = ChineseDraftInput;
+export type ChineseDraftCoreInput = ChineseDraftInput;
 
-type DraftTranslationInput = {
+export type DraftTranslationInput = {
   writingRole?: AiWritingRoleId;
   zhTitle: string;
   zhExcerpt?: string;
   zhContent: string;
 };
 
-type DraftMetadataInput = {
+export type DraftMetadataInput = {
   writingRole?: AiWritingRoleId;
   zhTitle: string;
   zhExcerpt?: string;

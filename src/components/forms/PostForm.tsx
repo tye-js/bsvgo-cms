@@ -120,6 +120,19 @@ type DraftMetadataResult = {
   };
 };
 
+type AiJobStatus = "queued" | "running" | "succeeded" | "failed";
+
+type AiJob<TOutput extends object> = {
+  id: string;
+  status: AiJobStatus;
+  output: TOutput | null;
+  error: string;
+};
+
+type AiJobResponse<TOutput extends object> = {
+  job: AiJob<TOutput>;
+};
+
 function structuredDataText(value: Record<string, unknown> | undefined) {
   if (!value || Object.keys(value).length === 0) return "{}";
   return JSON.stringify(value, null, 2);
@@ -201,6 +214,83 @@ async function readJsonResponse<T extends object>(
       defaultError ||
       `请求失败（${response.status}）`
   };
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function createAiJob<TOutput extends object>(
+  url: string,
+  body: Record<string, unknown>,
+  defaultError: string
+) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+  const payload = await readJsonResponse<AiJobResponse<TOutput>>(
+    response,
+    defaultError
+  );
+
+  if ("error" in payload) {
+    throw new Error(payload.error || defaultError);
+  }
+
+  if (!payload.job?.id) {
+    throw new Error(defaultError);
+  }
+
+  return payload.job;
+}
+
+async function waitForAiJob<TOutput extends object>(
+  initialJob: AiJob<TOutput>,
+  defaultError: string,
+  onStatus?: (job: AiJob<TOutput>) => void
+) {
+  let job = initialJob;
+  onStatus?.(job);
+
+  for (let attempt = 0; attempt < 240; attempt += 1) {
+    if (job.status === "succeeded") {
+      if (!job.output) throw new Error(defaultError);
+      return job.output;
+    }
+
+    if (job.status === "failed") {
+      throw new Error(job.error || defaultError);
+    }
+
+    await wait(1500);
+    const response = await fetch(`/api/ai/jobs/${job.id}`, {
+      cache: "no-store"
+    });
+    const payload = await readJsonResponse<AiJobResponse<TOutput>>(
+      response,
+      defaultError
+    );
+
+    if ("error" in payload) {
+      throw new Error(payload.error || defaultError);
+    }
+
+    job = payload.job;
+    onStatus?.(job);
+  }
+
+  throw new Error("AI 任务仍在后台运行，请稍后再检查。");
+}
+
+function jobStatusMessage<TOutput extends object>(job: AiJob<TOutput>, label: string) {
+  if (job.status === "queued") return `${label}任务已提交，等待执行...`;
+  if (job.status === "running") return `${label}正在后台生成...`;
+  if (job.status === "succeeded") return `${label}已生成。`;
+  return `${label}生成失败。`;
 }
 
 export function PostForm({
@@ -315,26 +405,20 @@ export function PostForm({
       setIsRewritingDraft(true);
 
       try {
-        const response = await fetch("/api/posts/draft/rewrite", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
+        const rewriteJob = await createAiJob<DraftRewriteResult>(
+          "/api/posts/draft/rewrite",
+          {
             writingRole,
             rawInput: rawDraftInput,
             sourceUrl
-          })
-        });
-        const payload = await readJsonResponse<DraftRewriteResult>(
-          response,
+          },
           "AI 改写文章失败。"
         );
-
-        if ("error" in payload) {
-          setDraftRewriteError(payload.error ?? "AI 改写文章失败。");
-          return;
-        }
+        const payload = await waitForAiJob<DraftRewriteResult>(
+          rewriteJob,
+          "AI 改写文章失败。",
+          (job) => setDraftRewriteSuccess(jobStatusMessage(job, "中文草稿"))
+        );
 
         setZhTitle(payload.zh.title);
         setZhExcerpt(payload.zh.excerpt);
@@ -353,78 +437,67 @@ export function PostForm({
 
         setDraftTranslationPending(true);
         setDraftMetadataPending(false);
-        void (async () => {
-          try {
-            const translationResponse = await fetch("/api/posts/draft/translate", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify({
-                writingRole,
-                zhTitle: payload.zh.title,
-                zhExcerpt: payload.zh.excerpt,
-                zhContent: payload.zh.content
-              })
-            });
-            const translationPayload = await readJsonResponse<DraftTranslationResult>(
-              translationResponse,
-              "英文稿自动生成失败。"
-            );
+        let downstreamStage: "translation" | "metadata" = "translation";
 
-            if ("error" in translationPayload) {
-              setDraftTranslationError(
-                translationPayload.error ?? "英文稿自动生成失败。"
-              );
-              return;
-            }
+        try {
+          const translationJob = await createAiJob<DraftTranslationResult>(
+            "/api/posts/draft/translate",
+            {
+              writingRole,
+              zhTitle: payload.zh.title,
+              zhExcerpt: payload.zh.excerpt,
+              zhContent: payload.zh.content
+            },
+            "英文稿自动生成失败。"
+          );
+          const translationPayload = await waitForAiJob<DraftTranslationResult>(
+            translationJob,
+            "英文稿自动生成失败。",
+            (job) => setDraftRewriteSuccess(jobStatusMessage(job, "英文稿"))
+          );
 
-            setEnTitle(translationPayload.en.title);
-            setEnExcerpt(translationPayload.en.excerpt);
-            setEnContent(translationPayload.en.content);
-            setDraftRewriteSuccess("英文稿已生成，Slug 和双语 SEO 正在后台补齐。");
+          setEnTitle(translationPayload.en.title);
+          setEnExcerpt(translationPayload.en.excerpt);
+          setEnContent(translationPayload.en.content);
+          setDraftRewriteSuccess("英文稿已生成，Slug 和双语 SEO 正在后台补齐。");
 
-            setDraftMetadataPending(true);
-            const metadataResponse = await fetch("/api/posts/draft/metadata", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify({
-                writingRole,
-                zhTitle: payload.zh.title,
-                zhExcerpt: payload.zh.excerpt,
-                zhContent: payload.zh.content,
-                enTitle: translationPayload.en.title,
-                enExcerpt: translationPayload.en.excerpt,
-                enContent: translationPayload.en.content
-              })
-            });
-            const metadataPayload = await readJsonResponse<DraftMetadataResult>(
-              metadataResponse,
-              "Slug 和 SEO 自动生成失败。"
-            );
+          downstreamStage = "metadata";
+          setDraftMetadataPending(true);
+          const metadataJob = await createAiJob<DraftMetadataResult>(
+            "/api/posts/draft/metadata",
+            {
+              writingRole,
+              zhTitle: payload.zh.title,
+              zhExcerpt: payload.zh.excerpt,
+              zhContent: payload.zh.content,
+              enTitle: translationPayload.en.title,
+              enExcerpt: translationPayload.en.excerpt,
+              enContent: translationPayload.en.content
+            },
+            "Slug 和 SEO 自动生成失败。"
+          );
+          const metadataPayload = await waitForAiJob<DraftMetadataResult>(
+            metadataJob,
+            "Slug 和 SEO 自动生成失败。",
+            (job) => setDraftRewriteSuccess(jobStatusMessage(job, "Slug 和 SEO"))
+          );
 
-            if ("error" in metadataPayload) {
-              setDraftMetadataError(
-                metadataPayload.error ?? "Slug 和 SEO 自动生成失败。"
-              );
-              return;
-            }
-
-            syncDraftMetadata(metadataPayload);
-            setDraftRewriteSuccess(
-              "中文草稿、英文稿、Slug 和双语 SEO 都已补齐，请检查后再提交。"
-            );
-          } catch (error) {
-            setDraftTranslationError(
-              error instanceof Error ? error.message : "英文稿自动生成失败。"
-            );
-          } finally {
-            setDraftTranslationPending(false);
-            setDraftMetadataPending(false);
+          syncDraftMetadata(metadataPayload);
+          setDraftRewriteSuccess(
+            "中文草稿、英文稿、Slug 和双语 SEO 都已补齐，请检查后再提交。"
+          );
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "英文稿自动生成失败。";
+          if (downstreamStage === "metadata") {
+            setDraftMetadataError(message);
+          } else {
+            setDraftTranslationError(message);
           }
-        })();
+        } finally {
+          setDraftTranslationPending(false);
+          setDraftMetadataPending(false);
+        }
       } catch (error) {
         setDraftRewriteError(
           error instanceof Error ? error.message : "AI 改写文章失败。"

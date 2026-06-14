@@ -1,15 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { aiDraftRewriteSchema } from "@/lib/validators";
-import { generateChineseDraftCore } from "@/server/ai/openai";
-import {
-  SourceIngestionError,
-  fetchAiDraftSource
-} from "@/server/ai/source-ingestion";
+import { createAiJob } from "@/server/ai/jobs";
 import { getCurrentUser } from "@/server/auth/session";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -45,29 +40,11 @@ export async function POST(request: Request) {
     );
   }
 
-  try {
-    const source = await fetchAiDraftSource(parsed.data.sourceUrl?.trim() ?? "");
-    const draft = await generateChineseDraftCore({
-      writingRole: parsed.data.writingRole,
-      rawInput: parsed.data.rawInput,
-      ...source
-    });
-    return NextResponse.json(draft);
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      return NextResponse.json(
-        { error: "链接读取超时。可以把网页关键信息粘贴到素材框后重试。" },
-        { status: 400 }
-      );
-    }
+  const job = await createAiJob({
+    type: "post_draft_rewrite",
+    input: parsed.data,
+    userId: user.id
+  });
 
-    if (error instanceof SourceIngestionError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
-    return NextResponse.json(
-      { error: "AI 改写文章失败。请检查 AI 设置后重试。" },
-      { status: 500 }
-    );
-  }
+  return NextResponse.json({ job });
 }

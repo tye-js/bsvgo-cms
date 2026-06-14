@@ -13,7 +13,8 @@ import {
   tagSchema,
   userSchema
 } from "@/lib/validators";
-import { generateEnglishPost, generateSeoSuggestion } from "@/server/ai/openai";
+import { createAiJob } from "@/server/ai/jobs";
+import { generateEnglishPost } from "@/server/ai/openai";
 import { requireContentEditor, requireRole } from "@/server/auth/session";
 import { hashPassword } from "@/server/auth/password";
 import { db } from "@/server/db";
@@ -22,7 +23,6 @@ import {
   categoryTranslations,
   postPlacements,
   postTags,
-  postTranslations,
   posts,
   tagTranslations,
   tags,
@@ -53,6 +53,7 @@ import { upsertPostTranslation } from "@/server/content/translations";
 type ActionState = {
   error?: string;
   success?: string;
+  jobId?: string;
 };
 
 const POST_WRITE_TIMEOUT = sql`set local statement_timeout = '15s'`;
@@ -375,7 +376,7 @@ export async function bulkGeneratePostSeoAction(
   _previousState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireContentEditor();
+  const user = await requireContentEditor();
   const parsed = bulkPostSeoSchema.safeParse({
     postIds: formData.getAll("postIds").map(String).filter(Boolean)
   });
@@ -386,100 +387,24 @@ export async function bulkGeneratePostSeoAction(
 
   const postIds = parsed.data.postIds;
   const rows = await db
-    .select({
-      postId: posts.id,
-      slug: posts.slug,
-      locale: postTranslations.locale,
-      title: postTranslations.title,
-      excerpt: postTranslations.excerpt,
-      content: postTranslations.content,
-      coverImage: posts.coverImage,
-      canonicalUrl: postTranslations.canonicalUrl,
-      ogImage: postTranslations.ogImage,
-      structuredData: postTranslations.structuredData
-    })
+    .select({ id: posts.id })
     .from(posts)
-    .innerJoin(postTranslations, eq(postTranslations.postId, posts.id))
     .where(and(inArray(posts.id, postIds), isNull(posts.deletedAt)));
 
   if (!rows.length) {
     return { error: "没有找到可处理的文章。" };
   }
 
-  let updated = 0;
+  const job = await createAiJob({
+    type: "bulk_post_seo",
+    input: { postIds: rows.map((row) => row.id) },
+    userId: user.id
+  });
 
-  for (const postId of postIds) {
-    const translations = rows.filter((row) => row.postId === postId);
-    const en = translations.find((row) => row.locale === "en");
-    const zh = translations.find((row) => row.locale === "zh");
-    if (!en && !zh) continue;
-
-    try {
-      const suggestion = await generateSeoSuggestion({
-        targetType: "post",
-        enTitle: en?.title ?? "",
-        enDescription: en?.excerpt ?? "",
-        enContent: en?.content ?? "",
-        zhTitle: zh?.title ?? "",
-        zhDescription: zh?.excerpt ?? "",
-        zhContent: zh?.content ?? ""
-      });
-
-      await db.transaction(async (tx) => {
-        if (en) {
-          await tx
-            .update(postTranslations)
-            .set({
-              seoTitle: suggestion.en.title,
-              seoDescription: suggestion.en.description,
-              ogImage: en.ogImage || en.coverImage || "",
-              structuredData:
-                en.structuredData && Object.keys(en.structuredData).length
-                  ? en.structuredData
-                  : suggestion.en.structuredData,
-              updatedAt: new Date()
-            })
-            .where(
-              and(
-                eq(postTranslations.postId, postId),
-                eq(postTranslations.locale, "en")
-              )
-            );
-        }
-
-        if (zh) {
-          await tx
-            .update(postTranslations)
-            .set({
-              seoTitle: suggestion.zh.title,
-              seoDescription: suggestion.zh.description,
-              ogImage: zh.ogImage || zh.coverImage || "",
-              structuredData:
-                zh.structuredData && Object.keys(zh.structuredData).length
-                  ? zh.structuredData
-                  : suggestion.zh.structuredData,
-              updatedAt: new Date()
-            })
-            .where(
-              and(
-                eq(postTranslations.postId, postId),
-                eq(postTranslations.locale, "zh")
-              )
-            );
-        }
-      });
-
-      updated += 1;
-    } catch (error) {
-      return {
-        error: `已处理 ${updated} 篇，后续 AI 生成失败：${friendlyAiError(error)}`
-      };
-    }
-  }
-
-  revalidatePath("/seo");
-  revalidatePath("/posts");
-  return { success: `已为 ${updated} 篇文章生成 SEO，请检查后发布。` };
+  return {
+    success: `已提交 ${rows.length} 篇文章的 SEO 生成任务。`,
+    jobId: job.id
+  };
 }
 
 export async function updateCategoryAction(

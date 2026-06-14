@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { aiDraftMetadataSchema } from "@/lib/validators";
-import { generateDraftMetadata } from "@/server/ai/openai";
+import { createAiJob } from "@/server/ai/jobs";
 import { getCurrentUser } from "@/server/auth/session";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -41,18 +40,11 @@ export async function POST(request: Request) {
     );
   }
 
-  try {
-    const metadata = await generateDraftMetadata(parsed.data);
-    return NextResponse.json(metadata);
-  } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error && error.message.includes("timed out")
-            ? "Slug 和 SEO 生成超时。可以稍后重试。"
-            : "Slug 和 SEO 自动生成失败。请检查 AI 设置后重试。"
-      },
-      { status: 500 }
-    );
-  }
+  const job = await createAiJob({
+    type: "post_draft_metadata",
+    input: parsed.data,
+    userId: user.id
+  });
+
+  return NextResponse.json({ job });
 }

@@ -20,6 +20,13 @@ export type Locale = "en" | "zh";
 export type PostMark = "" | "featured" | "pinned" | "sponsored";
 export type PostPlacementScope = "home" | "category";
 export type PostPlacementSlot = "featured" | "promoted";
+export type AiJobType =
+  | "post_draft_rewrite"
+  | "post_draft_translate"
+  | "post_draft_metadata"
+  | "media_metadata"
+  | "bulk_post_seo";
+export type AiJobStatus = "queued" | "running" | "succeeded" | "failed";
 export type AnalyticsEventName =
   | "page_view"
   | "article_view"
@@ -91,6 +98,45 @@ export const sessions = pgTable(
   (table) => ({
     tokenHashIdx: uniqueIndex("sessions_token_hash_idx").on(table.tokenHash),
     userIdx: index("sessions_user_idx").on(table.userId)
+  })
+);
+
+export const aiJobs = pgTable(
+  "ai_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    type: varchar("type", { length: 80 }).notNull(),
+    status: varchar("status", { length: 20 }).notNull().default("queued"),
+    input: jsonb("input").$type<Record<string, unknown>>().notNull().default({}),
+    output: jsonb("output").$type<Record<string, unknown> | null>(),
+    errorMessage: text("error_message"),
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(1),
+    createdBy: uuid("created_by").references(() => users.id, {
+      onDelete: "set null"
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    startedAt: timestamp("started_at"),
+    finishedAt: timestamp("finished_at")
+  },
+  (table) => ({
+    statusCreatedAtIdx: index("ai_jobs_status_created_at_idx").on(
+      table.status,
+      table.createdAt
+    ),
+    createdByCreatedAtIdx: index("ai_jobs_created_by_created_at_idx").on(
+      table.createdBy,
+      table.createdAt
+    ),
+    typeCheck: check(
+      "ai_jobs_type_check",
+      sql`${table.type} in ('post_draft_rewrite', 'post_draft_translate', 'post_draft_metadata', 'media_metadata', 'bulk_post_seo')`
+    ),
+    statusCheck: check(
+      "ai_jobs_status_check",
+      sql`${table.status} in ('queued', 'running', 'succeeded', 'failed')`
+    )
   })
 );
 
@@ -391,12 +437,20 @@ export const analyticsEvents = pgTable(
 export const usersRelations = relations(users, ({ many }) => ({
   sessions: many(sessions),
   posts: many(posts),
-  mediaAssets: many(mediaAssets)
+  mediaAssets: many(mediaAssets),
+  aiJobs: many(aiJobs)
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
   user: one(users, {
     fields: [sessions.userId],
+    references: [users.id]
+  })
+}));
+
+export const aiJobsRelations = relations(aiJobs, ({ one }) => ({
+  createdByUser: one(users, {
+    fields: [aiJobs.createdBy],
     references: [users.id]
   })
 }));

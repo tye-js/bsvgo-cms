@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { mediaAssetSchema } from "@/lib/validators";
-import { generateMediaMetadata } from "@/server/ai/openai";
+import { createAiJob } from "@/server/ai/jobs";
 import { requireContentEditor } from "@/server/auth/session";
 import { db } from "@/server/db";
 import { mediaAssets } from "@/server/db/schema";
@@ -19,6 +19,7 @@ import { regenerateMediaAssetVariants } from "@/server/media/upload";
 type ActionState = {
   error?: string;
   success?: string;
+  jobId?: string;
 };
 
 function stringValue(formData: FormData, key: string) {
@@ -105,36 +106,23 @@ export async function regenerateMediaVariantsAction(formData: FormData) {
   revalidatePath(`/media/${id}`);
 }
 
-export async function generateMediaMetadataAction(formData: FormData) {
-  await requireContentEditor();
+export async function generateMediaMetadataAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const user = await requireContentEditor();
   const id = stringValue(formData, "id");
   const asset = await getMediaAsset(id);
-  if (!asset) return;
 
-  const metadata = await generateMediaMetadata({
-    url: asset.url,
-    originalFilename: asset.originalFilename,
-    width: asset.width,
-    height: asset.height,
-    currentAltText: asset.altText,
-    currentCaption: asset.caption
+  if (!asset) {
+    return { error: "媒体资源不存在或已删除。" };
+  }
+
+  const job = await createAiJob({
+    type: "media_metadata",
+    input: { mediaAssetId: id },
+    userId: user.id
   });
 
-  await db
-    .update(mediaAssets)
-    .set({
-      altText: metadata.altText || asset.altText,
-      caption: metadata.caption || asset.caption,
-      metadata: {
-        ...(asset.metadata ?? {}),
-        seoSummary: metadata.seoSummary,
-        generatedBy: "ai",
-        generatedAt: new Date().toISOString()
-      },
-      updatedAt: new Date()
-    })
-    .where(eq(mediaAssets.id, id));
-
-  revalidatePath("/media");
-  revalidatePath(`/media/${id}`);
+  return { success: "图片 SEO 任务已提交。", jobId: job.id };
 }
