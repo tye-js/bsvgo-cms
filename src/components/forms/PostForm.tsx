@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useActionState, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
 
@@ -503,9 +504,12 @@ export function PostForm({
                   </p>
                   {selectedWritingRole ? (
                     <div className="mt-3 flex items-center gap-3 rounded-md bg-white px-3 py-2 ring-1 ring-slate-200">
-                      <img
+                      <Image
                         src={selectedWritingRole.avatar}
                         alt={selectedWritingRole.zhName}
+                        width={40}
+                        height={40}
+                        unoptimized
                         className="h-10 w-10 rounded-full bg-slate-100"
                       />
                       <div className="min-w-0">

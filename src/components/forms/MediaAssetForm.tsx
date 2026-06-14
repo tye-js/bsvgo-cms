@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useRef, useState, useTransition } from "react";
 
 import { buttonClassName } from "@/components/admin/Button";
@@ -160,9 +161,9 @@ export function MediaAssetForm({
         </section>
         <div className="sticky bottom-4 flex gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
           <SubmitButton className="flex-1">保存图片</SubmitButton>
-          <a href="/media" className={buttonClassName("secondary")}>
+          <Link href="/media" className={buttonClassName("secondary")}>
             取消
-          </a>
+          </Link>
         </div>
       </aside>
       </PendingFieldset>

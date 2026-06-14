@@ -1,4 +1,4 @@
-import { Bot, Database, Image, Search, ShieldCheck } from "lucide-react";
+import { Bot, Database, Image as ImageIcon, Search, ShieldCheck } from "lucide-react";
 
 import { AiSettingsForm } from "@/components/forms/AiSettingsForm";
 import { HomepageSeoForm } from "@/components/forms/HomepageSeoForm";
@@ -101,7 +101,7 @@ export default async function SettingsPage() {
           </p>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <Image className="mb-4 text-slate-500" size={22} />
+          <ImageIcon className="mb-4 text-slate-500" size={22} />
           <h2 className="font-semibold text-slate-950">媒体</h2>
           <p className="mt-2 text-sm leading-6 text-slate-500">
             封面图片以受管理的 URL 资源保存，可结合本地存储或对象存储策略使用。

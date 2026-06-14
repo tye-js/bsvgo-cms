@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useState, useTransition, type FormEvent } from "react";
 
 import { buttonClassName } from "@/components/admin/Button";
 import { Field, inputClassName, textareaClassName } from "@/components/admin/Field";
@@ -128,30 +128,38 @@ export function HomepageSeoForm({
   value: HomepageSeoValue;
 }) {
   const [saveState, saveAction] = useActionState(action, {});
-  const [generateState, generateFormAction] = useActionState(generateAction, {});
+  const [generateState, setGenerateState] = useState<GenerateState>({});
+  const [isGenerating, startGenerating] = useTransition();
   const [draft, setDraft] = useState(value);
 
-  useEffect(() => {
-    if (!generateState.suggestion) return;
-
+  const applySuggestion = (suggestion: SeoSuggestionOutput) => {
     setDraft((current) => ({
       ...current,
-      enTitle: generateState.suggestion?.en.title ?? current.enTitle,
-      enDescription:
-        generateState.suggestion?.en.description ?? current.enDescription,
-      enKeywords: generateState.suggestion?.en.keywords ?? current.enKeywords,
-      enOgTitle: generateState.suggestion?.en.ogTitle ?? current.enOgTitle,
-      enOgDescription:
-        generateState.suggestion?.en.ogDescription ?? current.enOgDescription,
-      zhTitle: generateState.suggestion?.zh.title ?? current.zhTitle,
-      zhDescription:
-        generateState.suggestion?.zh.description ?? current.zhDescription,
-      zhKeywords: generateState.suggestion?.zh.keywords ?? current.zhKeywords,
-      zhOgTitle: generateState.suggestion?.zh.ogTitle ?? current.zhOgTitle,
-      zhOgDescription:
-        generateState.suggestion?.zh.ogDescription ?? current.zhOgDescription
+      enTitle: suggestion.en.title ?? current.enTitle,
+      enDescription: suggestion.en.description ?? current.enDescription,
+      enKeywords: suggestion.en.keywords ?? current.enKeywords,
+      enOgTitle: suggestion.en.ogTitle ?? current.enOgTitle,
+      enOgDescription: suggestion.en.ogDescription ?? current.enOgDescription,
+      zhTitle: suggestion.zh.title ?? current.zhTitle,
+      zhDescription: suggestion.zh.description ?? current.zhDescription,
+      zhKeywords: suggestion.zh.keywords ?? current.zhKeywords,
+      zhOgTitle: suggestion.zh.ogTitle ?? current.zhOgTitle,
+      zhOgDescription: suggestion.zh.ogDescription ?? current.zhOgDescription
     }));
-  }, [generateState.suggestion]);
+  };
+
+  const handleGenerateSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+
+    startGenerating(async () => {
+      const nextState = await generateAction({}, formData);
+      setGenerateState(nextState);
+      if (nextState.suggestion) {
+        applySuggestion(nextState.suggestion);
+      }
+    });
+  };
 
   const updateDraft = (key: keyof HomepageSeoValue, nextValue: string) => {
     setDraft((current) => ({ ...current, [key]: nextValue }));
@@ -230,10 +238,14 @@ export function HomepageSeoForm({
         </PendingFieldset>
       </form>
 
-      <form action={generateFormAction}>
+      <form onSubmit={handleGenerateSubmit}>
         {hiddenFields}
-        <button type="submit" className={buttonClassName("secondary")}>
-          用 AI 生成双语首页 SEO 建议
+        <button
+          type="submit"
+          disabled={isGenerating}
+          className={buttonClassName("secondary")}
+        >
+          {isGenerating ? "生成中..." : "用 AI 生成双语首页 SEO 建议"}
         </button>
       </form>
     </div>

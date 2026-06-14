@@ -8,23 +8,43 @@ import { cn } from "@/lib/utils";
 
 const DEFAULT_TIMEOUT_MS = 20000;
 
-function usePendingTimeout(pending: boolean, timeoutMs: number) {
+function useTimeoutElapsed(timeoutMs: number) {
   const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
-    if (!pending) {
-      setTimedOut(false);
-      return;
-    }
-
     const timer = window.setTimeout(() => {
       setTimedOut(true);
     }, timeoutMs);
 
     return () => window.clearTimeout(timer);
-  }, [pending, timeoutMs]);
+  }, [timeoutMs]);
 
   return timedOut;
+}
+
+function PendingButtonContent({
+  pendingLabel,
+  timeoutLabel,
+  timeoutMs
+}: {
+  pendingLabel: string;
+  timeoutLabel: string;
+  timeoutMs: number;
+}) {
+  const timedOut = useTimeoutElapsed(timeoutMs);
+
+  return (
+    <>
+      <span
+        aria-hidden="true"
+        className={cn(
+          "h-4 w-4 rounded-full border-2 border-current border-t-transparent",
+          "animate-spin"
+        )}
+      />
+      {timedOut ? timeoutLabel : pendingLabel}
+    </>
+  );
 }
 
 export function SubmitButton({
@@ -43,21 +63,40 @@ export function SubmitButton({
   className?: string;
 }) {
   const { pending } = useFormStatus();
-  const timedOut = usePendingTimeout(pending, timeoutMs);
 
   return (
     <button type="submit" disabled={pending} className={buttonClassName(variant, className)}>
       {pending ? (
-        <span
-          aria-hidden="true"
-          className={cn(
-            "h-4 w-4 rounded-full border-2 border-current border-t-transparent",
-            "animate-spin"
-          )}
+        <PendingButtonContent
+          pendingLabel={pendingLabel}
+          timeoutLabel={timeoutLabel}
+          timeoutMs={timeoutMs}
         />
-      ) : null}
-      {pending ? (timedOut ? timeoutLabel : pendingLabel) : children}
+      ) : (
+        children
+      )}
     </button>
+  );
+}
+
+function SubmitTimeoutNoticeContent({
+  timeoutMs,
+  message
+}: {
+  timeoutMs: number;
+  message: string;
+}) {
+  const timedOut = useTimeoutElapsed(timeoutMs);
+
+  if (!timedOut) return null;
+
+  return (
+    <p
+      role="alert"
+      className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800"
+    >
+      {message}
+    </p>
   );
 }
 
@@ -69,16 +108,10 @@ export function SubmitTimeoutNotice({
   message?: string;
 }) {
   const { pending } = useFormStatus();
-  const timedOut = usePendingTimeout(pending, timeoutMs);
 
-  if (!pending || !timedOut) return null;
+  if (!pending) return null;
 
   return (
-    <p
-      role="alert"
-      className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800"
-    >
-      {message}
-    </p>
+    <SubmitTimeoutNoticeContent timeoutMs={timeoutMs} message={message} />
   );
 }

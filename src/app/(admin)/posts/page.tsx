@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Search } from "lucide-react";
 
@@ -141,9 +142,12 @@ export default async function PostsPage({
                     <td className="px-4 py-3">
                       {aiAuthor && aiAuthorZhName && aiAuthorEnName && aiAuthorAvatar ? (
                         <div className="flex min-w-0 items-center gap-2">
-                          <img
+                          <Image
                             src={aiAuthorAvatar}
                             alt={aiAuthorZhName}
+                            width={32}
+                            height={32}
+                            unoptimized
                             className="h-8 w-8 rounded-full bg-slate-100"
                           />
                           <div className="min-w-0">

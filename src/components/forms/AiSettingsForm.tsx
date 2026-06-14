@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useActionState, useState } from "react";
 
 import { Field, inputClassName, textareaClassName } from "@/components/admin/Field";
@@ -272,9 +273,12 @@ export function AiSettingsForm({
                 </select>
               </Field>
               <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <img
+                <Image
                   src={editingRole.avatar}
                   alt={editingRole.zhName}
+                  width={48}
+                  height={48}
+                  unoptimized
                   className="h-12 w-12 rounded-full bg-white"
                 />
                 <div>
