@@ -78,12 +78,20 @@ export const DEFAULT_IMAGE_OUTPUT_FORMAT = "png";
 export const DEFAULT_IMAGE_TIMEOUT_MS = 180000;
 export const DEFAULT_AI_WRITING_STYLE =
   "面向 BSVgo 技术读者，语言清晰、克制、可信。优先使用结构化小标题、短段落和 Markdown 正文，不输出 HTML。所有事实、数据、人物、时间、链接、代码、产品能力和因果判断必须来自素材或明确标注为推断；素材不足时要保守表达，不编造细节。允许适度营销，但必须具体、可验证、不过度承诺。中文正文自然专业，英文正文面向全球技术读者，避免中式直译。Slug 使用小写英文、数字和连字符，简短表达核心主题。SEO 要分别服务中文入口和英文入口，提炼真实关键词，不堆砌。";
-export const DEFAULT_IMAGE_BLOCKCHAIN_PROMPT_STYLE =
+const LEGACY_IMAGE_PROMPT_STYLE =
+  "为 BSVgo 技术博客生成原创封面图。画面应专业、清晰、现代，适合区块链、BSV、AI、开发者工具和技术文章。避免文字、Logo、人物肖像、夸张币价视觉和误导性金融暗示。构图适合横向文章封面，留出标题覆盖空间。";
+const LEGACY_IMAGE_BLOCKCHAIN_PROMPT_STYLE =
   "为 BSVgo 区块链类技术博客生成原创封面图。画面应体现 BSV、区块链系统、交易网络、数据结构、可扩展性和开发者工程感。风格专业、清晰、现代，避免文字、Logo、人物肖像、夸张币价视觉和误导性金融暗示。构图适合横向文章封面，留出标题覆盖空间。";
-export const DEFAULT_IMAGE_AI_PROMPT_STYLE =
+const LEGACY_IMAGE_AI_PROMPT_STYLE =
   "为 BSVgo 人工智能类技术博客生成原创封面图。画面应体现 AI 工作流、模型推理、自动化、数据处理和开发者工具感，与文章主题紧密相关。风格专业、克制、现代，避免文字、Logo、人物肖像、夸张科幻元素和误导性能力暗示。构图适合横向文章封面，留出标题覆盖空间。";
-export const DEFAULT_IMAGE_INFRASTRUCTURE_PROMPT_STYLE =
+const LEGACY_IMAGE_INFRASTRUCTURE_PROMPT_STYLE =
   "为 BSVgo 基础设施类技术博客生成原创封面图。画面应体现云服务、节点、网络、数据库、安全、运维和产品基础设施。风格专业、清晰、可靠，避免文字、Logo、人物肖像、过度抽象装饰和误导性金融暗示。构图适合横向文章封面，留出标题覆盖空间。";
+export const DEFAULT_IMAGE_BLOCKCHAIN_PROMPT_STYLE =
+  "为 BSVgo 区块链类文章生成一张专业、可信、具有传播吸引力的原创封面。画面要像高端技术媒体的头图，围绕文章标题和描述提炼一个清晰视觉主概念，突出 BSV、区块链网络、交易流、数据结构、可扩展系统或开发者工程场景。构图应有明确焦点、强缩略图识别度和社媒分享吸引力，适合横向文章封面和推广卡片；风格现代、精致、克制，有深度但不晦涩。避免可读文字、Logo、人物肖像、币价图、暴富暗示、夸张金融符号和廉价科幻感。";
+export const DEFAULT_IMAGE_AI_PROMPT_STYLE =
+  "为 BSVgo 人工智能类文章生成一张专业、前沿、容易被点击和转发的原创封面。画面要根据文章标题和描述定制视觉主题，体现 AI 模型、推理流程、自动化工作流、数据处理、智能代理或开发者工具的真实应用价值。构图应简洁有力量，具备清晰主视觉、层次感和推广海报级吸引力，适合技术读者在列表页和社交媒体中快速理解主题。风格现代、可信、精密，避免可读文字、Logo、人物肖像、夸张机器人脸、虚假能力暗示、过度赛博朋克和廉价炫光。";
+export const DEFAULT_IMAGE_INFRASTRUCTURE_PROMPT_STYLE =
+  "为 BSVgo 基础设施类文章生成一张专业、稳定、具有推广价值的原创封面。画面要根据文章标题和描述提炼基础设施核心卖点，表现云服务、节点网络、数据库、API、安全、监控、部署、扩展性或运维可靠性。构图应清晰、扎实、有可信的工程质感，适合横向文章封面、产品更新和社媒分发；视觉要有记忆点，但不喧宾夺主。避免可读文字、Logo、人物肖像、杂乱机房、过度抽象线条、廉价蓝图风和误导性金融暗示。";
 export const DEFAULT_IMAGE_PROMPT_STYLE = DEFAULT_IMAGE_BLOCKCHAIN_PROMPT_STYLE;
 
 function roleStyleSettingKey(roleId: AiWritingRoleId) {
@@ -126,29 +134,52 @@ function imageGenerationSettingKeys() {
 }
 
 function imagePromptStyleFallback(byKey: Map<string, SettingRow>) {
-  return decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.promptStyle)).trim();
+  const value = decryptIfNeeded(
+    byKey.get(IMAGE_GENERATION_SETTING_KEYS.promptStyle)
+  ).trim();
+  return value === LEGACY_IMAGE_PROMPT_STYLE ? "" : value;
+}
+
+function currentImagePromptStyle(
+  value: string,
+  legacyDefault: string,
+  nextDefault: string
+) {
+  if (!value || value === legacyDefault || value === LEGACY_IMAGE_PROMPT_STYLE) {
+    return nextDefault;
+  }
+
+  return value;
 }
 
 function imagePromptStyles(byKey: Map<string, SettingRow>) {
   const legacyPromptStyle = imagePromptStyleFallback(byKey);
+  const blockchainPromptStyle = decryptIfNeeded(
+    byKey.get(IMAGE_GENERATION_SETTING_KEYS.blockchainPromptStyle)
+  ).trim();
+  const aiPromptStyle = decryptIfNeeded(
+    byKey.get(IMAGE_GENERATION_SETTING_KEYS.aiPromptStyle)
+  ).trim();
+  const infrastructurePromptStyle = decryptIfNeeded(
+    byKey.get(IMAGE_GENERATION_SETTING_KEYS.infrastructurePromptStyle)
+  ).trim();
 
   return {
-    blockchain:
-      decryptIfNeeded(
-        byKey.get(IMAGE_GENERATION_SETTING_KEYS.blockchainPromptStyle)
-      ).trim() ||
-      legacyPromptStyle ||
-      DEFAULT_IMAGE_BLOCKCHAIN_PROMPT_STYLE,
-    ai:
-      decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.aiPromptStyle)).trim() ||
-      legacyPromptStyle ||
-      DEFAULT_IMAGE_AI_PROMPT_STYLE,
-    infrastructure:
-      decryptIfNeeded(
-        byKey.get(IMAGE_GENERATION_SETTING_KEYS.infrastructurePromptStyle)
-      ).trim() ||
-      legacyPromptStyle ||
+    blockchain: currentImagePromptStyle(
+      blockchainPromptStyle || legacyPromptStyle,
+      LEGACY_IMAGE_BLOCKCHAIN_PROMPT_STYLE,
+      DEFAULT_IMAGE_BLOCKCHAIN_PROMPT_STYLE
+    ),
+    ai: currentImagePromptStyle(
+      aiPromptStyle || legacyPromptStyle,
+      LEGACY_IMAGE_AI_PROMPT_STYLE,
+      DEFAULT_IMAGE_AI_PROMPT_STYLE
+    ),
+    infrastructure: currentImagePromptStyle(
+      infrastructurePromptStyle || legacyPromptStyle,
+      LEGACY_IMAGE_INFRASTRUCTURE_PROMPT_STYLE,
       DEFAULT_IMAGE_INFRASTRUCTURE_PROMPT_STYLE
+    )
   };
 }
 
