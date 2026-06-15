@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ImagePlus } from "lucide-react";
+import { ChevronDown, ImagePlus } from "lucide-react";
 
 import { buttonClassName } from "@/components/admin/Button";
 
@@ -60,6 +60,7 @@ export function BulkCoverImageGenerationForm({
   const [jobMessage, setJobMessage] = useState("");
   const [jobError, setJobError] = useState("");
   const [isPolling, setIsPolling] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     if (!state.jobId) return;
@@ -119,66 +120,84 @@ export function BulkCoverImageGenerationForm({
     <form action={formAction} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
         <div>
-          <h2 className="font-semibold text-slate-950">AI 批量生成文章封面</h2>
+          <h2 className="font-semibold text-slate-950">文章封面生成</h2>
           <p className="mt-1 text-sm text-slate-500">
-            选择最近文章，生成封面图后自动入库并绑定到文章。一次最多处理 10 篇。
+            按文章标题、描述和大分类批量生成封面。一次最多处理 10 篇。
           </p>
         </div>
         <button
-          type="submit"
-          disabled={isPending || isPolling}
-          className={buttonClassName("primary", "shrink-0")}
+          type="button"
+          onClick={() => setExpanded((current) => !current)}
+          className={buttonClassName("secondary", "shrink-0")}
+          aria-expanded={expanded}
         >
-          {isPending || isPolling ? (
-            <span
-              aria-hidden="true"
-              className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
-            />
-          ) : (
-            <ImagePlus size={16} />
-          )}
-          {isPending || isPolling ? "AI 后台生成中..." : "批量生成封面"}
+          <ChevronDown
+            size={16}
+            className={`transition ${expanded ? "rotate-180" : ""}`}
+          />
+          {expanded ? "收起" : "展开"}
         </button>
       </div>
 
-      <label className="mt-4 flex items-center gap-2 text-sm text-slate-600">
-        <input
-          type="checkbox"
-          name="overwriteExisting"
-          className="h-4 w-4 rounded border-slate-300 text-slate-700"
-        />
-        覆盖已有封面的文章
-      </label>
+      {expanded ? (
+        <>
+          <div className="mt-4 flex flex-col justify-between gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center">
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                name="overwriteExisting"
+                className="h-4 w-4 rounded border-slate-300 text-slate-700"
+              />
+              覆盖已有封面的文章
+            </label>
+            <button
+              type="submit"
+              disabled={isPending || isPolling}
+              className={buttonClassName("primary", "shrink-0")}
+            >
+              {isPending || isPolling ? (
+                <span
+                  aria-hidden="true"
+                  className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                />
+              ) : (
+                <ImagePlus size={16} />
+              )}
+              {isPending || isPolling ? "后台生成中..." : "生成选中文章封面"}
+            </button>
+          </div>
 
-      <div className="mt-4 grid max-h-72 gap-2 overflow-auto rounded-md border border-slate-200 p-2">
-        {posts.map((post) => (
-          <label
-            key={post.id}
-            className="flex items-start gap-3 rounded-md px-2 py-2 text-sm hover:bg-slate-50"
-          >
-            <input
-              type="checkbox"
-              name="postIds"
-              value={post.id}
-              className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-700"
-            />
-            <span className="min-w-0">
-              <span className="block truncate font-medium text-slate-900">
-                {post.title}
-              </span>
-              <span className="mt-0.5 block truncate text-xs text-slate-500">
-                {post.categoryName || post.categorySlug} · {post.slug} ·{" "}
-                {post.status} · {post.coverImage ? "已有封面" : "无封面"}
-              </span>
-            </span>
-          </label>
-        ))}
-        {posts.length === 0 ? (
-          <p className="px-2 py-6 text-center text-sm text-slate-500">
-            暂无可生成封面的文章。
-          </p>
-        ) : null}
-      </div>
+          <div className="mt-4 grid max-h-72 gap-2 overflow-auto rounded-md border border-slate-200 p-2">
+            {posts.map((post) => (
+              <label
+                key={post.id}
+                className="flex items-start gap-3 rounded-md px-2 py-2 text-sm hover:bg-slate-50"
+              >
+                <input
+                  type="checkbox"
+                  name="postIds"
+                  value={post.id}
+                  className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-700"
+                />
+                <span className="min-w-0">
+                  <span className="block truncate font-medium text-slate-900">
+                    {post.title}
+                  </span>
+                  <span className="mt-0.5 block truncate text-xs text-slate-500">
+                    {post.categoryName || post.categorySlug} · {post.slug} ·{" "}
+                    {post.status} · {post.coverImage ? "已有封面" : "无封面"}
+                  </span>
+                </span>
+              </label>
+            ))}
+            {posts.length === 0 ? (
+              <p className="px-2 py-6 text-center text-sm text-slate-500">
+                暂无可生成封面的文章。
+              </p>
+            ) : null}
+          </div>
+        </>
+      ) : null}
 
       <div className="mt-3 grid gap-2 text-sm">
         {state.error ? <p className="text-rose-600">{state.error}</p> : null}

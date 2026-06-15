@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useActionState, useState } from "react";
+import { BookOpen, ImageIcon, KeyRound, Search } from "lucide-react";
 
 import { Field, inputClassName, textareaClassName } from "@/components/admin/Field";
 import { PendingFieldset } from "@/components/forms/PendingFieldset";
@@ -13,7 +14,7 @@ type ActionState = {
   success?: string;
 };
 
-type SettingsTab = "provider" | "image" | "writing" | "roles" | "seo";
+type SettingsTab = "provider" | "writing" | "image" | "seo";
 
 const deepSeekBaseUrl = "https://api.deepseek.com";
 const deepSeekModel = "deepseek-v4-pro";
@@ -118,13 +119,38 @@ export function AiSettingsForm({
   );
   const editingRole =
     writingRoles.find((role) => role.id === editingRoleId) ?? writingRoles[0];
-  const tabs: Array<{ id: SettingsTab; label: string }> = [
-    { id: "provider", label: "模型连接" },
-    { id: "image", label: "图片生成" },
-    { id: "writing", label: "写作底线" },
-    { id: "roles", label: "AI 角色" },
-    { id: "seo", label: "SEO 风格" }
+  const tabs: Array<{
+    id: SettingsTab;
+    label: string;
+    description: string;
+    icon: React.ReactNode;
+  }> = [
+    {
+      id: "provider",
+      label: "模型连接",
+      description: "文本与图片模型的密钥、地址和超时",
+      icon: <KeyRound size={16} />
+    },
+    {
+      id: "writing",
+      label: "写作策略",
+      description: "全局底线、默认角色和角色风格",
+      icon: <BookOpen size={16} />
+    },
+    {
+      id: "image",
+      label: "封面生成",
+      description: "三类文章封面的模型参数和视觉风格",
+      icon: <ImageIcon size={16} />
+    },
+    {
+      id: "seo",
+      label: "SEO 策略",
+      description: "中文和英文 SEO 生成口径",
+      icon: <Search size={16} />
+    }
   ];
+  const activeTabConfig = tabs.find((tab) => tab.id === activeTab) ?? tabs[0];
 
   return (
     <form action={formAction} className="grid gap-5">
@@ -140,24 +166,52 @@ export function AiSettingsForm({
       ) : null}
 
       <PendingFieldset className="gap-5">
-        <div className="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`rounded-md px-3 py-2 text-sm font-medium transition ${
-                activeTab === tab.id
-                  ? "bg-slate-950 text-white shadow-sm"
-                  : "text-slate-600 hover:bg-white hover:text-slate-950"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <aside className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+            <div className="px-3 py-3">
+              <h2 className="text-sm font-semibold text-slate-950">AI 配置</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                按使用场景维护模型、写作、封面和 SEO 策略。
+              </p>
+            </div>
+            <nav className="grid gap-1">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-md px-3 py-3 text-left transition ${
+                    activeTab === tab.id
+                      ? "bg-slate-950 text-white shadow-sm"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                  }`}
+                >
+                  <span className="mt-0.5">{tab.icon}</span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">{tab.label}</span>
+                    <span
+                      className={`mt-0.5 block text-xs leading-5 ${
+                        activeTab === tab.id ? "text-slate-300" : "text-slate-500"
+                      }`}
+                    >
+                      {tab.description}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </nav>
+          </aside>
 
-        <section className="rounded-lg border border-slate-200 bg-white p-4">
+          <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-5 border-b border-slate-200 pb-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+              {activeTabConfig.icon}
+              {activeTabConfig.label}
+            </div>
+            <p className="mt-1 text-sm leading-6 text-slate-500">
+              {activeTabConfig.description}
+            </p>
+          </div>
           <input type="hidden" name="apiBaseUrl" value={apiBaseUrlValue} />
           <input type="hidden" name="model" value={modelValue} />
           <input type="hidden" name="timeoutMs" value={timeoutMsValue} />
@@ -205,161 +259,189 @@ export function AiSettingsForm({
 
           {activeTab === "provider" ? (
             <div className="grid gap-5">
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                API Key 状态：{" "}
-                <span className="font-medium text-slate-900">
-                  {hasApiKey ? `已配置（${apiKeyPreview}）` : "未配置"}
-                </span>
-              </div>
+              <div className="grid gap-5 xl:grid-cols-2">
+                <div className="grid content-start gap-5 rounded-lg border border-slate-200 p-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-950">
+                      文本生成
+                    </h3>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      用于写文章、翻译、SEO、媒体元数据等文本任务。
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                    API Key 状态：{" "}
+                    <span className="font-medium text-slate-900">
+                      {hasApiKey ? `已配置（${apiKeyPreview}）` : "未配置"}
+                    </span>
+                  </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                <p className="text-sm text-slate-600">
-                  DeepSeek 使用 OpenAI-compatible Chat Completions。点击可快速填入 DeepSeek 连接参数。
-                </p>
-                <button
-                  type="button"
-                  className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
-                  onClick={() => {
-                    setApiBaseUrlValue(deepSeekBaseUrl);
-                    setModelValue(deepSeekModel);
-                  }}
-                >
-                  使用 DeepSeek
-                </button>
-              </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                    <p className="text-sm text-slate-600">
+                      DeepSeek 使用 OpenAI-compatible Chat Completions。
+                    </p>
+                    <button
+                      type="button"
+                      className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+                      onClick={() => {
+                        setApiBaseUrlValue(deepSeekBaseUrl);
+                        setModelValue(deepSeekModel);
+                      }}
+                    >
+                      使用 DeepSeek
+                    </button>
+                  </div>
 
-              <Field
-                label="API Key"
-                hint="留空会保留现有密钥。完整密钥会在服务端加密保存，不会完整显示。"
-              >
-                <input
-                  name="apiKey"
-                  type="password"
-                  autoComplete="off"
-                  className={inputClassName}
-                  placeholder={hasApiKey ? "保留现有密钥" : "sk-..."}
-                />
-              </Field>
+                  <Field
+                    label="API Key"
+                    hint="留空会保留现有密钥。完整密钥会在服务端加密保存，不会完整显示。"
+                  >
+                    <input
+                      name="apiKey"
+                      type="password"
+                      autoComplete="off"
+                      className={inputClassName}
+                      placeholder={hasApiKey ? "保留现有密钥" : "sk-..."}
+                    />
+                  </Field>
 
-              <Field
-                label="API Base URL"
-                hint="DeepSeek 填 https://api.deepseek.com；OpenAI 填 https://api.openai.com/v1。"
-              >
-                <input
-                  type="url"
-                  value={apiBaseUrlValue}
-                  onChange={(event) => setApiBaseUrlValue(event.target.value)}
-                  className={inputClassName}
-                  placeholder="https://api.deepseek.com"
-                />
-              </Field>
+                  <Field
+                    label="API Base URL"
+                    hint="DeepSeek 填 https://api.deepseek.com；OpenAI 填 https://api.openai.com/v1。"
+                  >
+                    <input
+                      type="url"
+                      value={apiBaseUrlValue}
+                      onChange={(event) => setApiBaseUrlValue(event.target.value)}
+                      className={inputClassName}
+                      placeholder="https://api.deepseek.com"
+                    />
+                  </Field>
 
-              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px]">
-                <Field label="模型">
-                  <input
-                    value={modelValue}
-                    onChange={(event) => setModelValue(event.target.value)}
-                    required
-                    className={inputClassName}
-                  />
-                </Field>
-                <Field label="超时时间（毫秒）">
-                  <input
-                    type="number"
-                    min={5000}
-                    max={180000}
-                    step={1000}
-                    value={timeoutMsValue}
-                    onChange={(event) => setTimeoutMsValue(event.target.value)}
-                    required
-                    className={inputClassName}
-                  />
-                </Field>
+                  <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px]">
+                    <Field label="模型">
+                      <input
+                        value={modelValue}
+                        onChange={(event) => setModelValue(event.target.value)}
+                        required
+                        className={inputClassName}
+                      />
+                    </Field>
+                    <Field label="超时时间（毫秒）">
+                      <input
+                        type="number"
+                        min={5000}
+                        max={180000}
+                        step={1000}
+                        value={timeoutMsValue}
+                        onChange={(event) => setTimeoutMsValue(event.target.value)}
+                        required
+                        className={inputClassName}
+                      />
+                    </Field>
+                  </div>
+                </div>
+
+                <div className="grid content-start gap-5 rounded-lg border border-slate-200 p-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-950">
+                      图片生成
+                    </h3>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      用于批量生成文章封面。未单独配置密钥时复用文本生成密钥。
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                    API Key 状态：{" "}
+                    <span className="font-medium text-slate-900">
+                      {imageGeneration.hasApiKey
+                        ? `已单独配置（${imageGeneration.apiKeyPreview}）`
+                        : hasApiKey
+                          ? "未单独配置，将复用文本生成 Key"
+                          : "未配置"}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                    <p className="text-sm text-slate-600">
+                      兼容 OpenAI Images API，模型名可直接填写 image2 / gpt-image-2。
+                    </p>
+                    <button
+                      type="button"
+                      className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+                      onClick={() => {
+                        setImageApiBaseUrlValue("https://api.openai.com/v1");
+                        setImageModelValue("gpt-image-2");
+                        setImageSizeValue("1536x1024");
+                        setImageQualityValue("auto");
+                        setImageOutputFormatValue("png");
+                      }}
+                    >
+                      使用 OpenAI 生图
+                    </button>
+                  </div>
+
+                  <Field
+                    label="图片 API Key"
+                    hint="留空会保留现有图片生成密钥；如果从未单独配置，会复用文本生成 API Key。"
+                  >
+                    <input
+                      name="imageApiKey"
+                      type="password"
+                      autoComplete="off"
+                      className={inputClassName}
+                      placeholder={
+                        imageGeneration.hasApiKey
+                          ? "保留现有图片生成密钥"
+                          : "复用文本生成 Key 或填写 sk-..."
+                      }
+                    />
+                  </Field>
+
+                  <Field label="图片 API Base URL">
+                    <input
+                      type="url"
+                      value={imageApiBaseUrlValue}
+                      onChange={(event) =>
+                        setImageApiBaseUrlValue(event.target.value)
+                      }
+                      className={inputClassName}
+                      placeholder="https://api.openai.com/v1"
+                    />
+                  </Field>
+
+                  <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px]">
+                    <Field label="图片模型">
+                      <input
+                        value={imageModelValue}
+                        onChange={(event) => setImageModelValue(event.target.value)}
+                        required
+                        className={inputClassName}
+                        placeholder="gpt-image-2"
+                      />
+                    </Field>
+                    <Field label="超时时间（毫秒）">
+                      <input
+                        type="number"
+                        min={10000}
+                        max={300000}
+                        step={1000}
+                        value={imageTimeoutMsValue}
+                        onChange={(event) =>
+                          setImageTimeoutMsValue(event.target.value)
+                        }
+                        required
+                        className={inputClassName}
+                      />
+                    </Field>
+                  </div>
+                </div>
               </div>
             </div>
           ) : null}
 
           {activeTab === "image" ? (
             <div className="grid gap-5">
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                图片生成 API Key 状态：{" "}
-                <span className="font-medium text-slate-900">
-                  {imageGeneration.hasApiKey
-                    ? `已单独配置（${imageGeneration.apiKeyPreview}）`
-                    : hasApiKey
-                      ? "未单独配置，将复用内容 AI Key"
-                      : "未配置"}
-                </span>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                <p className="text-sm text-slate-600">
-                  图片生成默认走 OpenAI Images API。模型名可改，后续可直接填 image2 / gpt-image-2 这类模型。
-                </p>
-                <button
-                  type="button"
-                  className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
-                  onClick={() => {
-                    setImageApiBaseUrlValue("https://api.openai.com/v1");
-                    setImageModelValue("gpt-image-2");
-                    setImageSizeValue("1536x1024");
-                    setImageQualityValue("auto");
-                    setImageOutputFormatValue("png");
-                  }}
-                >
-                  使用 OpenAI 生图
-                </button>
-              </div>
-
-              <Field
-                label="图片生成 API Key"
-                hint="留空会保留现有图片生成密钥；如果从未单独配置，会复用内容 AI 的 API Key。"
-              >
-                <input
-                  name="imageApiKey"
-                  type="password"
-                  autoComplete="off"
-                  className={inputClassName}
-                  placeholder={
-                    imageGeneration.hasApiKey ? "保留现有图片生成密钥" : "复用内容 AI Key 或填写 sk-..."
-                  }
-                />
-              </Field>
-
-              <Field label="图片生成 API Base URL">
-                <input
-                  type="url"
-                  value={imageApiBaseUrlValue}
-                  onChange={(event) => setImageApiBaseUrlValue(event.target.value)}
-                  className={inputClassName}
-                  placeholder="https://api.openai.com/v1"
-                />
-              </Field>
-
-              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px]">
-                <Field label="图片生成模型">
-                  <input
-                    value={imageModelValue}
-                    onChange={(event) => setImageModelValue(event.target.value)}
-                    required
-                    className={inputClassName}
-                    placeholder="gpt-image-2"
-                  />
-                </Field>
-                <Field label="超时时间（毫秒）">
-                  <input
-                    type="number"
-                    min={10000}
-                    max={300000}
-                    step={1000}
-                    value={imageTimeoutMsValue}
-                    onChange={(event) => setImageTimeoutMsValue(event.target.value)}
-                    required
-                    className={inputClassName}
-                  />
-                </Field>
-              </div>
-
               <div className="grid gap-4 md:grid-cols-3">
                 <Field label="尺寸">
                   <select
@@ -481,71 +563,73 @@ export function AiSettingsForm({
                   ))}
                 </select>
               </Field>
-            </div>
-          ) : null}
 
-          {activeTab === "roles" && editingRole ? (
-            <div className="grid gap-5">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-950">AI 角色设置</h3>
-                <p className="mt-1 text-xs leading-5 text-slate-500">
-                  先选择一个角色，再编辑该角色的具体写作要求。其他角色会保留原配置。
-                </p>
-              </div>
-              <Field label="选择角色" hint={editingRole.description}>
-                <select
-                  value={editingRoleId}
-                  onChange={(event) =>
-                    setEditingRoleId(event.target.value as AiWritingRoleId)
-                  }
-                  className={inputClassName}
-                >
-                  {writingRoles.map((role) => (
-                    <option key={role.id} value={role.id}>
-                      {role.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <Image
-                  src={editingRole.avatar}
-                  alt={editingRole.zhName}
-                  width={48}
-                  height={48}
-                  unoptimized
-                  className="h-12 w-12 rounded-full bg-white"
-                />
-                <div>
-                  <p className="text-sm font-semibold text-slate-950">
-                    {editingRole.zhName}
-                  </p>
-                  <p className="text-xs text-slate-500">{editingRole.enName}</p>
+              {editingRole ? (
+                <div className="grid gap-5 rounded-lg border border-slate-200 p-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-950">
+                      角色风格
+                    </h3>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      只维护角色差异，不重复全局底线。
+                    </p>
+                  </div>
+                  <Field label="编辑角色" hint={editingRole.description}>
+                    <select
+                      value={editingRoleId}
+                      onChange={(event) =>
+                        setEditingRoleId(event.target.value as AiWritingRoleId)
+                      }
+                      className={inputClassName}
+                    >
+                      {writingRoles.map((role) => (
+                        <option key={role.id} value={role.id}>
+                          {role.label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <Image
+                      src={editingRole.avatar}
+                      alt={editingRole.zhName}
+                      width={48}
+                      height={48}
+                      unoptimized
+                      className="h-12 w-12 rounded-full bg-white"
+                    />
+                    <div>
+                      <p className="text-sm font-semibold text-slate-950">
+                        {editingRole.zhName}
+                      </p>
+                      <p className="text-xs text-slate-500">{editingRole.enName}</p>
+                    </div>
+                  </div>
+                  <Field label={`${editingRole.label}写作要求`}>
+                    <textarea
+                      value={roleStyleValues[editingRole.id] ?? editingRole.style}
+                      onChange={(event) =>
+                        setRoleStyleValues((current) => ({
+                          ...current,
+                          [editingRole.id]: event.target.value
+                        }))
+                      }
+                      maxLength={2000}
+                      className={`${textareaClassName} min-h-44`}
+                    />
+                  </Field>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
+                    建议明确：适合内容类型、开头方式、结构重点、语气、证据使用方式、营销或观点尺度。
+                  </div>
                 </div>
-              </div>
-              <Field label={`${editingRole.label}的写作要求`}>
-                <textarea
-                  value={roleStyleValues[editingRole.id] ?? editingRole.style}
-                  onChange={(event) =>
-                    setRoleStyleValues((current) => ({
-                      ...current,
-                      [editingRole.id]: event.target.value
-                    }))
-                  }
-                  maxLength={2000}
-                  className={`${textareaClassName} min-h-44`}
-                />
-              </Field>
-              <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
-                角色配置只写该角色的差异化风格，不要重复全局底线。建议明确：适合内容类型、开头方式、结构重点、语气、证据使用方式、营销或观点尺度。
-              </div>
+              ) : null}
             </div>
           ) : null}
 
           {activeTab === "seo" ? (
             <div className="grid gap-5">
               <div>
-                <h3 className="text-sm font-semibold text-slate-950">AI SEO 风格</h3>
+                <h3 className="text-sm font-semibold text-slate-950">SEO 风格</h3>
                 <p className="mt-1 text-xs leading-5 text-slate-500">
                   用于文章、分类、标签和首页的双语 SEO 生成。中文 SEO 和英文 SEO 分别服务对应前端入口。
                 </p>
@@ -568,10 +652,11 @@ export function AiSettingsForm({
               </Field>
             </div>
           ) : null}
-        </section>
+          </section>
+        </div>
 
-      <div>
-        <SubmitButton>保存 AI 设置</SubmitButton>
+      <div className="flex justify-end">
+        <SubmitButton>保存配置</SubmitButton>
       </div>
       </PendingFieldset>
     </form>

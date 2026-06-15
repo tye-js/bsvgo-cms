@@ -590,16 +590,16 @@ export function PostForm({
         {generateEnglishFromChinese ? (
           <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-5">
-              <h2 className="font-semibold text-slate-950">AI 写作助手</h2>
+              <h2 className="font-semibold text-slate-950">生成初稿</h2>
               <p className="mt-1 text-sm text-slate-500">
-                先选择本篇文章的写作角色，再放入素材。AI 会按该角色生成中文稿，并继续生成英文稿、Slug 和双语 SEO。
+                选择写作角色并放入素材，系统会生成中文稿、英文稿、Slug 和双语 SEO。
               </p>
             </div>
             <div className="grid gap-4">
               {writingRoles.length ? (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                   <Field
-                    label="1. 选择本篇文章的 AI 角色"
+                    label="写作角色"
                     hint={
                       selectedWritingRole?.description
                     }
@@ -620,7 +620,7 @@ export function PostForm({
                     </select>
                   </Field>
                   <p className="mt-2 text-xs leading-5 text-slate-500">
-                    角色会在点击生成时锁定，后续中文稿、英文稿和 SEO 会沿用同一个写作方向。
+                    生成时会锁定当前角色，后续英文稿和 SEO 沿用同一方向。
                   </p>
                   {selectedWritingRole ? (
                     <div className="mt-3 flex items-center gap-3 rounded-md bg-white px-3 py-2 ring-1 ring-slate-200">
@@ -715,7 +715,7 @@ export function PostForm({
                 ) : (
                   <Sparkles size={16} />
                 )}
-                {isRewritingDraft ? "AI 正在生成中文..." : "按所选角色生成中英文文章"}
+                {isRewritingDraft ? "正在生成中文..." : "生成中英文文章"}
               </button>
               {draftTranslationPending ? (
                 <p className="text-xs text-slate-500">英文稿正在后台生成...</p>

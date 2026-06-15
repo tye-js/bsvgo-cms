@@ -26,9 +26,9 @@ type AiJobResponse = {
 
 function statusText(status: AiJobPayload["status"] | undefined) {
   if (status === "queued") return "任务已提交，等待执行...";
-  if (status === "running") return "AI 正在后台生成...";
-  if (status === "succeeded") return "AI 任务已完成。";
-  if (status === "failed") return "AI 任务失败。";
+  if (status === "running") return "正在后台生成...";
+  if (status === "succeeded") return "任务已完成。";
+  if (status === "failed") return "任务失败。";
   return "";
 }
 
@@ -50,9 +50,9 @@ async function readJob(jobId: string) {
 export function AiJobSubmitButton({
   action,
   children,
-  label = "AI 生成",
-  pendingLabel = "AI 任务提交中...",
-  completedMessage = "AI 任务已完成。",
+  label = "生成",
+  pendingLabel = "提交中...",
+  completedMessage = "任务已完成。",
   className
 }: {
   action: (previousState: ActionState, formData: FormData) => Promise<ActionState>;

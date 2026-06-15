@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Sparkles } from "lucide-react";
 
 import { buttonClassName } from "@/components/admin/Button";
 import type { SeoSuggestionOutput, SeoTargetType } from "@/server/ai/openai";
@@ -70,7 +71,15 @@ export function SeoSuggestionButton({
         className={buttonClassName("secondary")}
         onClick={generate}
       >
-        {isPending ? "AI 生成中..." : "用 AI 生成双语 SEO 建议"}
+        {isPending ? (
+          <span
+            aria-hidden="true"
+            className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+          />
+        ) : (
+          <Sparkles size={16} />
+        )}
+        {isPending ? "生成中..." : "生成 SEO 建议"}
       </button>
       {error ? (
         <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">

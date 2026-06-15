@@ -112,7 +112,7 @@ export function BulkPostSeoForm({
     <form action={formAction}>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
         <div className="grid gap-2 text-sm text-slate-500">
-          <p>批量生成会按文章处理，最多选择 20 篇。</p>
+          <p>勾选文章后批量补齐 SEO，最多 20 篇。</p>
           {state.error ? (
             <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
               {state.error}
@@ -135,12 +135,12 @@ export function BulkPostSeoForm({
           ) : null}
         </div>
         <SubmitButton
-          pendingLabel={isPolling ? "AI 后台生成中..." : "AI 任务提交中..."}
+          pendingLabel={isPolling ? "后台生成中..." : "提交中..."}
           timeoutMs={120000}
           disabled={isPolling}
         >
           <Sparkles size={16} />
-          {isPolling ? "AI 后台生成中..." : "批量 AI 生成 SEO"}
+          {isPolling ? "后台生成中..." : "生成选中 SEO"}
         </SubmitButton>
       </div>
       <div className="px-4 pb-3">

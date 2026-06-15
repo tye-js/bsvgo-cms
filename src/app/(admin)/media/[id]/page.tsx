@@ -56,8 +56,8 @@ export default async function MediaDetailPage({
           <CopyButton value={asset.url} label="复制来源" />
           <AiJobSubmitButton
             action={generateMediaMetadataAction}
-            label="AI 生成图片 SEO"
-            pendingLabel="AI 生成中..."
+            label="生成图片 SEO"
+            pendingLabel="生成中..."
             completedMessage="图片 SEO 已生成。"
           >
             <input type="hidden" name="id" value={asset.id} />
