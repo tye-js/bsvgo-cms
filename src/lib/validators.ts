@@ -276,5 +276,19 @@ export const bulkPostSeoSchema = z.object({
 export const mediaAssetSchema = z.object({
   url: z.string().trim().url("请输入有效的图片 URL"),
   altText: z.string().trim().max(255).optional(),
-  caption: z.string().trim().optional()
+  caption: z.string().trim().optional(),
+  zhAltText: z.string().trim().max(255, "中文替代文本不能超过 255 个字符").optional(),
+  enAltText: z.string().trim().max(255, "英文替代文本不能超过 255 个字符").optional(),
+  zhSeoTitle: z.string().trim().max(255, "中文 SEO 标题不能超过 255 个字符").optional(),
+  zhSeoDescription: z
+    .string()
+    .trim()
+    .max(500, "中文 SEO 描述不能超过 500 个字符")
+    .optional(),
+  enSeoTitle: z.string().trim().max(255, "英文 SEO 标题不能超过 255 个字符").optional(),
+  enSeoDescription: z
+    .string()
+    .trim()
+    .max(500, "英文 SEO 描述不能超过 500 个字符")
+    .optional()
 });

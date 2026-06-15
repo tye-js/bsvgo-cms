@@ -33,10 +33,14 @@ export async function resolveCoverImage(
   if (requestedId) {
     const asset = await getMediaAssetWithClient(tx, requestedId);
     if (asset) {
-      if (toRequiredText(asset.altText) !== altText) {
+      if (!toRequiredText(asset.altText) && altText) {
         await tx
           .update(mediaAssets)
-          .set({ altText, updatedAt: new Date() })
+          .set({
+            altText,
+            zhAltText: toRequiredText(asset.zhAltText) || altText,
+            updatedAt: new Date()
+          })
           .where(eq(mediaAssets.id, asset.id));
       }
 

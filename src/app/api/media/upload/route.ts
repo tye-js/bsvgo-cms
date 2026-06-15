@@ -32,6 +32,12 @@ export async function POST(request: Request) {
   const file = formData.get("file");
   const altText = formText(formData, "altText");
   const caption = formText(formData, "caption");
+  const zhAltText = formText(formData, "zhAltText");
+  const enAltText = formText(formData, "enAltText");
+  const zhSeoTitle = formText(formData, "zhSeoTitle");
+  const zhSeoDescription = formText(formData, "zhSeoDescription");
+  const enSeoTitle = formText(formData, "enSeoTitle");
+  const enSeoDescription = formText(formData, "enSeoDescription");
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "请选择图片文件。" }, { status: 400 });
@@ -49,6 +55,12 @@ export async function POST(request: Request) {
       file,
       altText,
       caption,
+      zhAltText,
+      enAltText,
+      zhSeoTitle,
+      zhSeoDescription,
+      enSeoTitle,
+      enSeoDescription,
       userId: user.id,
       publicOrigin: requestOrigin(request)
     });

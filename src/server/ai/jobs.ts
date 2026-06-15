@@ -95,6 +95,16 @@ function coverImageCategoryFromSlug(slug: string): CoverImageCategory {
   if (slug === "infrastructure") return "infrastructure";
   return "blockchain";
 }
+
+function mediaSeoTitle(title: string, suffix: string) {
+  const value = title.trim();
+  return value ? `${value} ${suffix}`.slice(0, 255) : suffix;
+}
+
+function mediaSeoDescription(title: string, excerpt: string, fallback: string) {
+  const source = excerpt.trim() || title.trim() || fallback;
+  return source.slice(0, 500);
+}
 const STALE_RUNNING_JOB_MS = 15 * 60 * 1000;
 
 function toRecord(value: unknown) {
@@ -164,14 +174,26 @@ async function executeMediaMetadataJob({
     width: asset.width,
     height: asset.height,
     currentAltText: asset.altText,
-    currentCaption: asset.caption
+    currentCaption: asset.caption,
+    currentZhAltText: asset.zhAltText,
+    currentEnAltText: asset.enAltText,
+    currentZhSeoTitle: asset.zhSeoTitle,
+    currentZhSeoDescription: asset.zhSeoDescription,
+    currentEnSeoTitle: asset.enSeoTitle,
+    currentEnSeoDescription: asset.enSeoDescription
   });
 
   await db
     .update(mediaAssets)
     .set({
-      altText: metadata.altText || asset.altText,
+      altText: metadata.zhAltText || metadata.enAltText || asset.altText,
       caption: metadata.caption || asset.caption,
+      zhAltText: metadata.zhAltText || asset.zhAltText,
+      enAltText: metadata.enAltText || asset.enAltText,
+      zhSeoTitle: metadata.zhSeoTitle || asset.zhSeoTitle,
+      zhSeoDescription: metadata.zhSeoDescription || asset.zhSeoDescription,
+      enSeoTitle: metadata.enSeoTitle || asset.enSeoTitle,
+      enSeoDescription: metadata.enSeoDescription || asset.enSeoDescription,
       metadata: {
         ...(asset.metadata ?? {}),
         seoSummary: metadata.seoSummary,
@@ -319,6 +341,24 @@ async function executeBulkPostCoverImagesJob({
     if (!source?.title) continue;
     const category = coverImageCategoryFromSlug(first.categorySlug);
     const categoryName = first.categoryName ?? first.categorySlug;
+    const zhTitle = zh?.title ?? source.title;
+    const enTitle = en?.title ?? source.title;
+    const zhExcerpt = zh?.excerpt ?? source.excerpt ?? "";
+    const enExcerpt = en?.excerpt ?? source.excerpt ?? "";
+    const zhAltText = `${zhTitle} 文章封面`;
+    const enAltText = `${enTitle} article cover`;
+    const zhSeoTitle = mediaSeoTitle(zhTitle, "文章封面");
+    const enSeoTitle = mediaSeoTitle(enTitle, "Article Cover");
+    const zhSeoDescription = mediaSeoDescription(
+      zhTitle,
+      zhExcerpt,
+      `${zhTitle} 的文章封面图。`
+    );
+    const enSeoDescription = mediaSeoDescription(
+      enTitle,
+      enExcerpt,
+      `Article cover image for ${enTitle}.`
+    );
 
     const image = await generatePostCoverImage({
       title: source.title,
@@ -326,14 +366,19 @@ async function executeBulkPostCoverImagesJob({
       category,
       categoryName
     });
-    const altText = `${source.title} 文章封面`;
-    const caption = `AI 生成封面：${source.title}`;
+    const caption = `AI 生成封面：${zhTitle}`;
     const asset = await saveGeneratedCoverImage({
       buffer: image.buffer,
       mimeType: image.mimeType,
       originalFilename: `${first.slug}-ai-cover`,
-      altText,
+      altText: zhAltText,
       caption,
+      zhAltText,
+      enAltText,
+      zhSeoTitle,
+      zhSeoDescription,
+      enSeoTitle,
+      enSeoDescription,
       userId,
       metadata: {
         generatedBy: "ai",
@@ -341,6 +386,7 @@ async function executeBulkPostCoverImagesJob({
         generationType: "post_cover",
         prompt: image.prompt,
         model: image.model,
+        seoSummary: zhSeoDescription,
         category,
         categoryName,
         postId

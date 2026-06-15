@@ -183,7 +183,11 @@ export async function getPostForEdit(id: string) {
 
   const [coverAsset] = post.coverImageId
     ? await db
-        .select({ altText: mediaAssets.altText })
+        .select({
+          altText: mediaAssets.altText,
+          zhAltText: mediaAssets.zhAltText,
+          enAltText: mediaAssets.enAltText
+        })
         .from(mediaAssets)
         .where(eq(mediaAssets.id, post.coverImageId))
         .limit(1)
@@ -197,7 +201,8 @@ export async function getPostForEdit(id: string) {
     aiAuthorRole: isAiWritingRoleId(aiAuthorRole) ? aiAuthorRole : null,
     coverImageId: post.coverImageId,
     coverImageUrl: post.coverImage,
-    coverImageAlt: coverAsset?.altText ?? "",
+    coverImageAlt:
+      coverAsset?.zhAltText || coverAsset?.altText || coverAsset?.enAltText || "",
     enSeoTitle:
       translations.find((translation) => translation.locale === "en")?.seoTitle ??
       "",

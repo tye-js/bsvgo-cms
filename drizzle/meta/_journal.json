@@ -99,6 +99,13 @@
       "when": 1781542800000,
       "tag": "0013_seed_app_settings_defaults",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1781546400000,
+      "tag": "0014_media_bilingual_seo",
+      "breakpoints": true
     }
   ]
 }

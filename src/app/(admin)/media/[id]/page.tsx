@@ -5,12 +5,14 @@ import { ButtonLink, buttonClassName } from "@/components/admin/Button";
 import { CopyButton } from "@/components/admin/CopyButton";
 import { AiJobSubmitButton } from "@/components/forms/AiJobSubmitButton";
 import { ConfirmSubmitButton } from "@/components/forms/ConfirmSubmitButton";
+import { MediaMetadataForm } from "@/components/forms/MediaMetadataForm";
 import { SubmitButton } from "@/components/forms/SubmitButton";
 import { formatDate } from "@/lib/utils";
 import {
   deleteMediaAssetAction,
   generateMediaMetadataAction,
-  regenerateMediaVariantsAction
+  regenerateMediaVariantsAction,
+  updateMediaAssetMetadataAction
 } from "@/server/media/actions";
 import { getMediaAsset, getMediaAssetUsage } from "@/server/media/service";
 
@@ -35,7 +37,9 @@ export default async function MediaDetailPage({
 
   const canGenerateVariants = asset.storageProvider === "local" && asset.storageKey;
   const seoSummary =
-    typeof asset.metadata?.seoSummary === "string" ? asset.metadata.seoSummary : "";
+    asset.zhSeoDescription ||
+    asset.enSeoDescription ||
+    (typeof asset.metadata?.seoSummary === "string" ? asset.metadata.seoSummary : "");
 
   return (
     <div className="grid gap-6">
@@ -79,24 +83,24 @@ export default async function MediaDetailPage({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={asset.url}
-            alt={asset.altText}
+            alt={asset.zhAltText || asset.altText || asset.enAltText}
             className="max-h-[620px] w-full bg-slate-50 object-contain"
           />
           <div className="grid gap-3 border-t border-slate-200 p-5">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                Alt text
+                中文替代文本
               </p>
               <p className="mt-1 text-sm text-slate-900">
-                {asset.altText || "未填写"}
+                {asset.zhAltText || asset.altText || "未填写"}
               </p>
             </div>
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                Caption
+                English alt text
               </p>
               <p className="mt-1 text-sm text-slate-900">
-                {asset.caption || "未填写"}
+                {asset.enAltText || "Not set"}
               </p>
             </div>
             <div>
@@ -162,6 +166,8 @@ export default async function MediaDetailPage({
           </section>
         </aside>
       </div>
+
+      <MediaMetadataForm action={updateMediaAssetMetadataAction} asset={asset} />
 
       <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 p-5">

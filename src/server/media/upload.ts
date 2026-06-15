@@ -190,12 +190,24 @@ export async function saveUploadedCoverImage({
   file,
   altText,
   caption,
+  zhAltText,
+  enAltText,
+  zhSeoTitle,
+  zhSeoDescription,
+  enSeoTitle,
+  enSeoDescription,
   userId,
   publicOrigin
 }: {
   file: File;
   altText: string;
   caption?: string;
+  zhAltText?: string;
+  enAltText?: string;
+  zhSeoTitle?: string;
+  zhSeoDescription?: string;
+  enSeoTitle?: string;
+  enSeoDescription?: string;
   userId: string;
   publicOrigin?: string;
 }) {
@@ -231,6 +243,9 @@ export async function saveUploadedCoverImage({
     height: metadata.height ?? null
   };
   const url = publicUrl(storageKey, publicOrigin);
+  const normalizedZhAltText = zhAltText?.trim() || altText.trim();
+  const normalizedEnAltText = enAltText?.trim() ?? "";
+  const normalizedAltText = altText.trim() || normalizedZhAltText || normalizedEnAltText;
   const variants = await generateImageVariants({
     buffer,
     storageKey,
@@ -243,8 +258,14 @@ export async function saveUploadedCoverImage({
     .insert(mediaAssets)
     .values({
       url,
-      altText: altText.trim(),
+      altText: normalizedAltText,
       caption: caption?.trim() ?? "",
+      zhAltText: normalizedZhAltText,
+      enAltText: normalizedEnAltText,
+      zhSeoTitle: zhSeoTitle?.trim() ?? "",
+      zhSeoDescription: zhSeoDescription?.trim() ?? "",
+      enSeoTitle: enSeoTitle?.trim() ?? "",
+      enSeoDescription: enSeoDescription?.trim() ?? "",
       storageProvider: "local",
       storageKey,
       originalFilename: safeOriginalName(file.name),
@@ -271,6 +292,12 @@ export async function saveGeneratedCoverImage({
   originalFilename,
   altText,
   caption,
+  zhAltText,
+  enAltText,
+  zhSeoTitle,
+  zhSeoDescription,
+  enSeoTitle,
+  enSeoDescription,
   userId,
   metadata,
   publicOrigin
@@ -280,6 +307,12 @@ export async function saveGeneratedCoverImage({
   originalFilename: string;
   altText: string;
   caption?: string;
+  zhAltText?: string;
+  enAltText?: string;
+  zhSeoTitle?: string;
+  zhSeoDescription?: string;
+  enSeoTitle?: string;
+  enSeoDescription?: string;
   userId: string;
   metadata?: Record<string, unknown>;
   publicOrigin?: string;
@@ -305,6 +338,9 @@ export async function saveGeneratedCoverImage({
     height: imageMetadata.height ?? null
   };
   const url = publicUrl(storageKey, publicOrigin);
+  const normalizedZhAltText = zhAltText?.trim() || altText.trim();
+  const normalizedEnAltText = enAltText?.trim() ?? "";
+  const normalizedAltText = altText.trim() || normalizedZhAltText || normalizedEnAltText;
   const variants = await generateImageVariants({
     buffer,
     storageKey,
@@ -317,8 +353,14 @@ export async function saveGeneratedCoverImage({
     .insert(mediaAssets)
     .values({
       url,
-      altText: altText.trim(),
+      altText: normalizedAltText,
       caption: caption?.trim() ?? "",
+      zhAltText: normalizedZhAltText,
+      enAltText: normalizedEnAltText,
+      zhSeoTitle: zhSeoTitle?.trim() ?? "",
+      zhSeoDescription: zhSeoDescription?.trim() ?? "",
+      enSeoTitle: enSeoTitle?.trim() ?? "",
+      enSeoDescription: enSeoDescription?.trim() ?? "",
       storageProvider: "local",
       storageKey,
       originalFilename: safeOriginalName(originalFilename),

@@ -233,6 +233,16 @@ export const mediaAssets = pgTable(
     url: text("url").notNull(),
     altText: varchar("alt_text", { length: 255 }).notNull().default(""),
     caption: text("caption").notNull().default(""),
+    zhAltText: varchar("zh_alt_text", { length: 255 }).notNull().default(""),
+    enAltText: varchar("en_alt_text", { length: 255 }).notNull().default(""),
+    zhSeoTitle: varchar("zh_seo_title", { length: 255 }).notNull().default(""),
+    zhSeoDescription: varchar("zh_seo_description", { length: 500 })
+      .notNull()
+      .default(""),
+    enSeoTitle: varchar("en_seo_title", { length: 255 }).notNull().default(""),
+    enSeoDescription: varchar("en_seo_description", { length: 500 })
+      .notNull()
+      .default(""),
     storageProvider: varchar("storage_provider", { length: 40 })
       .notNull()
       .default("external_url"),

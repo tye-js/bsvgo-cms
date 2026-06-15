@@ -42,6 +42,12 @@ export async function listMediaAssets(options: {
           ilike(mediaAssets.url, `%${query}%`),
           ilike(mediaAssets.altText, `%${query}%`),
           ilike(mediaAssets.caption, `%${query}%`),
+          ilike(mediaAssets.zhAltText, `%${query}%`),
+          ilike(mediaAssets.enAltText, `%${query}%`),
+          ilike(mediaAssets.zhSeoTitle, `%${query}%`),
+          ilike(mediaAssets.zhSeoDescription, `%${query}%`),
+          ilike(mediaAssets.enSeoTitle, `%${query}%`),
+          ilike(mediaAssets.enSeoDescription, `%${query}%`),
           ilike(mediaAssets.originalFilename, `%${query}%`)
         )
       : undefined
@@ -54,6 +60,12 @@ export async function listMediaAssets(options: {
       url: mediaAssets.url,
       altText: mediaAssets.altText,
       caption: mediaAssets.caption,
+      zhAltText: mediaAssets.zhAltText,
+      enAltText: mediaAssets.enAltText,
+      zhSeoTitle: mediaAssets.zhSeoTitle,
+      zhSeoDescription: mediaAssets.zhSeoDescription,
+      enSeoTitle: mediaAssets.enSeoTitle,
+      enSeoDescription: mediaAssets.enSeoDescription,
       storageProvider: mediaAssets.storageProvider,
       storageKey: mediaAssets.storageKey,
       originalFilename: mediaAssets.originalFilename,
@@ -100,6 +112,12 @@ export async function getMediaAssetOptions(limit = 80) {
       url: mediaAssets.url,
       altText: mediaAssets.altText,
       caption: mediaAssets.caption,
+      zhAltText: mediaAssets.zhAltText,
+      enAltText: mediaAssets.enAltText,
+      zhSeoTitle: mediaAssets.zhSeoTitle,
+      zhSeoDescription: mediaAssets.zhSeoDescription,
+      enSeoTitle: mediaAssets.enSeoTitle,
+      enSeoDescription: mediaAssets.enSeoDescription,
       storageProvider: mediaAssets.storageProvider,
       width: mediaAssets.width,
       height: mediaAssets.height,
@@ -188,7 +206,13 @@ export async function getMediaAssetWithClient(
       id: mediaAssets.id,
       url: mediaAssets.url,
       altText: mediaAssets.altText,
-      caption: mediaAssets.caption
+      caption: mediaAssets.caption,
+      zhAltText: mediaAssets.zhAltText,
+      enAltText: mediaAssets.enAltText,
+      zhSeoTitle: mediaAssets.zhSeoTitle,
+      zhSeoDescription: mediaAssets.zhSeoDescription,
+      enSeoTitle: mediaAssets.enSeoTitle,
+      enSeoDescription: mediaAssets.enSeoDescription
     })
     .from(mediaAssets)
     .where(and(eq(mediaAssets.id, id), isNull(mediaAssets.deletedAt)))
@@ -201,17 +225,35 @@ export async function upsertMediaAssetFromUrl({
   url,
   altText,
   caption,
+  zhAltText,
+  enAltText,
+  zhSeoTitle,
+  zhSeoDescription,
+  enSeoTitle,
+  enSeoDescription,
   userId
 }: {
   url: string;
   altText: string;
   caption?: string;
+  zhAltText?: string;
+  enAltText?: string;
+  zhSeoTitle?: string;
+  zhSeoDescription?: string;
+  enSeoTitle?: string;
+  enSeoDescription?: string;
   userId: string;
 }) {
   return upsertMediaAssetFromUrlWithClient(db, {
     url,
     altText,
     caption,
+    zhAltText,
+    enAltText,
+    zhSeoTitle,
+    zhSeoDescription,
+    enSeoTitle,
+    enSeoDescription,
     userId
   });
 }
@@ -222,22 +264,43 @@ export async function upsertMediaAssetFromUrlWithClient(
     url,
     altText,
     caption,
+    zhAltText,
+    enAltText,
+    zhSeoTitle,
+    zhSeoDescription,
+    enSeoTitle,
+    enSeoDescription,
     userId
   }: {
     url: string;
     altText: string;
     caption?: string;
+    zhAltText?: string;
+    enAltText?: string;
+    zhSeoTitle?: string;
+    zhSeoDescription?: string;
+    enSeoTitle?: string;
+    enSeoDescription?: string;
     userId: string;
   }
 ) {
   const trimmedUrl = url.trim();
+  const trimmedAltText = altText.trim();
+  const nextZhAltText = zhAltText?.trim() || trimmedAltText;
+  const nextEnAltText = enAltText?.trim() ?? "";
   const now = new Date();
   const [asset] = await client
     .insert(mediaAssets)
     .values({
       url: trimmedUrl,
-      altText: altText.trim(),
+      altText: trimmedAltText || nextZhAltText || nextEnAltText,
       caption: caption?.trim() ?? "",
+      zhAltText: nextZhAltText,
+      enAltText: nextEnAltText,
+      zhSeoTitle: zhSeoTitle?.trim() ?? "",
+      zhSeoDescription: zhSeoDescription?.trim() ?? "",
+      enSeoTitle: enSeoTitle?.trim() ?? "",
+      enSeoDescription: enSeoDescription?.trim() ?? "",
       storageProvider: "external_url",
       createdBy: userId,
       updatedAt: now
@@ -245,8 +308,14 @@ export async function upsertMediaAssetFromUrlWithClient(
     .onConflictDoUpdate({
       target: mediaAssets.url,
       set: {
-        altText: altText.trim(),
+        altText: trimmedAltText || nextZhAltText || nextEnAltText,
         caption: caption?.trim() ?? "",
+        zhAltText: nextZhAltText,
+        enAltText: nextEnAltText,
+        zhSeoTitle: zhSeoTitle?.trim() ?? "",
+        zhSeoDescription: zhSeoDescription?.trim() ?? "",
+        enSeoTitle: enSeoTitle?.trim() ?? "",
+        enSeoDescription: enSeoDescription?.trim() ?? "",
         deletedAt: null,
         updatedAt: now
       }

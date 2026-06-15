@@ -24,8 +24,9 @@ export function MediaAssetForm({
   const [state, formAction] = useActionState(action, {});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [url, setUrl] = useState("");
-  const [altText, setAltText] = useState("");
   const [caption, setCaption] = useState("");
+  const [zhAltText, setZhAltText] = useState("");
+  const [enAltText, setEnAltText] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -38,8 +39,10 @@ export function MediaAssetForm({
     startTransition(async () => {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("altText", altText);
+      formData.append("altText", zhAltText || enAltText);
       formData.append("caption", caption);
+      formData.append("zhAltText", zhAltText);
+      formData.append("enAltText", enAltText);
 
       const response = await fetch("/api/media/upload", {
         method: "POST",
@@ -57,7 +60,7 @@ export function MediaAssetForm({
       }
 
       setUrl(payload.url);
-      setAltText(payload.altText ?? altText);
+      setZhAltText(payload.altText ?? zhAltText);
       setUploadSuccess("图片上传成功，URL 已自动填入。");
     });
   }
@@ -131,16 +134,52 @@ export function MediaAssetForm({
               placeholder="https://..."
             />
           </Field>
-          <Field label="替代文本">
-            <input
-              name="altText"
-              value={altText}
-              onChange={(event) => setAltText(event.target.value)}
-              maxLength={255}
-              className={inputClassName}
-              placeholder="描述图片内容，便于无障碍访问和 SEO"
-            />
-          </Field>
+          <div className="grid gap-5 lg:grid-cols-2">
+            <section className="grid gap-4 rounded-lg border border-slate-200 p-4">
+              <h3 className="text-sm font-semibold text-slate-950">中文信息</h3>
+              <Field label="中文替代文本">
+                <input
+                  name="zhAltText"
+                  value={zhAltText}
+                  onChange={(event) => setZhAltText(event.target.value)}
+                  maxLength={255}
+                  className={inputClassName}
+                />
+              </Field>
+              <Field label="中文 SEO 标题">
+                <input name="zhSeoTitle" maxLength={255} className={inputClassName} />
+              </Field>
+              <Field label="中文 SEO 描述">
+                <textarea
+                  name="zhSeoDescription"
+                  maxLength={500}
+                  className={`${textareaClassName} min-h-28`}
+                />
+              </Field>
+            </section>
+            <section className="grid gap-4 rounded-lg border border-slate-200 p-4">
+              <h3 className="text-sm font-semibold text-slate-950">English</h3>
+              <Field label="English alt text">
+                <input
+                  name="enAltText"
+                  value={enAltText}
+                  onChange={(event) => setEnAltText(event.target.value)}
+                  maxLength={255}
+                  className={inputClassName}
+                />
+              </Field>
+              <Field label="English SEO title">
+                <input name="enSeoTitle" maxLength={255} className={inputClassName} />
+              </Field>
+              <Field label="English SEO description">
+                <textarea
+                  name="enSeoDescription"
+                  maxLength={500}
+                  className={`${textareaClassName} min-h-28`}
+                />
+              </Field>
+            </section>
+          </div>
           <Field label="图片说明">
             <textarea
               name="caption"

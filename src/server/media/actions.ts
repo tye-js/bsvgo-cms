@@ -34,7 +34,13 @@ export async function createMediaAssetAction(
   const parsed = mediaAssetSchema.safeParse({
     url: stringValue(formData, "url"),
     altText: stringValue(formData, "altText"),
-    caption: stringValue(formData, "caption")
+    caption: stringValue(formData, "caption"),
+    zhAltText: stringValue(formData, "zhAltText"),
+    enAltText: stringValue(formData, "enAltText"),
+    zhSeoTitle: stringValue(formData, "zhSeoTitle"),
+    zhSeoDescription: stringValue(formData, "zhSeoDescription"),
+    enSeoTitle: stringValue(formData, "enSeoTitle"),
+    enSeoDescription: stringValue(formData, "enSeoDescription")
   });
 
   if (!parsed.success) {
@@ -45,11 +51,74 @@ export async function createMediaAssetAction(
     url: parsed.data.url,
     altText: parsed.data.altText ?? "",
     caption: parsed.data.caption,
+    zhAltText: parsed.data.zhAltText,
+    enAltText: parsed.data.enAltText,
+    zhSeoTitle: parsed.data.zhSeoTitle,
+    zhSeoDescription: parsed.data.zhSeoDescription,
+    enSeoTitle: parsed.data.enSeoTitle,
+    enSeoDescription: parsed.data.enSeoDescription,
     userId: user.id
   });
 
   revalidatePath("/media");
   redirect("/media");
+}
+
+export async function updateMediaAssetMetadataAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  await requireContentEditor();
+  const id = stringValue(formData, "id");
+  const parsed = mediaAssetSchema.omit({ url: true }).safeParse({
+    altText: stringValue(formData, "altText"),
+    caption: stringValue(formData, "caption"),
+    zhAltText: stringValue(formData, "zhAltText"),
+    enAltText: stringValue(formData, "enAltText"),
+    zhSeoTitle: stringValue(formData, "zhSeoTitle"),
+    zhSeoDescription: stringValue(formData, "zhSeoDescription"),
+    enSeoTitle: stringValue(formData, "enSeoTitle"),
+    enSeoDescription: stringValue(formData, "enSeoDescription")
+  });
+
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "媒体 SEO 信息无效" };
+  }
+  const asset = await getMediaAsset(id);
+  if (!asset) {
+    return { error: "媒体资源不存在或已删除。" };
+  }
+
+  const zhAltText = parsed.data.zhAltText ?? "";
+  const enAltText = parsed.data.enAltText ?? "";
+  const altText = zhAltText || enAltText || parsed.data.altText || asset.altText;
+  const zhSeoDescription = parsed.data.zhSeoDescription ?? "";
+  const enSeoDescription = parsed.data.enSeoDescription ?? "";
+
+  await db
+    .update(mediaAssets)
+    .set({
+      altText,
+      caption: parsed.data.caption ?? "",
+      zhAltText,
+      enAltText,
+      zhSeoTitle: parsed.data.zhSeoTitle ?? "",
+      zhSeoDescription,
+      enSeoTitle: parsed.data.enSeoTitle ?? "",
+      enSeoDescription,
+      metadata: {
+        ...(asset.metadata ?? {}),
+        seoSummary: zhSeoDescription || enSeoDescription,
+        manuallyEdited: true,
+        editedAt: new Date().toISOString()
+      },
+      updatedAt: new Date()
+    })
+    .where(and(eq(mediaAssets.id, id), isNull(mediaAssets.deletedAt)));
+
+  revalidatePath("/media");
+  revalidatePath(`/media/${id}`);
+  return { success: "媒体 SEO 信息已保存。" };
 }
 
 export async function deleteMediaAssetAction(formData: FormData) {

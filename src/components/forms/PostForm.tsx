@@ -27,6 +27,12 @@ type MediaAssetOption = {
   url: string;
   altText: string;
   caption: string;
+  zhAltText: string;
+  enAltText: string;
+  zhSeoTitle: string;
+  zhSeoDescription: string;
+  enSeoTitle: string;
+  enSeoDescription: string;
   storageProvider: string;
   width: number | null;
   height: number | null;

@@ -115,6 +115,12 @@ type MediaMetadataInput = {
   height?: number | null;
   currentAltText?: string;
   currentCaption?: string;
+  currentZhAltText?: string;
+  currentEnAltText?: string;
+  currentZhSeoTitle?: string;
+  currentZhSeoDescription?: string;
+  currentEnSeoTitle?: string;
+  currentEnSeoDescription?: string;
 };
 
 export type CoverImageCategory = "blockchain" | "ai" | "infrastructure";
@@ -127,7 +133,12 @@ export type CoverImageGenerationInput = {
 };
 
 export type MediaMetadataOutput = {
-  altText: string;
+  zhAltText: string;
+  enAltText: string;
+  zhSeoTitle: string;
+  zhSeoDescription: string;
+  enSeoTitle: string;
+  enSeoDescription: string;
   caption: string;
   seoSummary: string;
 };
@@ -488,9 +499,17 @@ function parseMediaMetadata(payload: unknown): MediaMetadataOutput {
 
   const parsed = JSON.parse(text) as Partial<MediaMetadataOutput>;
   return {
-    altText: clean(parsed.altText, 255),
+    zhAltText: clean(parsed.zhAltText, 255),
+    enAltText: clean(parsed.enAltText, 255),
+    zhSeoTitle: clean(parsed.zhSeoTitle, 255),
+    zhSeoDescription: clean(parsed.zhSeoDescription, 500),
+    enSeoTitle: clean(parsed.enSeoTitle, 255),
+    enSeoDescription: clean(parsed.enSeoDescription, 500),
     caption: clean(parsed.caption, 500),
-    seoSummary: clean(parsed.seoSummary, 500)
+    seoSummary: clean(
+      parsed.seoSummary || parsed.zhSeoDescription || parsed.enSeoDescription,
+      500
+    )
   };
 }
 
@@ -1151,7 +1170,7 @@ export async function generateMediaMetadata(
           {
             type: "input_text",
             text:
-              "You are the BSVgo CMS media metadata editor. Generate concise, factual image alt text, a short caption, and an SEO summary for a technical blog CMS. Use only the URL, filename, dimensions, and existing metadata. Do not claim visual details that are not inferable. Prefer Chinese output for this admin UI."
+              "You are the BSVgo CMS media metadata editor. Generate concise, factual bilingual image metadata for a technical blog CMS. Use only the URL, filename, dimensions, and existing metadata. Do not claim visual details that are not inferable. Chinese fields should be natural for Chinese readers; English fields should be natural, search-friendly English."
           }
         ]
       },
@@ -1161,7 +1180,8 @@ export async function generateMediaMetadata(
           {
             type: "input_text",
             text: JSON.stringify({
-              task: "Generate image alt text, caption, and SEO summary.",
+              task:
+                "Generate bilingual image alt text and SEO metadata. Keep fields factual, concise, and suitable for article cover discovery.",
               writingStyle: stylePayload(settings),
               image: {
                 url: input.url,
@@ -1169,7 +1189,13 @@ export async function generateMediaMetadata(
                 width: input.width ?? null,
                 height: input.height ?? null,
                 currentAltText: input.currentAltText ?? "",
-                currentCaption: input.currentCaption ?? ""
+                currentCaption: input.currentCaption ?? "",
+                currentZhAltText: input.currentZhAltText ?? "",
+                currentEnAltText: input.currentEnAltText ?? "",
+                currentZhSeoTitle: input.currentZhSeoTitle ?? "",
+                currentZhSeoDescription: input.currentZhSeoDescription ?? "",
+                currentEnSeoTitle: input.currentEnSeoTitle ?? "",
+                currentEnSeoDescription: input.currentEnSeoDescription ?? ""
               }
             })
           }
@@ -1184,21 +1210,50 @@ export async function generateMediaMetadata(
         type: "object",
         additionalProperties: false,
         properties: {
-          altText: {
+          zhAltText: {
             type: "string",
-            description: "Concise image alt text, under 125 Chinese characters."
+            description: "Chinese image alt text, factual and under 125 Chinese characters."
+          },
+          enAltText: {
+            type: "string",
+            description: "English image alt text, factual and ideally under 125 characters."
+          },
+          zhSeoTitle: {
+            type: "string",
+            description: "Chinese SEO title for this media asset."
+          },
+          zhSeoDescription: {
+            type: "string",
+            description: "Chinese SEO description for this media asset."
+          },
+          enSeoTitle: {
+            type: "string",
+            description: "English SEO title for this media asset."
+          },
+          enSeoDescription: {
+            type: "string",
+            description: "English SEO description for this media asset."
           },
           caption: {
             type: "string",
-            description: "Short image caption for a CMS media library."
+            description: "Short Chinese image caption for the CMS media library."
           },
           seoSummary: {
             type: "string",
             description:
-              "Concise SEO-oriented image summary for media discovery and article cover context."
+              "Concise Chinese summary for media discovery and article cover context."
           }
         },
-        required: ["altText", "caption", "seoSummary"]
+        required: [
+          "zhAltText",
+          "enAltText",
+          "zhSeoTitle",
+          "zhSeoDescription",
+          "enSeoTitle",
+          "enSeoDescription",
+          "caption",
+          "seoSummary"
+        ]
       }
     },
     timeoutMessage: "media metadata generation timed out."

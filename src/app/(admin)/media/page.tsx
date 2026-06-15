@@ -130,7 +130,7 @@ export default async function MediaPage({
               <tr>
                 <th className="w-12 px-5 py-3 font-medium">选择</th>
                 <th className="px-5 py-3 font-medium">预览</th>
-                <th className="px-5 py-3 font-medium">替代文本</th>
+                <th className="px-5 py-3 font-medium">替代文本 / SEO</th>
                 <th className="px-5 py-3 font-medium">来源</th>
                 <th className="px-5 py-3 font-medium">使用</th>
                 <th className="px-5 py-3 font-medium">尺寸</th>
@@ -155,7 +155,7 @@ export default async function MediaPage({
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={asset.url}
-                      alt={asset.altText}
+                      alt={asset.zhAltText || asset.altText || asset.enAltText}
                       className="h-14 w-24 rounded-md border border-slate-200 object-cover"
                     />
                   </td>
@@ -164,17 +164,21 @@ export default async function MediaPage({
                       href={`/media/${asset.id}`}
                       className="hover:text-slate-600 hover:underline"
                     >
-                      {asset.altText || asset.originalFilename || "未命名图片"}
+                      {asset.zhAltText || asset.altText || asset.originalFilename || "未命名图片"}
                     </Link>
+                    {asset.enAltText ? (
+                      <p className="mt-1 line-clamp-1 text-xs font-normal text-slate-500">
+                        EN: {asset.enAltText}
+                      </p>
+                    ) : null}
                     {asset.caption ? (
                       <p className="mt-1 line-clamp-2 text-xs font-normal text-slate-500">
                         {asset.caption}
                       </p>
                     ) : null}
-                    {typeof asset.metadata?.seoSummary === "string" &&
-                    asset.metadata.seoSummary ? (
+                    {asset.zhSeoDescription || asset.enSeoDescription ? (
                       <p className="mt-1 line-clamp-2 text-[11px] font-normal text-slate-400">
-                        SEO: {asset.metadata.seoSummary}
+                        SEO: {asset.zhSeoDescription || asset.enSeoDescription}
                       </p>
                     ) : null}
                   </td>
