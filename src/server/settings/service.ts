@@ -183,6 +183,21 @@ function imagePromptStyles(byKey: Map<string, SettingRow>) {
   };
 }
 
+function settingOrigin(value: string) {
+  try {
+    const url = new URL(value);
+    return `${url.protocol}//${url.host}`.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function canReuseApiKey(sourceBaseUrl: string, targetBaseUrl: string) {
+  const sourceOrigin = settingOrigin(sourceBaseUrl);
+  const targetOrigin = settingOrigin(targetBaseUrl);
+  return Boolean(sourceOrigin && targetOrigin && sourceOrigin === targetOrigin);
+}
+
 export async function getAiSettingsForGeneration(roleId?: string) {
   const rows = await getSettings(aiSettingKeys());
   const byKey = new Map(rows.map((row) => [row.key, row]));
@@ -243,10 +258,21 @@ export async function getImageGenerationSettings() {
     byKey.get(IMAGE_GENERATION_SETTING_KEYS.apiKey)
   ).trim();
   const fallbackApiKey = decryptIfNeeded(byKey.get(AI_SETTING_KEYS.apiKey)).trim();
-  const apiKey = imageApiKey || fallbackApiKey;
+  const apiBaseUrl =
+    decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.apiBaseUrl)).trim() ||
+    DEFAULT_IMAGE_API_BASE_URL;
+  const fallbackApiBaseUrl =
+    decryptIfNeeded(byKey.get(AI_SETTING_KEYS.apiBaseUrl)).trim() ||
+    DEFAULT_AI_API_BASE_URL;
+  const canReuseFallbackApiKey = canReuseApiKey(fallbackApiBaseUrl, apiBaseUrl);
+  const apiKey = imageApiKey || (canReuseFallbackApiKey ? fallbackApiKey : "");
 
   if (!apiKey) {
-    throw new Error("Image generation API key is not configured.");
+    throw new Error(
+      canReuseFallbackApiKey
+        ? "Image generation API key is not configured."
+        : "Image generation API key is not configured for this image provider. Configure a dedicated image API key because the text AI provider is different from the image provider."
+    );
   }
 
   const timeoutValue = Number(
@@ -255,9 +281,7 @@ export async function getImageGenerationSettings() {
 
   return {
     apiKey,
-    apiBaseUrl:
-      decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.apiBaseUrl)).trim() ||
-      DEFAULT_IMAGE_API_BASE_URL,
+    apiBaseUrl,
     model:
       decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.model)).trim() ||
       DEFAULT_IMAGE_MODEL,
@@ -335,6 +359,7 @@ export async function getSettingsPageData() {
     decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.timeoutMs)).trim() ||
     String(DEFAULT_IMAGE_TIMEOUT_MS);
   const promptStyles = imagePromptStyles(byKey);
+  const canReuseTextApiKey = canReuseApiKey(apiBaseUrl, imageApiBaseUrl);
 
   const homepageSeo = {
     enTitle: (
@@ -393,6 +418,7 @@ export async function getSettingsPageData() {
     },
     imageGeneration: {
       hasApiKey: imageApiKey.length > 0,
+      canReuseTextApiKey,
       apiKeyPreview: imageApiKey
         ? `${imageApiKey.slice(0, 7)}...${imageApiKey.slice(-4)}`
         : "",

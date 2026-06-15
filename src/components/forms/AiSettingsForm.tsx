@@ -57,6 +57,7 @@ export function AiSettingsForm({
   enSeoStyle: string;
   imageGeneration: {
     hasApiKey: boolean;
+    canReuseTextApiKey: boolean;
     apiKeyPreview: string;
     apiBaseUrl: string;
     model: string;
@@ -73,6 +74,7 @@ export function AiSettingsForm({
 }) {
   const [state, formAction] = useActionState(action, {});
   const [activeTab, setActiveTab] = useState<SettingsTab>("provider");
+  const [apiKeyValue, setApiKeyValue] = useState("");
   const [apiBaseUrlValue, setApiBaseUrlValue] = useState(apiBaseUrl);
   const [modelValue, setModelValue] = useState(model);
   const [timeoutMsValue, setTimeoutMsValue] = useState(timeoutMs);
@@ -92,6 +94,7 @@ export function AiSettingsForm({
   const [imageApiBaseUrlValue, setImageApiBaseUrlValue] = useState(
     imageGeneration.apiBaseUrl
   );
+  const [imageApiKeyValue, setImageApiKeyValue] = useState("");
   const [imageModelValue, setImageModelValue] = useState(imageGeneration.model);
   const [imageSizeValue, setImageSizeValue] = useState(imageGeneration.size);
   const [imageQualityValue, setImageQualityValue] = useState(
@@ -119,6 +122,11 @@ export function AiSettingsForm({
   );
   const editingRole =
     writingRoles.find((role) => role.id === editingRoleId) ?? writingRoles[0];
+  const imageKeyStatus = imageGeneration.hasApiKey
+    ? `已单独配置（${imageGeneration.apiKeyPreview}）`
+    : imageGeneration.canReuseTextApiKey && hasApiKey
+      ? "未单独配置，将复用同供应商文本 Key"
+      : "未单独配置，请填写图片 API Key";
   const tabs: Array<{
     id: SettingsTab;
     label: string;
@@ -212,6 +220,7 @@ export function AiSettingsForm({
               {activeTabConfig.description}
             </p>
           </div>
+          <input type="hidden" name="apiKey" value={apiKeyValue} />
           <input type="hidden" name="apiBaseUrl" value={apiBaseUrlValue} />
           <input type="hidden" name="model" value={modelValue} />
           <input type="hidden" name="timeoutMs" value={timeoutMsValue} />
@@ -219,6 +228,7 @@ export function AiSettingsForm({
           <textarea className="hidden" name="writingStyle" value={writingStyleValue} readOnly />
           <textarea className="hidden" name="zhSeoStyle" value={zhSeoStyleValue} readOnly />
           <textarea className="hidden" name="enSeoStyle" value={enSeoStyleValue} readOnly />
+          <input type="hidden" name="imageApiKey" value={imageApiKeyValue} />
           <input type="hidden" name="imageApiBaseUrl" value={imageApiBaseUrlValue} />
           <input type="hidden" name="imageModel" value={imageModelValue} />
           <input type="hidden" name="imageSize" value={imageSizeValue} />
@@ -297,9 +307,10 @@ export function AiSettingsForm({
                     hint="留空会保留现有密钥。完整密钥会在服务端加密保存，不会完整显示。"
                   >
                     <input
-                      name="apiKey"
                       type="password"
                       autoComplete="off"
+                      value={apiKeyValue}
+                      onChange={(event) => setApiKeyValue(event.target.value)}
                       className={inputClassName}
                       placeholder={hasApiKey ? "保留现有密钥" : "sk-..."}
                     />
@@ -348,17 +359,14 @@ export function AiSettingsForm({
                       图片生成
                     </h3>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
-                      用于批量生成文章封面。未单独配置密钥时复用文本生成密钥。
+                      用于批量生成文章封面。只有文本与图片使用同一 API
+                      供应商时才会复用文本密钥。
                     </p>
                   </div>
                   <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
                     API Key 状态：{" "}
                     <span className="font-medium text-slate-900">
-                      {imageGeneration.hasApiKey
-                        ? `已单独配置（${imageGeneration.apiKeyPreview}）`
-                        : hasApiKey
-                          ? "未单独配置，将复用文本生成 Key"
-                          : "未配置"}
+                      {imageKeyStatus}
                     </span>
                   </div>
 
@@ -383,17 +391,20 @@ export function AiSettingsForm({
 
                   <Field
                     label="图片 API Key"
-                    hint="留空会保留现有图片生成密钥；如果从未单独配置，会复用文本生成 API Key。"
+                    hint="留空会保留现有图片生成密钥。图片供应商与文本供应商不同时必须单独填写。"
                   >
                     <input
-                      name="imageApiKey"
                       type="password"
                       autoComplete="off"
+                      value={imageApiKeyValue}
+                      onChange={(event) => setImageApiKeyValue(event.target.value)}
                       className={inputClassName}
                       placeholder={
                         imageGeneration.hasApiKey
                           ? "保留现有图片生成密钥"
-                          : "复用文本生成 Key 或填写 sk-..."
+                          : imageGeneration.canReuseTextApiKey
+                            ? "可复用同供应商文本 Key 或填写 sk-..."
+                            : "填写 OpenAI 图片 API Key"
                       }
                     />
                   </Field>
