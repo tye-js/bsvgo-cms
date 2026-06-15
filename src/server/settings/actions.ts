@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import {
   aiSettingsSchema,
   homepageSeoSchema,
+  imageGenerationSettingsSchema,
   writingStyleSchema
 } from "@/lib/validators";
 import { aiWritingRoles } from "@/lib/ai-style";
@@ -12,6 +13,7 @@ import { generateSeoSuggestion } from "@/server/ai/openai";
 import { requireContentEditor, requireRole } from "@/server/auth/session";
 import {
   saveAiSettings,
+  saveImageGenerationSettings,
   saveHomepageSeoSettings
 } from "@/server/settings/service";
 
@@ -47,12 +49,28 @@ export async function updateAiSettingsAction(
       ])
     )
   });
+  const parsedImageGeneration = imageGenerationSettingsSchema.safeParse({
+    apiKey: stringValue(formData, "imageApiKey"),
+    apiBaseUrl: stringValue(formData, "imageApiBaseUrl"),
+    model: stringValue(formData, "imageModel"),
+    size: stringValue(formData, "imageSize"),
+    quality: stringValue(formData, "imageQuality"),
+    outputFormat: stringValue(formData, "imageOutputFormat"),
+    timeoutMs: stringValue(formData, "imageTimeoutMs"),
+    promptStyle: stringValue(formData, "imagePromptStyle")
+  });
 
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "AI 设置无效" };
   }
   if (!parsedStyle.success) {
     return { error: parsedStyle.error.issues[0]?.message ?? "AI 写作风格无效" };
+  }
+  if (!parsedImageGeneration.success) {
+    return {
+      error:
+        parsedImageGeneration.error.issues[0]?.message ?? "AI 图片生成设置无效"
+    };
   }
 
   await saveAiSettings({
@@ -65,6 +83,17 @@ export async function updateAiSettingsAction(
     writingRoleStyles: parsedStyle.data.writingRoleStyles,
     zhSeoStyle: parsedStyle.data.zhSeoStyle,
     enSeoStyle: parsedStyle.data.enSeoStyle,
+    userId: user.id
+  });
+  await saveImageGenerationSettings({
+    apiKey: parsedImageGeneration.data.apiKey,
+    apiBaseUrl: parsedImageGeneration.data.apiBaseUrl,
+    model: parsedImageGeneration.data.model,
+    size: parsedImageGeneration.data.size,
+    quality: parsedImageGeneration.data.quality,
+    outputFormat: parsedImageGeneration.data.outputFormat,
+    timeoutMs: parsedImageGeneration.data.timeoutMs,
+    promptStyle: parsedImageGeneration.data.promptStyle,
     userId: user.id
   });
 

@@ -25,7 +25,8 @@ export type AiJobType =
   | "post_draft_translate"
   | "post_draft_metadata"
   | "media_metadata"
-  | "bulk_post_seo";
+  | "bulk_post_seo"
+  | "bulk_post_cover_images";
 export type AiJobStatus = "queued" | "running" | "succeeded" | "failed";
 export type AnalyticsEventName =
   | "page_view"
@@ -131,7 +132,7 @@ export const aiJobs = pgTable(
     ),
     typeCheck: check(
       "ai_jobs_type_check",
-      sql`${table.type} in ('post_draft_rewrite', 'post_draft_translate', 'post_draft_metadata', 'media_metadata', 'bulk_post_seo')`
+      sql`${table.type} in ('post_draft_rewrite', 'post_draft_translate', 'post_draft_metadata', 'media_metadata', 'bulk_post_seo', 'bulk_post_cover_images')`
     ),
     statusCheck: check(
       "ai_jobs_status_check",

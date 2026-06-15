@@ -8,7 +8,7 @@ import { mediaAssetSchema } from "@/lib/validators";
 import { createAiJob } from "@/server/ai/jobs";
 import { requireContentEditor } from "@/server/auth/session";
 import { db } from "@/server/db";
-import { mediaAssets } from "@/server/db/schema";
+import { mediaAssets, posts } from "@/server/db/schema";
 import {
   getMediaAsset,
   getUnusedMediaAssetIds,
@@ -125,4 +125,41 @@ export async function generateMediaMetadataAction(
   });
 
   return { success: "图片 SEO 任务已提交。", jobId: job.id };
+}
+
+export async function bulkGeneratePostCoverImagesAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const user = await requireContentEditor();
+  const requestedIds = formData.getAll("postIds").map(String).filter(Boolean);
+  const overwriteExisting = stringValue(formData, "overwriteExisting") === "on";
+  const uniqueIds = Array.from(new Set(requestedIds)).slice(0, 10);
+
+  if (!uniqueIds.length) {
+    return { error: "请选择需要生成封面的文章。" };
+  }
+
+  const rows = await db
+    .select({ id: posts.id })
+    .from(posts)
+    .where(and(inArray(posts.id, uniqueIds), isNull(posts.deletedAt)));
+
+  if (!rows.length) {
+    return { error: "没有找到可生成封面的文章。" };
+  }
+
+  const job = await createAiJob({
+    type: "bulk_post_cover_images",
+    input: {
+      postIds: rows.map((row) => row.id),
+      overwriteExisting
+    },
+    userId: user.id
+  });
+
+  return {
+    success: `已提交 ${rows.length} 篇文章的封面生成任务。`,
+    jobId: job.id
+  };
 }

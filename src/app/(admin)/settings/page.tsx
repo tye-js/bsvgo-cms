@@ -49,6 +49,7 @@ export default async function SettingsPage() {
             writingRoles={settings.ai.writingRoles}
             zhSeoStyle={settings.ai.zhSeoStyle}
             enSeoStyle={settings.ai.enSeoStyle}
+            imageGeneration={settings.imageGeneration}
           />
         </section>
       ) : null}

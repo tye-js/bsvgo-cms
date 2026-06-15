@@ -1,7 +1,10 @@
 import "server-only";
 
 import type { AiWritingRoleId } from "@/lib/ai-style";
-import { getAiSettingsForGeneration } from "@/server/settings/service";
+import {
+  getAiSettingsForGeneration,
+  getImageGenerationSettings
+} from "@/server/settings/service";
 
 type EnglishPostInput = {
   writingRole?: AiWritingRoleId;
@@ -114,10 +117,25 @@ type MediaMetadataInput = {
   currentCaption?: string;
 };
 
+export type CoverImageGenerationInput = {
+  title: string;
+  excerpt?: string;
+  content?: string;
+  category?: string;
+  tags?: string[];
+};
+
 export type MediaMetadataOutput = {
   altText: string;
   caption: string;
   seoSummary: string;
+};
+
+export type GeneratedCoverImage = {
+  buffer: Buffer;
+  mimeType: string;
+  prompt: string;
+  model: string;
 };
 
 type ResponsesJsonSchema = {
@@ -194,6 +212,14 @@ function chatCompletionsUrl(apiBaseUrl: string) {
     : `${normalized}/v1/chat/completions`;
 }
 
+function imageGenerationsUrl(apiBaseUrl: string) {
+  const normalized = apiBaseUrl.trim().replace(/\/+$/, "");
+  if (normalized.endsWith("/images/generations")) return normalized;
+  return normalized.endsWith("/v1")
+    ? `${normalized}/images/generations`
+    : `${normalized}/v1/images/generations`;
+}
+
 function isResponsesProvider(apiBaseUrl: string) {
   return apiBaseUrl.includes("api.openai.com") || apiBaseUrl.endsWith("/responses");
 }
@@ -201,6 +227,33 @@ function isResponsesProvider(apiBaseUrl: string) {
 function providerLabel(apiBaseUrl: string) {
   if (apiBaseUrl.includes("deepseek.com")) return "DeepSeek";
   return apiBaseUrl.includes("api.openai.com") ? "OpenAI" : "AI provider";
+}
+
+function imageMimeType(outputFormat: string) {
+  if (outputFormat === "jpeg") return "image/jpeg";
+  if (outputFormat === "webp") return "image/webp";
+  return "image/png";
+}
+
+function buildCoverImagePrompt(
+  input: CoverImageGenerationInput,
+  promptStyle: string
+) {
+  return [
+    promptStyle,
+    "",
+    "Create one original blog cover image for this article.",
+    "Do not include readable text, logos, watermarks, UI screenshots, price charts, or celebrity/person likenesses.",
+    "Keep the result suitable for a professional technical publication.",
+    "",
+    `Article title: ${input.title}`,
+    input.excerpt ? `Article excerpt: ${input.excerpt}` : "",
+    input.category ? `Category: ${input.category}` : "",
+    input.tags?.length ? `Tags: ${input.tags.join(", ")}` : "",
+    input.content ? `Article context: ${input.content.slice(0, 1200)}` : ""
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function outputText(payload: unknown) {
@@ -1152,4 +1205,65 @@ export async function generateMediaMetadata(
   });
 
   return parseMediaMetadata(payload);
+}
+
+export async function generatePostCoverImage(
+  input: CoverImageGenerationInput
+): Promise<GeneratedCoverImage> {
+  const settings = await getImageGenerationSettings();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), settings.timeoutMs);
+  const prompt = buildCoverImagePrompt(input, settings.promptStyle);
+
+  try {
+    const response = await fetch(imageGenerationsUrl(settings.apiBaseUrl), {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${settings.apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: settings.model,
+        prompt,
+        n: 1,
+        size: settings.size,
+        quality: settings.quality,
+        output_format: settings.outputFormat,
+        response_format: "b64_json"
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `${providerLabel(settings.apiBaseUrl)} image generation failed: ${response.status} ${errorText}`
+      );
+    }
+
+    const payload = (await response.json()) as {
+      data?: Array<{
+        b64_json?: string;
+        revised_prompt?: string;
+      }>;
+    };
+    const b64Json = payload.data?.[0]?.b64_json;
+    if (!b64Json) {
+      throw new Error("Image generation provider did not return image data.");
+    }
+
+    return {
+      buffer: Buffer.from(b64Json, "base64"),
+      mimeType: imageMimeType(settings.outputFormat),
+      prompt: payload.data?.[0]?.revised_prompt || prompt,
+      model: settings.model
+    };
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`${providerLabel(settings.apiBaseUrl)} image generation timed out.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }

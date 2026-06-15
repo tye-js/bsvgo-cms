@@ -107,6 +107,24 @@ export async function getMediaAssetOptions(limit = 80) {
     .limit(limit);
 }
 
+export async function getPostCoverGenerationOptions(limit = 50) {
+  return db
+    .select({
+      id: posts.id,
+      slug: posts.slug,
+      status: posts.status,
+      coverImage: posts.coverImage,
+      updatedAt: posts.updatedAt,
+      title: sql<string>`coalesce(nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'zh'), ''), nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'en'), ''), ${posts.slug})`
+    })
+    .from(posts)
+    .leftJoin(postTranslations, eq(postTranslations.postId, posts.id))
+    .where(isNull(posts.deletedAt))
+    .groupBy(posts.id)
+    .orderBy(desc(posts.updatedAt))
+    .limit(limit);
+}
+
 export async function getMediaAsset(id: string) {
   const [asset] = await db
     .select()

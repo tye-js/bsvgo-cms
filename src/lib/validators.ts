@@ -131,6 +131,36 @@ export const aiSettingsSchema = z.object({
     .max(180000, "超时时间不能超过 180000 毫秒")
 });
 
+export const imageGenerationSettingsSchema = z.object({
+  apiKey: z.string().trim().optional(),
+  apiBaseUrl: z
+    .string()
+    .trim()
+    .refine((value) => {
+      if (!value) return true;
+      try {
+        const url = new URL(value);
+        return url.protocol === "http:" || url.protocol === "https:";
+      } catch {
+        return false;
+      }
+    }, "请输入有效的图片生成 API Base URL"),
+  model: z.string().trim().min(1, "图片生成模型为必填项").max(120),
+  size: z.enum(["auto", "1024x1024", "1024x1536", "1536x1024"]),
+  quality: z.enum(["auto", "low", "medium", "high"]),
+  outputFormat: z.enum(["png", "jpeg", "webp"]),
+  timeoutMs: z.coerce
+    .number()
+    .int()
+    .min(10000, "图片生成超时时间至少为 10000 毫秒")
+    .max(300000, "图片生成超时时间不能超过 300000 毫秒"),
+  promptStyle: z
+    .string()
+    .trim()
+    .max(2000, "图片生成提示词风格不能超过 2000 个字符")
+    .optional()
+});
+
 export const writingStyleSchema = z.object({
   writingStyle: z.string().trim().max(2000, "写作风格不能超过 2000 个字符").optional(),
   defaultWritingRole: z.enum(aiWritingRoleIds),

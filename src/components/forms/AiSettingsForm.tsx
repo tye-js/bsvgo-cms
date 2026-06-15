@@ -13,7 +13,7 @@ type ActionState = {
   success?: string;
 };
 
-type SettingsTab = "provider" | "writing" | "roles" | "seo";
+type SettingsTab = "provider" | "image" | "writing" | "roles" | "seo";
 
 const deepSeekBaseUrl = "https://api.deepseek.com";
 const deepSeekModel = "deepseek-v4-pro";
@@ -29,7 +29,8 @@ export function AiSettingsForm({
   defaultWritingRole,
   writingRoles,
   zhSeoStyle,
-  enSeoStyle
+  enSeoStyle,
+  imageGeneration
 }: {
   action: (
     previousState: ActionState,
@@ -53,6 +54,17 @@ export function AiSettingsForm({
   }>;
   zhSeoStyle: string;
   enSeoStyle: string;
+  imageGeneration: {
+    hasApiKey: boolean;
+    apiKeyPreview: string;
+    apiBaseUrl: string;
+    model: string;
+    size: string;
+    quality: string;
+    outputFormat: string;
+    timeoutMs: string;
+    promptStyle: string;
+  };
 }) {
   const [state, formAction] = useActionState(action, {});
   const [activeTab, setActiveTab] = useState<SettingsTab>("provider");
@@ -72,6 +84,23 @@ export function AiSettingsForm({
   );
   const [zhSeoStyleValue, setZhSeoStyleValue] = useState(zhSeoStyle);
   const [enSeoStyleValue, setEnSeoStyleValue] = useState(enSeoStyle);
+  const [imageApiBaseUrlValue, setImageApiBaseUrlValue] = useState(
+    imageGeneration.apiBaseUrl
+  );
+  const [imageModelValue, setImageModelValue] = useState(imageGeneration.model);
+  const [imageSizeValue, setImageSizeValue] = useState(imageGeneration.size);
+  const [imageQualityValue, setImageQualityValue] = useState(
+    imageGeneration.quality
+  );
+  const [imageOutputFormatValue, setImageOutputFormatValue] = useState(
+    imageGeneration.outputFormat
+  );
+  const [imageTimeoutMsValue, setImageTimeoutMsValue] = useState(
+    imageGeneration.timeoutMs
+  );
+  const [imagePromptStyleValue, setImagePromptStyleValue] = useState(
+    imageGeneration.promptStyle
+  );
   const [editingRoleId, setEditingRoleId] = useState<AiWritingRoleId>(
     defaultWritingRole as AiWritingRoleId
   );
@@ -79,6 +108,7 @@ export function AiSettingsForm({
     writingRoles.find((role) => role.id === editingRoleId) ?? writingRoles[0];
   const tabs: Array<{ id: SettingsTab; label: string }> = [
     { id: "provider", label: "模型连接" },
+    { id: "image", label: "图片生成" },
     { id: "writing", label: "写作底线" },
     { id: "roles", label: "AI 角色" },
     { id: "seo", label: "SEO 风格" }
@@ -123,6 +153,22 @@ export function AiSettingsForm({
           <textarea className="hidden" name="writingStyle" value={writingStyleValue} readOnly />
           <textarea className="hidden" name="zhSeoStyle" value={zhSeoStyleValue} readOnly />
           <textarea className="hidden" name="enSeoStyle" value={enSeoStyleValue} readOnly />
+          <input type="hidden" name="imageApiBaseUrl" value={imageApiBaseUrlValue} />
+          <input type="hidden" name="imageModel" value={imageModelValue} />
+          <input type="hidden" name="imageSize" value={imageSizeValue} />
+          <input type="hidden" name="imageQuality" value={imageQualityValue} />
+          <input
+            type="hidden"
+            name="imageOutputFormat"
+            value={imageOutputFormatValue}
+          />
+          <input type="hidden" name="imageTimeoutMs" value={imageTimeoutMsValue} />
+          <textarea
+            className="hidden"
+            name="imagePromptStyle"
+            value={imagePromptStyleValue}
+            readOnly
+          />
           {writingRoles.map((role) => (
             <textarea
               key={role.id}
@@ -206,6 +252,141 @@ export function AiSettingsForm({
                   />
                 </Field>
               </div>
+            </div>
+          ) : null}
+
+          {activeTab === "image" ? (
+            <div className="grid gap-5">
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                图片生成 API Key 状态：{" "}
+                <span className="font-medium text-slate-900">
+                  {imageGeneration.hasApiKey
+                    ? `已单独配置（${imageGeneration.apiKeyPreview}）`
+                    : hasApiKey
+                      ? "未单独配置，将复用内容 AI Key"
+                      : "未配置"}
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-sm text-slate-600">
+                  图片生成默认走 OpenAI Images API。模型名可改，后续可直接填 image2 / gpt-image-2 这类模型。
+                </p>
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+                  onClick={() => {
+                    setImageApiBaseUrlValue("https://api.openai.com/v1");
+                    setImageModelValue("gpt-image-2");
+                    setImageSizeValue("1536x1024");
+                    setImageQualityValue("auto");
+                    setImageOutputFormatValue("png");
+                  }}
+                >
+                  使用 OpenAI 生图
+                </button>
+              </div>
+
+              <Field
+                label="图片生成 API Key"
+                hint="留空会保留现有图片生成密钥；如果从未单独配置，会复用内容 AI 的 API Key。"
+              >
+                <input
+                  name="imageApiKey"
+                  type="password"
+                  autoComplete="off"
+                  className={inputClassName}
+                  placeholder={
+                    imageGeneration.hasApiKey ? "保留现有图片生成密钥" : "复用内容 AI Key 或填写 sk-..."
+                  }
+                />
+              </Field>
+
+              <Field label="图片生成 API Base URL">
+                <input
+                  type="url"
+                  value={imageApiBaseUrlValue}
+                  onChange={(event) => setImageApiBaseUrlValue(event.target.value)}
+                  className={inputClassName}
+                  placeholder="https://api.openai.com/v1"
+                />
+              </Field>
+
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px]">
+                <Field label="图片生成模型">
+                  <input
+                    value={imageModelValue}
+                    onChange={(event) => setImageModelValue(event.target.value)}
+                    required
+                    className={inputClassName}
+                    placeholder="gpt-image-2"
+                  />
+                </Field>
+                <Field label="超时时间（毫秒）">
+                  <input
+                    type="number"
+                    min={10000}
+                    max={300000}
+                    step={1000}
+                    value={imageTimeoutMsValue}
+                    onChange={(event) => setImageTimeoutMsValue(event.target.value)}
+                    required
+                    className={inputClassName}
+                  />
+                </Field>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <Field label="尺寸">
+                  <select
+                    value={imageSizeValue}
+                    onChange={(event) => setImageSizeValue(event.target.value)}
+                    className={inputClassName}
+                  >
+                    <option value="auto">auto</option>
+                    <option value="1024x1024">1024x1024</option>
+                    <option value="1536x1024">1536x1024</option>
+                    <option value="1024x1536">1024x1536</option>
+                  </select>
+                </Field>
+                <Field label="质量">
+                  <select
+                    value={imageQualityValue}
+                    onChange={(event) => setImageQualityValue(event.target.value)}
+                    className={inputClassName}
+                  >
+                    <option value="auto">auto</option>
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                  </select>
+                </Field>
+                <Field label="输出格式">
+                  <select
+                    value={imageOutputFormatValue}
+                    onChange={(event) =>
+                      setImageOutputFormatValue(event.target.value)
+                    }
+                    className={inputClassName}
+                  >
+                    <option value="png">png</option>
+                    <option value="jpeg">jpeg</option>
+                    <option value="webp">webp</option>
+                  </select>
+                </Field>
+              </div>
+
+              <Field
+                label="封面生成风格"
+                hint="用于批量文章封面图生成。建议明确禁止文字、Logo、人物肖像和误导性金融暗示。"
+              >
+                <textarea
+                  value={imagePromptStyleValue}
+                  onChange={(event) => setImagePromptStyleValue(event.target.value)}
+                  maxLength={2000}
+                  className={`${textareaClassName} min-h-36`}
+                />
+              </Field>
             </div>
           ) : null}
 

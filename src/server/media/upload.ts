@@ -100,6 +100,10 @@ function safeOriginalName(name: string) {
   return path.basename(name).replace(/[^\w.\- ]+/g, "").slice(0, 255);
 }
 
+function extensionForMimeType(mimeType: string) {
+  return ALLOWED_MIME_TYPES.get(mimeType) ?? "png";
+}
+
 function variantStorageKey(originalStorageKey: string, width: number, format: string) {
   const parsed = path.parse(originalStorageKey);
   return `${parsed.dir}/${parsed.name}-${width}.${format}`;
@@ -250,6 +254,81 @@ export async function saveUploadedCoverImage({
       height: imageSize.height,
       fileSize: file.size,
       variants,
+      createdBy: userId
+    })
+    .returning({
+      id: mediaAssets.id,
+      url: mediaAssets.url,
+      altText: mediaAssets.altText
+    });
+
+  return asset;
+}
+
+export async function saveGeneratedCoverImage({
+  buffer,
+  mimeType,
+  originalFilename,
+  altText,
+  caption,
+  userId,
+  metadata,
+  publicOrigin
+}: {
+  buffer: Buffer;
+  mimeType: string;
+  originalFilename: string;
+  altText: string;
+  caption?: string;
+  userId: string;
+  metadata?: Record<string, unknown>;
+  publicOrigin?: string;
+}) {
+  if (!buffer.length) {
+    throw new Error("AI 生成的图片为空。");
+  }
+
+  const extension = extensionForMimeType(mimeType);
+  const checksum = createHash("sha256").update(buffer).digest("hex");
+  const now = new Date();
+  const year = String(now.getFullYear());
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const storageKey = `covers/${year}/${month}/${randomUUID()}.${extension}`;
+  const targetPath = safeUploadPath(storageKey);
+
+  await mkdir(path.dirname(targetPath), { recursive: true });
+  await writeFile(targetPath, buffer, { flag: "wx" });
+
+  const imageMetadata = await sharp(buffer).metadata();
+  const imageSize = {
+    width: imageMetadata.width ?? null,
+    height: imageMetadata.height ?? null
+  };
+  const url = publicUrl(storageKey, publicOrigin);
+  const variants = await generateImageVariants({
+    buffer,
+    storageKey,
+    publicOrigin,
+    width: imageSize.width,
+    height: imageSize.height
+  });
+
+  const [asset] = await db
+    .insert(mediaAssets)
+    .values({
+      url,
+      altText: altText.trim(),
+      caption: caption?.trim() ?? "",
+      storageProvider: "local",
+      storageKey,
+      originalFilename: safeOriginalName(originalFilename),
+      checksum,
+      mimeType,
+      width: imageSize.width,
+      height: imageSize.height,
+      fileSize: buffer.length,
+      variants,
+      metadata: metadata ?? {},
       createdBy: userId
     })
     .returning({

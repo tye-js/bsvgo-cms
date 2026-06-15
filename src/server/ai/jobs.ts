@@ -6,6 +6,7 @@ import {
   generateDraftMetadata,
   generateChineseDraftCore,
   generateMediaMetadata,
+  generatePostCoverImage,
   generateSeoSuggestion,
   translateDraftToEnglish,
   type ChineseDraftCoreInput,
@@ -24,12 +25,15 @@ import { db } from "@/server/db";
 import type { CurrentUser } from "@/server/auth/session";
 import {
   aiJobs,
+  categories,
+  categoryTranslations,
   mediaAssets,
   postTranslations,
   posts,
   type AiJobStatus,
   type AiJobType
 } from "@/server/db/schema";
+import { saveGeneratedCoverImage } from "@/server/media/upload";
 
 type MediaMetadataJobInput = {
   mediaAssetId: string;
@@ -43,12 +47,23 @@ type BulkPostSeoJobOutput = {
   updated: number;
 };
 
+type BulkPostCoverImagesJobInput = {
+  postIds: string[];
+  overwriteExisting?: boolean;
+  userId?: string;
+};
+
+type BulkPostCoverImagesJobOutput = {
+  generated: number;
+};
+
 type AiJobInputByType = {
   post_draft_rewrite: ChineseDraftCoreInput;
   post_draft_translate: DraftTranslationInput;
   post_draft_metadata: DraftMetadataInput;
   media_metadata: MediaMetadataJobInput;
   bulk_post_seo: BulkPostSeoJobInput;
+  bulk_post_cover_images: BulkPostCoverImagesJobInput;
 };
 
 type AiJobOutputByType = {
@@ -57,6 +72,7 @@ type AiJobOutputByType = {
   post_draft_metadata: DraftMetadataOutput;
   media_metadata: MediaMetadataOutput;
   bulk_post_seo: BulkPostSeoJobOutput;
+  bulk_post_cover_images: BulkPostCoverImagesJobOutput;
 };
 
 type SerializedJob = {
@@ -246,6 +262,96 @@ async function executeBulkPostSeoJob({
   return { updated };
 }
 
+async function executeBulkPostCoverImagesJob({
+  postIds,
+  overwriteExisting = false,
+  userId
+}: BulkPostCoverImagesJobInput): Promise<BulkPostCoverImagesJobOutput> {
+  if (!userId) {
+    throw new Error("无法确认 AI 封面任务创建人。");
+  }
+
+  const rows = await db
+    .select({
+      postId: posts.id,
+      slug: posts.slug,
+      coverImage: posts.coverImage,
+      categoryName: categoryTranslations.name,
+      locale: postTranslations.locale,
+      title: postTranslations.title,
+      excerpt: postTranslations.excerpt,
+      content: postTranslations.content
+    })
+    .from(posts)
+    .innerJoin(categories, eq(categories.id, posts.categoryId))
+    .leftJoin(
+      categoryTranslations,
+      and(
+        eq(categoryTranslations.categoryId, categories.id),
+        eq(categoryTranslations.locale, "zh")
+      )
+    )
+    .innerJoin(postTranslations, eq(postTranslations.postId, posts.id))
+    .where(and(inArray(posts.id, postIds), isNull(posts.deletedAt)));
+
+  if (!rows.length) {
+    throw new Error("没有找到可生成封面的文章。");
+  }
+
+  let generated = 0;
+
+  for (const postId of postIds) {
+    const translations = rows.filter((row) => row.postId === postId);
+    const first = translations[0];
+    if (!first) continue;
+    if (!overwriteExisting && first.coverImage) continue;
+
+    const zh = translations.find((row) => row.locale === "zh");
+    const en = translations.find((row) => row.locale === "en");
+    const source = zh ?? en;
+    if (!source?.title) continue;
+
+    const image = await generatePostCoverImage({
+      title: source.title,
+      excerpt: source.excerpt,
+      content: source.content,
+      category: first.categoryName ?? "",
+      tags: []
+    });
+    const altText = `${source.title} 文章封面`;
+    const caption = `AI 生成封面：${source.title}`;
+    const asset = await saveGeneratedCoverImage({
+      buffer: image.buffer,
+      mimeType: image.mimeType,
+      originalFilename: `${first.slug}-ai-cover`,
+      altText,
+      caption,
+      userId,
+      metadata: {
+        generatedBy: "ai",
+        generatedAt: new Date().toISOString(),
+        generationType: "post_cover",
+        prompt: image.prompt,
+        model: image.model,
+        postId
+      }
+    });
+
+    await db
+      .update(posts)
+      .set({
+        coverImage: asset.url,
+        coverImageId: asset.id,
+        updatedAt: new Date()
+      })
+      .where(and(eq(posts.id, postId), isNull(posts.deletedAt)));
+
+    generated += 1;
+  }
+
+  return { generated };
+}
+
 async function executeJob<TType extends AiJobType>(
   type: TType,
   input: AiJobInputByType[TType]
@@ -277,6 +383,12 @@ async function executeJob<TType extends AiJobType>(
     ) as Promise<AiJobOutputByType[TType]>;
   }
 
+  if (type === "bulk_post_cover_images") {
+    return executeBulkPostCoverImagesJob(
+      input as AiJobInputByType["bulk_post_cover_images"]
+    ) as Promise<AiJobOutputByType[TType]>;
+  }
+
   return generateDraftMetadata(
     input as AiJobInputByType["post_draft_metadata"]
   ) as Promise<AiJobOutputByType[TType]>;
@@ -293,7 +405,8 @@ async function runAiJob(jobId: string) {
         type: aiJobs.type,
         status: aiJobs.status,
         input: aiJobs.input,
-        attempts: aiJobs.attempts
+        attempts: aiJobs.attempts,
+        createdBy: aiJobs.createdBy
       })
       .from(aiJobs)
       .where(eq(aiJobs.id, jobId))
@@ -317,7 +430,10 @@ async function runAiJob(jobId: string) {
     try {
       const output = await executeJob(
         job.type as AiJobType,
-        toRecord(job.input) as AiJobInputByType[AiJobType]
+        {
+          ...toRecord(job.input),
+          userId: job.createdBy ?? undefined
+        } as AiJobInputByType[AiJobType]
       );
       const finishedAt = new Date();
       await db

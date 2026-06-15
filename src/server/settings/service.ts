@@ -26,6 +26,17 @@ export const AI_SETTING_KEYS = {
   enSeoStyle: "ai.openai.en_seo_style"
 } as const;
 
+export const IMAGE_GENERATION_SETTING_KEYS = {
+  apiKey: "ai.image.api_key",
+  apiBaseUrl: "ai.image.api_base_url",
+  model: "ai.image.model",
+  size: "ai.image.size",
+  quality: "ai.image.quality",
+  outputFormat: "ai.image.output_format",
+  timeoutMs: "ai.image.timeout_ms",
+  promptStyle: "ai.image.prompt_style"
+} as const;
+
 export const HOMEPAGE_SEO_SETTING_KEYS = {
   en: {
     title: "seo.home.en.title",
@@ -56,8 +67,16 @@ const LEGACY_HOMEPAGE_SEO_SETTING_KEYS = {
 export const DEFAULT_AI_API_BASE_URL = "https://api.deepseek.com";
 export const DEFAULT_AI_MODEL = "deepseek-v4-pro";
 export const DEFAULT_AI_TIMEOUT_MS = 60000;
+export const DEFAULT_IMAGE_API_BASE_URL = "https://api.openai.com/v1";
+export const DEFAULT_IMAGE_MODEL = "gpt-image-2";
+export const DEFAULT_IMAGE_SIZE = "1536x1024";
+export const DEFAULT_IMAGE_QUALITY = "auto";
+export const DEFAULT_IMAGE_OUTPUT_FORMAT = "png";
+export const DEFAULT_IMAGE_TIMEOUT_MS = 180000;
 export const DEFAULT_AI_WRITING_STYLE =
   "面向 BSVgo 技术读者，语言清晰、克制、可信。优先使用结构化小标题、短段落和 Markdown 正文，不输出 HTML。所有事实、数据、人物、时间、链接、代码、产品能力和因果判断必须来自素材或明确标注为推断；素材不足时要保守表达，不编造细节。允许适度营销，但必须具体、可验证、不过度承诺。中文正文自然专业，英文正文面向全球技术读者，避免中式直译。Slug 使用小写英文、数字和连字符，简短表达核心主题。SEO 要分别服务中文入口和英文入口，提炼真实关键词，不堆砌。";
+export const DEFAULT_IMAGE_PROMPT_STYLE =
+  "为 BSVgo 技术博客生成原创封面图。画面应专业、清晰、现代，适合区块链、BSV、AI、开发者工具和技术文章。避免文字、Logo、人物肖像、夸张币价视觉和误导性金融暗示。构图适合横向文章封面，留出标题覆盖空间。";
 
 function roleStyleSettingKey(roleId: AiWritingRoleId) {
   return `ai.openai.writing_role.${roleId}.style`;
@@ -92,6 +111,10 @@ function aiSettingKeys() {
     ...Object.values(AI_SETTING_KEYS),
     ...aiWritingRoles.map((role) => roleStyleSettingKey(role.id))
   ];
+}
+
+function imageGenerationSettingKeys() {
+  return Object.values(IMAGE_GENERATION_SETTING_KEYS);
 }
 
 export async function getAiSettingsForGeneration(roleId?: string) {
@@ -144,9 +167,58 @@ export async function getAiSettingsForGeneration(roleId?: string) {
   };
 }
 
+export async function getImageGenerationSettings() {
+  const rows = await getSettings([
+    ...Object.values(AI_SETTING_KEYS),
+    ...imageGenerationSettingKeys()
+  ]);
+  const byKey = new Map(rows.map((row) => [row.key, row]));
+  const imageApiKey = decryptIfNeeded(
+    byKey.get(IMAGE_GENERATION_SETTING_KEYS.apiKey)
+  ).trim();
+  const fallbackApiKey = decryptIfNeeded(byKey.get(AI_SETTING_KEYS.apiKey)).trim();
+  const apiKey = imageApiKey || fallbackApiKey;
+
+  if (!apiKey) {
+    throw new Error("Image generation API key is not configured.");
+  }
+
+  const timeoutValue = Number(
+    decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.timeoutMs)).trim()
+  );
+
+  return {
+    apiKey,
+    apiBaseUrl:
+      decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.apiBaseUrl)).trim() ||
+      DEFAULT_IMAGE_API_BASE_URL,
+    model:
+      decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.model)).trim() ||
+      DEFAULT_IMAGE_MODEL,
+    size:
+      decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.size)).trim() ||
+      DEFAULT_IMAGE_SIZE,
+    quality:
+      decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.quality)).trim() ||
+      DEFAULT_IMAGE_QUALITY,
+    outputFormat:
+      decryptIfNeeded(
+        byKey.get(IMAGE_GENERATION_SETTING_KEYS.outputFormat)
+      ).trim() || DEFAULT_IMAGE_OUTPUT_FORMAT,
+    promptStyle:
+      decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.promptStyle)).trim() ||
+      DEFAULT_IMAGE_PROMPT_STYLE,
+    timeoutMs:
+      Number.isFinite(timeoutValue) && timeoutValue > 0
+        ? timeoutValue
+        : DEFAULT_IMAGE_TIMEOUT_MS
+  };
+}
+
 export async function getSettingsPageData() {
   const rows = await getSettings([
     ...aiSettingKeys(),
+    ...imageGenerationSettingKeys(),
     ...homepageSeoSettingKeys()
   ]);
   const byKey = new Map(rows.map((row) => [row.key, row]));
@@ -177,6 +249,30 @@ export async function getSettingsPageData() {
       decryptIfNeeded(byKey.get(roleStyleSettingKey(role.id))).trim() ||
       role.defaultStyle
   }));
+  const imageApiKey = decryptIfNeeded(
+    byKey.get(IMAGE_GENERATION_SETTING_KEYS.apiKey)
+  ).trim();
+  const imageApiBaseUrl =
+    decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.apiBaseUrl)).trim() ||
+    DEFAULT_IMAGE_API_BASE_URL;
+  const imageModel =
+    decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.model)).trim() ||
+    DEFAULT_IMAGE_MODEL;
+  const imageSize =
+    decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.size)).trim() ||
+    DEFAULT_IMAGE_SIZE;
+  const imageQuality =
+    decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.quality)).trim() ||
+    DEFAULT_IMAGE_QUALITY;
+  const imageOutputFormat =
+    decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.outputFormat)).trim() ||
+    DEFAULT_IMAGE_OUTPUT_FORMAT;
+  const imageTimeoutValue =
+    decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.timeoutMs)).trim() ||
+    String(DEFAULT_IMAGE_TIMEOUT_MS);
+  const imagePromptStyle =
+    decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.promptStyle)).trim() ||
+    DEFAULT_IMAGE_PROMPT_STYLE;
 
   const homepageSeo = {
     enTitle: (
@@ -232,6 +328,19 @@ export async function getSettingsPageData() {
       writingRoles,
       zhSeoStyle,
       enSeoStyle
+    },
+    imageGeneration: {
+      hasApiKey: imageApiKey.length > 0,
+      apiKeyPreview: imageApiKey
+        ? `${imageApiKey.slice(0, 7)}...${imageApiKey.slice(-4)}`
+        : "",
+      apiBaseUrl: imageApiBaseUrl,
+      model: imageModel,
+      size: imageSize,
+      quality: imageQuality,
+      outputFormat: imageOutputFormat,
+      timeoutMs: imageTimeoutValue,
+      promptStyle: imagePromptStyle
     },
     homepageSeo
   };
@@ -430,6 +539,102 @@ export async function saveAiSettings({
   if (apiKey?.trim()) {
     values.push({
       key: AI_SETTING_KEYS.apiKey,
+      value: encryptSettingValue(apiKey.trim()),
+      encrypted: true
+    });
+  }
+
+  await db.transaction(async (tx) => {
+    for (const value of values) {
+      await tx
+        .insert(appSettings)
+        .values({
+          key: value.key,
+          value: value.value,
+          encrypted: value.encrypted,
+          updatedBy: userId,
+          updatedAt: now
+        })
+        .onConflictDoUpdate({
+          target: appSettings.key,
+          set: {
+            value: value.value,
+            encrypted: value.encrypted,
+            updatedBy: userId,
+            updatedAt: now
+          }
+        });
+    }
+  });
+}
+
+export async function saveImageGenerationSettings({
+  apiKey,
+  apiBaseUrl,
+  model,
+  size,
+  quality,
+  outputFormat,
+  timeoutMs,
+  promptStyle,
+  userId
+}: {
+  apiKey?: string;
+  apiBaseUrl?: string;
+  model: string;
+  size: string;
+  quality: string;
+  outputFormat: string;
+  timeoutMs: number;
+  promptStyle?: string;
+  userId: string;
+}) {
+  const now = new Date();
+  const values: Array<{
+    key: string;
+    value: string;
+    encrypted: boolean;
+  }> = [
+    {
+      key: IMAGE_GENERATION_SETTING_KEYS.apiBaseUrl,
+      value: apiBaseUrl?.trim() || DEFAULT_IMAGE_API_BASE_URL,
+      encrypted: false
+    },
+    {
+      key: IMAGE_GENERATION_SETTING_KEYS.model,
+      value: model.trim() || DEFAULT_IMAGE_MODEL,
+      encrypted: false
+    },
+    {
+      key: IMAGE_GENERATION_SETTING_KEYS.size,
+      value: size || DEFAULT_IMAGE_SIZE,
+      encrypted: false
+    },
+    {
+      key: IMAGE_GENERATION_SETTING_KEYS.quality,
+      value: quality || DEFAULT_IMAGE_QUALITY,
+      encrypted: false
+    },
+    {
+      key: IMAGE_GENERATION_SETTING_KEYS.outputFormat,
+      value: outputFormat || DEFAULT_IMAGE_OUTPUT_FORMAT,
+      encrypted: false
+    },
+    {
+      key: IMAGE_GENERATION_SETTING_KEYS.timeoutMs,
+      value: String(timeoutMs),
+      encrypted: false
+    },
+    {
+      key: IMAGE_GENERATION_SETTING_KEYS.promptStyle,
+      value: promptStyle?.trim() || DEFAULT_IMAGE_PROMPT_STYLE,
+      encrypted: false
+    }
+  ];
+
+  if (apiKey?.trim()) {
+    values.push({
+      key: IMAGE_GENERATION_SETTING_KEYS.apiKey,
       value: encryptSettingValue(apiKey.trim()),
       encrypted: true
     });

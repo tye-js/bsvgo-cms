@@ -5,14 +5,19 @@ import { ButtonLink, buttonClassName } from "@/components/admin/Button";
 import { CopyButton } from "@/components/admin/CopyButton";
 import { inputClassName } from "@/components/admin/Field";
 import { AiJobSubmitButton } from "@/components/forms/AiJobSubmitButton";
+import { BulkCoverImageGenerationForm } from "@/components/forms/BulkCoverImageGenerationForm";
 import { ConfirmSubmitButton } from "@/components/forms/ConfirmSubmitButton";
 import { formatDate } from "@/lib/utils";
 import {
+  bulkGeneratePostCoverImagesAction,
   deleteMediaAssetAction,
   deleteUnusedMediaAssetsAction,
   generateMediaMetadataAction
 } from "@/server/media/actions";
-import { listMediaAssets } from "@/server/media/service";
+import {
+  getPostCoverGenerationOptions,
+  listMediaAssets
+} from "@/server/media/service";
 
 function formatFileSize(size: number | null) {
   if (!size) return "-";
@@ -44,12 +49,15 @@ export default async function MediaPage({
     : "all";
   const requestedPage = Number(params.page ?? "1");
   const page = Number.isFinite(requestedPage) ? Math.max(requestedPage, 1) : 1;
-  const { rows: assets, total, pageSize } = await listMediaAssets({
-    query: params.q,
-    provider,
-    usage,
-    page
-  });
+  const [{ rows: assets, total, pageSize }, coverPostOptions] = await Promise.all([
+    listMediaAssets({
+      query: params.q,
+      provider,
+      usage,
+      page
+    }),
+    getPostCoverGenerationOptions()
+  ]);
   const pageCount = Math.max(Math.ceil(total / pageSize), 1);
 
   const preserveParams = (nextPage: number) => {
@@ -98,6 +106,11 @@ export default async function MediaPage({
           搜索
         </button>
       </form>
+
+      <BulkCoverImageGenerationForm
+        action={bulkGeneratePostCoverImagesAction}
+        posts={coverPostOptions}
+      />
 
       <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <form id="bulk-delete-unused-media" action={deleteUnusedMediaAssetsAction} />
