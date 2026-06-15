@@ -133,6 +133,8 @@ type AiJobResponse<TOutput extends object> = {
   job: AiJob<TOutput>;
 };
 
+const MAX_MARKDOWN_SOURCE_BYTES = 1024 * 1024;
+
 function structuredDataText(value: Record<string, unknown> | undefined) {
   if (!value || Object.keys(value).length === 0) return "{}";
   return JSON.stringify(value, null, 2);
@@ -323,6 +325,8 @@ export function PostForm({
   const zh = getTranslation(post, "zh");
   const submitTimeoutMs = generateEnglishFromChinese ? 30000 : undefined;
   const [rawDraftInput, setRawDraftInput] = useState("");
+  const [sourceFileName, setSourceFileName] = useState("");
+  const [sourceFileError, setSourceFileError] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [writingRole, setWritingRole] = useState<AiWritingRoleId>(
     post?.aiAuthorRole ?? defaultWritingRole
@@ -391,6 +395,49 @@ export function PostForm({
     } catch {
       setTimeZone("");
     }
+  }
+
+  function importMarkdownFile(file: File | undefined) {
+    setSourceFileError("");
+
+    if (!file) return;
+
+    const lowerName = file.name.toLowerCase();
+    const isMarkdown =
+      lowerName.endsWith(".md") || lowerName.endsWith(".markdown");
+
+    if (!isMarkdown) {
+      setSourceFileError("请上传 .md 或 .markdown 格式的 Markdown 文件。");
+      return;
+    }
+
+    if (file.size <= 0) {
+      setSourceFileError("Markdown 文件为空，请换一个文件。");
+      return;
+    }
+
+    if (file.size > MAX_MARKDOWN_SOURCE_BYTES) {
+      setSourceFileError("Markdown 文件不能超过 1MB。");
+      return;
+    }
+
+    void file
+      .text()
+      .then((content) => {
+        const trimmedContent = content.trim();
+        if (!trimmedContent) {
+          setSourceFileError("Markdown 文件没有可读取的正文。");
+          return;
+        }
+
+        setRawDraftInput(trimmedContent);
+        setSourceFileName(file.name);
+        setDraftRewriteError("");
+        setDraftRewriteSuccess("");
+      })
+      .catch(() => {
+        setSourceFileError("Markdown 文件读取失败，请重新选择。");
+      });
   }
 
   function rewriteDraft() {
@@ -610,6 +657,28 @@ export function PostForm({
                   placeholder="https://..."
                 />
               </Field>
+              <Field
+                label="Markdown 素材文件"
+                hint="可选。支持 .md 和 .markdown，读取后会填入下方素材框，可继续编辑。"
+              >
+                <input
+                  type="file"
+                  accept=".md,.markdown,text/markdown,text/plain"
+                  disabled={aiGenerationPending}
+                  className={inputClassName}
+                  onChange={(event) => importMarkdownFile(event.target.files?.[0])}
+                />
+              </Field>
+              {sourceFileName ? (
+                <p className="text-xs text-slate-500">
+                  已导入：{sourceFileName}
+                </p>
+              ) : null}
+              {sourceFileError ? (
+                <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                  {sourceFileError}
+                </p>
+              ) : null}
               <Field label="未整理素材">
                 <textarea
                   value={rawDraftInput}
