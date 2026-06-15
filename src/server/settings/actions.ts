@@ -57,7 +57,12 @@ export async function updateAiSettingsAction(
     quality: stringValue(formData, "imageQuality"),
     outputFormat: stringValue(formData, "imageOutputFormat"),
     timeoutMs: stringValue(formData, "imageTimeoutMs"),
-    promptStyle: stringValue(formData, "imagePromptStyle")
+    blockchainPromptStyle: stringValue(formData, "imageBlockchainPromptStyle"),
+    aiPromptStyle: stringValue(formData, "imageAiPromptStyle"),
+    infrastructurePromptStyle: stringValue(
+      formData,
+      "imageInfrastructurePromptStyle"
+    )
   });
 
   if (!parsed.success) {
@@ -93,7 +98,10 @@ export async function updateAiSettingsAction(
     quality: parsedImageGeneration.data.quality,
     outputFormat: parsedImageGeneration.data.outputFormat,
     timeoutMs: parsedImageGeneration.data.timeoutMs,
-    promptStyle: parsedImageGeneration.data.promptStyle,
+    blockchainPromptStyle: parsedImageGeneration.data.blockchainPromptStyle,
+    aiPromptStyle: parsedImageGeneration.data.aiPromptStyle,
+    infrastructurePromptStyle:
+      parsedImageGeneration.data.infrastructurePromptStyle,
     userId: user.id
   });
 

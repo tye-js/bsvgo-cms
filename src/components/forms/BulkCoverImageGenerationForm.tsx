@@ -18,6 +18,8 @@ type PostOption = {
   slug: string;
   status: string;
   coverImage: string;
+  categorySlug: string;
+  categoryName: string;
 };
 
 type AiJobResponse = {
@@ -165,7 +167,8 @@ export function BulkCoverImageGenerationForm({
                 {post.title}
               </span>
               <span className="mt-0.5 block truncate text-xs text-slate-500">
-                {post.slug} · {post.status} · {post.coverImage ? "已有封面" : "无封面"}
+                {post.categoryName || post.categorySlug} · {post.slug} ·{" "}
+                {post.status} · {post.coverImage ? "已有封面" : "无封面"}
               </span>
             </span>
           </label>

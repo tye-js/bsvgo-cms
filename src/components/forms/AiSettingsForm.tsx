@@ -63,7 +63,11 @@ export function AiSettingsForm({
     quality: string;
     outputFormat: string;
     timeoutMs: string;
-    promptStyle: string;
+    promptStyles: {
+      blockchain: string;
+      ai: string;
+      infrastructure: string;
+    };
   };
 }) {
   const [state, formAction] = useActionState(action, {});
@@ -98,8 +102,16 @@ export function AiSettingsForm({
   const [imageTimeoutMsValue, setImageTimeoutMsValue] = useState(
     imageGeneration.timeoutMs
   );
-  const [imagePromptStyleValue, setImagePromptStyleValue] = useState(
-    imageGeneration.promptStyle
+  const [imageBlockchainPromptStyleValue, setImageBlockchainPromptStyleValue] =
+    useState(imageGeneration.promptStyles.blockchain);
+  const [imageAiPromptStyleValue, setImageAiPromptStyleValue] = useState(
+    imageGeneration.promptStyles.ai
+  );
+  const [
+    imageInfrastructurePromptStyleValue,
+    setImageInfrastructurePromptStyleValue
+  ] = useState(
+    imageGeneration.promptStyles.infrastructure
   );
   const [editingRoleId, setEditingRoleId] = useState<AiWritingRoleId>(
     defaultWritingRole as AiWritingRoleId
@@ -165,8 +177,20 @@ export function AiSettingsForm({
           <input type="hidden" name="imageTimeoutMs" value={imageTimeoutMsValue} />
           <textarea
             className="hidden"
-            name="imagePromptStyle"
-            value={imagePromptStyleValue}
+            name="imageBlockchainPromptStyle"
+            value={imageBlockchainPromptStyleValue}
+            readOnly
+          />
+          <textarea
+            className="hidden"
+            name="imageAiPromptStyle"
+            value={imageAiPromptStyleValue}
+            readOnly
+          />
+          <textarea
+            className="hidden"
+            name="imageInfrastructurePromptStyle"
+            value={imageInfrastructurePromptStyleValue}
             readOnly
           />
           {writingRoles.map((role) => (
@@ -376,17 +400,47 @@ export function AiSettingsForm({
                 </Field>
               </div>
 
-              <Field
-                label="封面生成风格"
-                hint="用于批量文章封面图生成。建议明确禁止文字、Logo、人物肖像和误导性金融暗示。"
-              >
-                <textarea
-                  value={imagePromptStyleValue}
-                  onChange={(event) => setImagePromptStyleValue(event.target.value)}
-                  maxLength={2000}
-                  className={`${textareaClassName} min-h-36`}
-                />
-              </Field>
+              <div className="grid gap-4">
+                <Field
+                  label="区块链封面风格"
+                  hint="用于区块链大类文章封面。提示词会自动附加当前文章标题、描述和所属大分类。"
+                >
+                  <textarea
+                    value={imageBlockchainPromptStyleValue}
+                    onChange={(event) =>
+                      setImageBlockchainPromptStyleValue(event.target.value)
+                    }
+                    maxLength={2000}
+                    className={`${textareaClassName} min-h-32`}
+                  />
+                </Field>
+                <Field
+                  label="人工智能封面风格"
+                  hint="用于人工智能大类文章封面。提示词会自动附加当前文章标题、描述和所属大分类。"
+                >
+                  <textarea
+                    value={imageAiPromptStyleValue}
+                    onChange={(event) =>
+                      setImageAiPromptStyleValue(event.target.value)
+                    }
+                    maxLength={2000}
+                    className={`${textareaClassName} min-h-32`}
+                  />
+                </Field>
+                <Field
+                  label="基础设施封面风格"
+                  hint="用于基础设施大类文章封面。提示词会自动附加当前文章标题、描述和所属大分类。"
+                >
+                  <textarea
+                    value={imageInfrastructurePromptStyleValue}
+                    onChange={(event) =>
+                      setImageInfrastructurePromptStyleValue(event.target.value)
+                    }
+                    maxLength={2000}
+                    className={`${textareaClassName} min-h-32`}
+                  />
+                </Field>
+              </div>
             </div>
           ) : null}
 

@@ -154,10 +154,20 @@ export const imageGenerationSettingsSchema = z.object({
     .int()
     .min(10000, "图片生成超时时间至少为 10000 毫秒")
     .max(300000, "图片生成超时时间不能超过 300000 毫秒"),
-  promptStyle: z
+  blockchainPromptStyle: z
     .string()
     .trim()
-    .max(2000, "图片生成提示词风格不能超过 2000 个字符")
+    .max(2000, "区块链封面生成风格不能超过 2000 个字符")
+    .optional(),
+  aiPromptStyle: z
+    .string()
+    .trim()
+    .max(2000, "人工智能封面生成风格不能超过 2000 个字符")
+    .optional(),
+  infrastructurePromptStyle: z
+    .string()
+    .trim()
+    .max(2000, "基础设施封面生成风格不能超过 2000 个字符")
     .optional()
 });
 

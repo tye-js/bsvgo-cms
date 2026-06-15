@@ -9,6 +9,7 @@ import {
   generatePostCoverImage,
   generateSeoSuggestion,
   translateDraftToEnglish,
+  type CoverImageCategory,
   type ChineseDraftCoreInput,
   type DraftMetadataInput,
   type DraftMetadataOutput,
@@ -88,6 +89,12 @@ type SerializedJob = {
 };
 
 const activeJobIds = new Set<string>();
+
+function coverImageCategoryFromSlug(slug: string): CoverImageCategory {
+  if (slug === "ai") return "ai";
+  if (slug === "infrastructure") return "infrastructure";
+  return "blockchain";
+}
 const STALE_RUNNING_JOB_MS = 15 * 60 * 1000;
 
 function toRecord(value: unknown) {
@@ -276,11 +283,11 @@ async function executeBulkPostCoverImagesJob({
       postId: posts.id,
       slug: posts.slug,
       coverImage: posts.coverImage,
+      categorySlug: categories.slug,
       categoryName: categoryTranslations.name,
       locale: postTranslations.locale,
       title: postTranslations.title,
-      excerpt: postTranslations.excerpt,
-      content: postTranslations.content
+      excerpt: postTranslations.excerpt
     })
     .from(posts)
     .innerJoin(categories, eq(categories.id, posts.categoryId))
@@ -310,13 +317,14 @@ async function executeBulkPostCoverImagesJob({
     const en = translations.find((row) => row.locale === "en");
     const source = zh ?? en;
     if (!source?.title) continue;
+    const category = coverImageCategoryFromSlug(first.categorySlug);
+    const categoryName = first.categoryName ?? first.categorySlug;
 
     const image = await generatePostCoverImage({
       title: source.title,
-      excerpt: source.excerpt,
-      content: source.content,
-      category: first.categoryName ?? "",
-      tags: []
+      description: source.excerpt,
+      category,
+      categoryName
     });
     const altText = `${source.title} 文章封面`;
     const caption = `AI 生成封面：${source.title}`;
@@ -333,6 +341,8 @@ async function executeBulkPostCoverImagesJob({
         generationType: "post_cover",
         prompt: image.prompt,
         model: image.model,
+        category,
+        categoryName,
         postId
       }
     });

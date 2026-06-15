@@ -34,7 +34,10 @@ export const IMAGE_GENERATION_SETTING_KEYS = {
   quality: "ai.image.quality",
   outputFormat: "ai.image.output_format",
   timeoutMs: "ai.image.timeout_ms",
-  promptStyle: "ai.image.prompt_style"
+  promptStyle: "ai.image.prompt_style",
+  blockchainPromptStyle: "ai.image.prompt_style.blockchain",
+  aiPromptStyle: "ai.image.prompt_style.ai",
+  infrastructurePromptStyle: "ai.image.prompt_style.infrastructure"
 } as const;
 
 export const HOMEPAGE_SEO_SETTING_KEYS = {
@@ -75,8 +78,13 @@ export const DEFAULT_IMAGE_OUTPUT_FORMAT = "png";
 export const DEFAULT_IMAGE_TIMEOUT_MS = 180000;
 export const DEFAULT_AI_WRITING_STYLE =
   "面向 BSVgo 技术读者，语言清晰、克制、可信。优先使用结构化小标题、短段落和 Markdown 正文，不输出 HTML。所有事实、数据、人物、时间、链接、代码、产品能力和因果判断必须来自素材或明确标注为推断；素材不足时要保守表达，不编造细节。允许适度营销，但必须具体、可验证、不过度承诺。中文正文自然专业，英文正文面向全球技术读者，避免中式直译。Slug 使用小写英文、数字和连字符，简短表达核心主题。SEO 要分别服务中文入口和英文入口，提炼真实关键词，不堆砌。";
-export const DEFAULT_IMAGE_PROMPT_STYLE =
-  "为 BSVgo 技术博客生成原创封面图。画面应专业、清晰、现代，适合区块链、BSV、AI、开发者工具和技术文章。避免文字、Logo、人物肖像、夸张币价视觉和误导性金融暗示。构图适合横向文章封面，留出标题覆盖空间。";
+export const DEFAULT_IMAGE_BLOCKCHAIN_PROMPT_STYLE =
+  "为 BSVgo 区块链类技术博客生成原创封面图。画面应体现 BSV、区块链系统、交易网络、数据结构、可扩展性和开发者工程感。风格专业、清晰、现代，避免文字、Logo、人物肖像、夸张币价视觉和误导性金融暗示。构图适合横向文章封面，留出标题覆盖空间。";
+export const DEFAULT_IMAGE_AI_PROMPT_STYLE =
+  "为 BSVgo 人工智能类技术博客生成原创封面图。画面应体现 AI 工作流、模型推理、自动化、数据处理和开发者工具感，与文章主题紧密相关。风格专业、克制、现代，避免文字、Logo、人物肖像、夸张科幻元素和误导性能力暗示。构图适合横向文章封面，留出标题覆盖空间。";
+export const DEFAULT_IMAGE_INFRASTRUCTURE_PROMPT_STYLE =
+  "为 BSVgo 基础设施类技术博客生成原创封面图。画面应体现云服务、节点、网络、数据库、安全、运维和产品基础设施。风格专业、清晰、可靠，避免文字、Logo、人物肖像、过度抽象装饰和误导性金融暗示。构图适合横向文章封面，留出标题覆盖空间。";
+export const DEFAULT_IMAGE_PROMPT_STYLE = DEFAULT_IMAGE_BLOCKCHAIN_PROMPT_STYLE;
 
 function roleStyleSettingKey(roleId: AiWritingRoleId) {
   return `ai.openai.writing_role.${roleId}.style`;
@@ -115,6 +123,33 @@ function aiSettingKeys() {
 
 function imageGenerationSettingKeys() {
   return Object.values(IMAGE_GENERATION_SETTING_KEYS);
+}
+
+function imagePromptStyleFallback(byKey: Map<string, SettingRow>) {
+  return decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.promptStyle)).trim();
+}
+
+function imagePromptStyles(byKey: Map<string, SettingRow>) {
+  const legacyPromptStyle = imagePromptStyleFallback(byKey);
+
+  return {
+    blockchain:
+      decryptIfNeeded(
+        byKey.get(IMAGE_GENERATION_SETTING_KEYS.blockchainPromptStyle)
+      ).trim() ||
+      legacyPromptStyle ||
+      DEFAULT_IMAGE_BLOCKCHAIN_PROMPT_STYLE,
+    ai:
+      decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.aiPromptStyle)).trim() ||
+      legacyPromptStyle ||
+      DEFAULT_IMAGE_AI_PROMPT_STYLE,
+    infrastructure:
+      decryptIfNeeded(
+        byKey.get(IMAGE_GENERATION_SETTING_KEYS.infrastructurePromptStyle)
+      ).trim() ||
+      legacyPromptStyle ||
+      DEFAULT_IMAGE_INFRASTRUCTURE_PROMPT_STYLE
+  };
 }
 
 export async function getAiSettingsForGeneration(roleId?: string) {
@@ -205,9 +240,7 @@ export async function getImageGenerationSettings() {
       decryptIfNeeded(
         byKey.get(IMAGE_GENERATION_SETTING_KEYS.outputFormat)
       ).trim() || DEFAULT_IMAGE_OUTPUT_FORMAT,
-    promptStyle:
-      decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.promptStyle)).trim() ||
-      DEFAULT_IMAGE_PROMPT_STYLE,
+    promptStyles: imagePromptStyles(byKey),
     timeoutMs:
       Number.isFinite(timeoutValue) && timeoutValue > 0
         ? timeoutValue
@@ -270,9 +303,7 @@ export async function getSettingsPageData() {
   const imageTimeoutValue =
     decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.timeoutMs)).trim() ||
     String(DEFAULT_IMAGE_TIMEOUT_MS);
-  const imagePromptStyle =
-    decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.promptStyle)).trim() ||
-    DEFAULT_IMAGE_PROMPT_STYLE;
+  const promptStyles = imagePromptStyles(byKey);
 
   const homepageSeo = {
     enTitle: (
@@ -340,7 +371,7 @@ export async function getSettingsPageData() {
       quality: imageQuality,
       outputFormat: imageOutputFormat,
       timeoutMs: imageTimeoutValue,
-      promptStyle: imagePromptStyle
+      promptStyles
     },
     homepageSeo
   };
@@ -576,7 +607,9 @@ export async function saveImageGenerationSettings({
   quality,
   outputFormat,
   timeoutMs,
-  promptStyle,
+  blockchainPromptStyle,
+  aiPromptStyle,
+  infrastructurePromptStyle,
   userId
 }: {
   apiKey?: string;
@@ -586,7 +619,9 @@ export async function saveImageGenerationSettings({
   quality: string;
   outputFormat: string;
   timeoutMs: number;
-  promptStyle?: string;
+  blockchainPromptStyle?: string;
+  aiPromptStyle?: string;
+  infrastructurePromptStyle?: string;
   userId: string;
 }) {
   const now = new Date();
@@ -626,8 +661,20 @@ export async function saveImageGenerationSettings({
       encrypted: false
     },
     {
-      key: IMAGE_GENERATION_SETTING_KEYS.promptStyle,
-      value: promptStyle?.trim() || DEFAULT_IMAGE_PROMPT_STYLE,
+      key: IMAGE_GENERATION_SETTING_KEYS.blockchainPromptStyle,
+      value: blockchainPromptStyle?.trim() || DEFAULT_IMAGE_BLOCKCHAIN_PROMPT_STYLE,
+      encrypted: false
+    },
+    {
+      key: IMAGE_GENERATION_SETTING_KEYS.aiPromptStyle,
+      value: aiPromptStyle?.trim() || DEFAULT_IMAGE_AI_PROMPT_STYLE,
+      encrypted: false
+    },
+    {
+      key: IMAGE_GENERATION_SETTING_KEYS.infrastructurePromptStyle,
+      value:
+        infrastructurePromptStyle?.trim() ||
+        DEFAULT_IMAGE_INFRASTRUCTURE_PROMPT_STYLE,
       encrypted: false
     }
   ];

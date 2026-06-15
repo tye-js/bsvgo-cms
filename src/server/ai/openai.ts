@@ -117,12 +117,13 @@ type MediaMetadataInput = {
   currentCaption?: string;
 };
 
+export type CoverImageCategory = "blockchain" | "ai" | "infrastructure";
+
 export type CoverImageGenerationInput = {
   title: string;
-  excerpt?: string;
-  content?: string;
-  category?: string;
-  tags?: string[];
+  description?: string;
+  category: CoverImageCategory;
+  categoryName: string;
 };
 
 export type MediaMetadataOutput = {
@@ -242,15 +243,14 @@ function buildCoverImagePrompt(
   return [
     promptStyle,
     "",
-    "Create one original blog cover image for this article.",
+    "Create one original blog cover image customized for this exact article.",
     "Do not include readable text, logos, watermarks, UI screenshots, price charts, or celebrity/person likenesses.",
     "Keep the result suitable for a professional technical publication.",
     "",
     `Article title: ${input.title}`,
-    input.excerpt ? `Article excerpt: ${input.excerpt}` : "",
-    input.category ? `Category: ${input.category}` : "",
-    input.tags?.length ? `Tags: ${input.tags.join(", ")}` : "",
-    input.content ? `Article context: ${input.content.slice(0, 1200)}` : ""
+    input.description ? `Article description: ${input.description}` : "",
+    `Major category: ${input.categoryName} (${input.category})`,
+    "Use the title, description, and major category to decide the scene, symbols, materials, and visual mood."
   ]
     .filter(Boolean)
     .join("\n");
@@ -1213,7 +1213,7 @@ export async function generatePostCoverImage(
   const settings = await getImageGenerationSettings();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), settings.timeoutMs);
-  const prompt = buildCoverImagePrompt(input, settings.promptStyle);
+  const prompt = buildCoverImagePrompt(input, settings.promptStyles[input.category]);
 
   try {
     const response = await fetch(imageGenerationsUrl(settings.apiBaseUrl), {

@@ -3,7 +3,13 @@ import "server-only";
 import { and, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "@/server/db";
-import { mediaAssets, postTranslations, posts } from "@/server/db/schema";
+import {
+  categories,
+  categoryTranslations,
+  mediaAssets,
+  postTranslations,
+  posts
+} from "@/server/db/schema";
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -115,12 +121,16 @@ export async function getPostCoverGenerationOptions(limit = 50) {
       status: posts.status,
       coverImage: posts.coverImage,
       updatedAt: posts.updatedAt,
+      categorySlug: categories.slug,
+      categoryName: sql<string>`coalesce(nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'zh'), ''), ${categories.slug})`,
       title: sql<string>`coalesce(nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'zh'), ''), nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'en'), ''), ${posts.slug})`
     })
     .from(posts)
+    .innerJoin(categories, eq(categories.id, posts.categoryId))
+    .leftJoin(categoryTranslations, eq(categoryTranslations.categoryId, categories.id))
     .leftJoin(postTranslations, eq(postTranslations.postId, posts.id))
     .where(isNull(posts.deletedAt))
-    .groupBy(posts.id)
+    .groupBy(posts.id, categories.id)
     .orderBy(desc(posts.updatedAt))
     .limit(limit);
 }
