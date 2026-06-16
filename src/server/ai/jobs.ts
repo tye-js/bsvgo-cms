@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 
 import {
   generateDraftMetadata,
@@ -52,10 +52,29 @@ type BulkPostCoverImagesJobInput = {
   postIds: string[];
   overwriteExisting?: boolean;
   userId?: string;
+  jobId?: string;
 };
+
+type BulkPostCoverImageItemStatus =
+  | "pending"
+  | "running"
+  | "generated"
+  | "skipped"
+  | "failed";
 
 type BulkPostCoverImagesJobOutput = {
   generated: number;
+  total?: number;
+  processed?: number;
+  skipped?: number;
+  currentPostId?: string;
+  currentTitle?: string;
+  items?: Array<{
+    postId: string;
+    title: string;
+    status: BulkPostCoverImageItemStatus;
+    message?: string;
+  }>;
 };
 
 type AiJobInputByType = {
@@ -306,7 +325,8 @@ async function executeBulkPostSeoJob({
 async function executeBulkPostCoverImagesJob({
   postIds,
   overwriteExisting = false,
-  userId
+  userId,
+  jobId
 }: BulkPostCoverImagesJobInput): Promise<BulkPostCoverImagesJobOutput> {
   if (!userId) {
     throw new Error("无法确认 AI 封面任务创建人。");
@@ -339,18 +359,79 @@ async function executeBulkPostCoverImagesJob({
     throw new Error("没有找到可生成封面的文章。");
   }
 
-  let generated = 0;
+  const candidates = postIds
+    .map((postId) => {
+      const translations = rows.filter((row) => row.postId === postId);
+      const first = translations[0];
+      const zh = translations.find((row) => row.locale === "zh");
+      const en = translations.find((row) => row.locale === "en");
+      const source = zh ?? en;
 
-  for (const postId of postIds) {
-    const translations = rows.filter((row) => row.postId === postId);
-    const first = translations[0];
-    if (!first) continue;
+      return first && source?.title
+        ? {
+            postId,
+            translations,
+            first,
+            zh,
+            en,
+            source,
+            title: source.title
+          }
+        : null;
+    })
+    .filter((value): value is NonNullable<typeof value> => Boolean(value));
+  const items: NonNullable<BulkPostCoverImagesJobOutput["items"]> =
+    candidates.map((candidate) => ({
+      postId: candidate.postId,
+      title: candidate.title,
+      status:
+        !overwriteExisting && candidate.first.coverImage ? "skipped" : "pending",
+      message:
+        !overwriteExisting && candidate.first.coverImage
+          ? "已有封面，已跳过。"
+          : undefined
+    }));
+  let generated = 0;
+  let skipped = items.filter((item) => item.status === "skipped").length;
+  let processed = skipped;
+
+  const writeProgress = async (
+    status: BulkPostCoverImageItemStatus,
+    currentPostId?: string,
+    currentTitle?: string
+  ) => {
+    if (!jobId) return;
+
+    await db
+      .update(aiJobs)
+      .set({
+        output: {
+          generated,
+          skipped,
+          processed,
+          total: items.length,
+          currentPostId: currentPostId ?? "",
+          currentTitle: currentTitle ?? "",
+          status,
+          items
+        },
+        updatedAt: new Date()
+      })
+      .where(eq(aiJobs.id, jobId));
+  };
+
+  await writeProgress("pending");
+
+  for (const candidate of candidates) {
+    const { postId, translations, first, zh, en, source } = candidate;
+    const item = items.find((value) => value.postId === postId);
+    if (!item) continue;
     if (!overwriteExisting && first.coverImage) continue;
 
-    const zh = translations.find((row) => row.locale === "zh");
-    const en = translations.find((row) => row.locale === "en");
-    const source = zh ?? en;
-    if (!source?.title) continue;
+    item.status = "running";
+    item.message = "正在生成封面。";
+    await writeProgress("running", postId, candidate.title);
+
     const category = coverImageCategoryFromSlug(first.categorySlug);
     const categoryName = first.categoryName ?? first.categorySlug;
     const zhTitle = zh?.title ?? source.title;
@@ -417,9 +498,21 @@ async function executeBulkPostCoverImagesJob({
       .where(and(eq(posts.id, postId), isNull(posts.deletedAt)));
 
     generated += 1;
+    processed += 1;
+    item.status = "generated";
+    item.message = "封面已生成并写入媒体库。";
+    await writeProgress("generated", postId, candidate.title);
   }
 
-  return { generated };
+  return {
+    generated,
+    skipped,
+    processed,
+    total: items.length,
+    currentPostId: "",
+    currentTitle: "",
+    items
+  };
 }
 
 async function executeJob<TType extends AiJobType>(
@@ -502,7 +595,8 @@ async function runAiJob(jobId: string) {
         job.type as AiJobType,
         {
           ...toRecord(job.input),
-          userId: job.createdBy ?? undefined
+          userId: job.createdBy ?? undefined,
+          jobId: job.id
         } as AiJobInputByType[AiJobType]
       );
       const finishedAt = new Date();
@@ -625,6 +719,35 @@ export async function getAiJobForUser(jobId: string, user: CurrentUser) {
   if (!job) return null;
   await resumeJobIfRecoverable(job);
   return serializeJob(job);
+}
+
+export async function listRecentCoverImageJobsForUser(
+  user: CurrentUser,
+  limit = 10
+) {
+  const filters = [eq(aiJobs.type, "bulk_post_cover_images")];
+  if (user.role !== "admin") {
+    filters.push(eq(aiJobs.createdBy, user.id));
+  }
+
+  const rows = await db
+    .select({
+      id: aiJobs.id,
+      type: aiJobs.type,
+      status: aiJobs.status,
+      output: aiJobs.output,
+      errorMessage: aiJobs.errorMessage,
+      attempts: aiJobs.attempts,
+      createdAt: aiJobs.createdAt,
+      startedAt: aiJobs.startedAt,
+      finishedAt: aiJobs.finishedAt
+    })
+    .from(aiJobs)
+    .where(and(...filters))
+    .orderBy(desc(aiJobs.createdAt))
+    .limit(Math.min(Math.max(limit, 1), 20));
+
+  return rows.map(serializeJob);
 }
 
 export async function retryAiJobForUser(jobId: string, user: CurrentUser) {

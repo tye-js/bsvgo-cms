@@ -13,6 +13,28 @@ import {
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+function mediaAssetUsedExpression() {
+  return sql<boolean>`exists (
+    select 1 from ${posts}
+    where (
+        ${posts.coverImageId} = ${mediaAssets.id}
+        or ${posts.coverImage} = ${mediaAssets.url}
+      )
+      and ${posts.deletedAt} is null
+  )`;
+}
+
+function mediaAssetUsageCountExpression() {
+  return sql<number>`(
+    select count(*)::int from ${posts}
+    where (
+        ${posts.coverImageId} = ${mediaAssets.id}
+        or ${posts.coverImage} = ${mediaAssets.url}
+      )
+      and ${posts.deletedAt} is null
+  )`;
+}
+
 export async function listMediaAssets(options: {
   query?: string;
   provider?: "all" | "local" | "external_url";
@@ -27,11 +49,7 @@ export async function listMediaAssets(options: {
   const query = options.query?.trim();
   const provider = options.provider ?? "all";
   const usage = options.usage ?? "all";
-  const isUsedExpression = sql<boolean>`exists (
-    select 1 from ${posts}
-    where ${posts.coverImageId} = ${mediaAssets.id}
-      and ${posts.deletedAt} is null
-  )`;
+  const isUsedExpression = mediaAssetUsedExpression();
   const filters = [
     isNull(mediaAssets.deletedAt),
     provider === "all" ? undefined : eq(mediaAssets.storageProvider, provider),
@@ -80,11 +98,7 @@ export async function listMediaAssets(options: {
       createdAt: mediaAssets.createdAt,
       updatedAt: mediaAssets.updatedAt,
       deletedAt: mediaAssets.deletedAt,
-      usageCount: sql<number>`(
-        select count(*)::int from ${posts}
-        where ${posts.coverImageId} = ${mediaAssets.id}
-          and ${posts.deletedAt} is null
-      )`
+      usageCount: mediaAssetUsageCountExpression()
     })
     .from(mediaAssets)
     .where(where)
@@ -173,8 +187,17 @@ export async function getMediaAssetUsage(id: string) {
       title: sql<string>`coalesce(nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'zh'), ''), nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'en'), ''), ${posts.slug})`
     })
     .from(posts)
+    .innerJoin(
+      mediaAssets,
+      and(eq(mediaAssets.id, id), isNull(mediaAssets.deletedAt))
+    )
     .leftJoin(postTranslations, eq(postTranslations.postId, posts.id))
-    .where(and(eq(posts.coverImageId, id), isNull(posts.deletedAt)))
+    .where(
+      and(
+        or(eq(posts.coverImageId, id), eq(posts.coverImage, mediaAssets.url)),
+        isNull(posts.deletedAt)
+      )
+    )
     .groupBy(posts.id)
     .orderBy(desc(posts.updatedAt));
 }
@@ -185,11 +208,7 @@ export async function getUnusedMediaAssetIds(ids: string[]) {
   const rows = await db
     .select({
       id: mediaAssets.id,
-      usageCount: sql<number>`(
-        select count(*)::int from ${posts}
-        where ${posts.coverImageId} = ${mediaAssets.id}
-          and ${posts.deletedAt} is null
-      )`
+      usageCount: mediaAssetUsageCountExpression()
     })
     .from(mediaAssets)
     .where(and(inArray(mediaAssets.id, ids), isNull(mediaAssets.deletedAt)));

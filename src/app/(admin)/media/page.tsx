@@ -1,21 +1,16 @@
 import Link from "next/link";
-import { ImagePlus } from "lucide-react";
+import { Images, ImagePlus } from "lucide-react";
 
 import { ButtonLink, buttonClassName } from "@/components/admin/Button";
 import { CopyButton } from "@/components/admin/CopyButton";
 import { inputClassName } from "@/components/admin/Field";
-import { BulkCoverImageGenerationForm } from "@/components/forms/BulkCoverImageGenerationForm";
 import { ConfirmSubmitButton } from "@/components/forms/ConfirmSubmitButton";
 import { formatDate } from "@/lib/utils";
 import {
-  bulkGeneratePostCoverImagesAction,
   deleteMediaAssetAction,
   deleteUnusedMediaAssetsAction
 } from "@/server/media/actions";
-import {
-  getPostCoverGenerationOptions,
-  listMediaAssets
-} from "@/server/media/service";
+import { listMediaAssets } from "@/server/media/service";
 
 function formatFileSize(size: number | null) {
   if (!size) return "-";
@@ -47,15 +42,12 @@ export default async function MediaPage({
     : "all";
   const requestedPage = Number(params.page ?? "1");
   const page = Number.isFinite(requestedPage) ? Math.max(requestedPage, 1) : 1;
-  const [{ rows: assets, total, pageSize }, coverPostOptions] = await Promise.all([
-    listMediaAssets({
-      query: params.q,
-      provider,
-      usage,
-      page
-    }),
-    getPostCoverGenerationOptions()
-  ]);
+  const { rows: assets, total, pageSize } = await listMediaAssets({
+    query: params.q,
+    provider,
+    usage,
+    page
+  });
   const pageCount = Math.max(Math.ceil(total / pageSize), 1);
 
   const preserveParams = (nextPage: number) => {
@@ -76,10 +68,16 @@ export default async function MediaPage({
             管理文章封面使用的上传图片和外部图片。
           </p>
         </div>
-        <ButtonLink href="/media/new" variant="primary">
-          <ImagePlus size={17} />
-          新建图片
-        </ButtonLink>
+        <div className="flex flex-wrap gap-2">
+          <ButtonLink href="/media/covers" variant="secondary">
+            <Images size={17} />
+            封面生成
+          </ButtonLink>
+          <ButtonLink href="/media/new" variant="primary">
+            <ImagePlus size={17} />
+            新建图片
+          </ButtonLink>
+        </div>
       </div>
 
       <form className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_180px_180px_auto]">
@@ -104,11 +102,6 @@ export default async function MediaPage({
           搜索
         </button>
       </form>
-
-      <BulkCoverImageGenerationForm
-        action={bulkGeneratePostCoverImagesAction}
-        posts={coverPostOptions}
-      />
 
       <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <form id="bulk-delete-unused-media" action={deleteUnusedMediaAssetsAction} />

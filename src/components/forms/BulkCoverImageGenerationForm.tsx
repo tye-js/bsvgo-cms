@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ImagePlus } from "lucide-react";
+import { CheckCircle2, ChevronDown, ImagePlus, Loader2, SkipForward, XCircle } from "lucide-react";
 
 import { buttonClassName } from "@/components/admin/Button";
 
@@ -28,6 +28,16 @@ type AiJobResponse = {
     error?: string;
     output?: {
       generated?: number;
+      skipped?: number;
+      processed?: number;
+      total?: number;
+      currentTitle?: string;
+      items?: Array<{
+        postId: string;
+        title: string;
+        status: "pending" | "running" | "generated" | "skipped" | "failed";
+        message?: string;
+      }>;
     } | null;
   };
   error?: string;
@@ -50,18 +60,21 @@ async function readJob(jobId: string) {
 
 export function BulkCoverImageGenerationForm({
   action,
-  posts
+  posts,
+  defaultExpanded = false
 }: {
   action: (previousState: ActionState, formData: FormData) => Promise<ActionState>;
   posts: PostOption[];
+  defaultExpanded?: boolean;
 }) {
   const router = useRouter();
   const [state, formAction, isPending] = useActionState(action, {});
   const [jobMessage, setJobMessage] = useState("");
   const [jobError, setJobError] = useState("");
   const [isPolling, setIsPolling] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [overwriteExisting, setOverwriteExisting] = useState(false);
+  const [progress, setProgress] = useState<NonNullable<AiJobResponse["job"]>["output"]>(null);
   const availableCount = overwriteExisting
     ? posts.length
     : posts.filter((post) => !post.coverImage).length;
@@ -79,13 +92,26 @@ export function BulkCoverImageGenerationForm({
         for (let attempt = 0; attempt < 300; attempt += 1) {
           const job = await readJob(state.jobId ?? "");
           if (cancelled) return;
+          setProgress(job.output ?? null);
+
+          const generated = Number(job.output?.generated ?? 0);
+          const processed = Number(job.output?.processed ?? generated);
+          const total = Number(job.output?.total ?? 0);
+          const currentTitle = job.output?.currentTitle;
+          const progressText =
+            total > 0
+              ? `已处理 ${processed}/${total}，已生成 ${generated} 张`
+              : "";
 
           if (job.status === "queued") {
             setJobMessage("封面生成任务已提交，等待执行...");
           } else if (job.status === "running") {
-            setJobMessage("AI 正在后台生成文章封面...");
+            setJobMessage(
+              currentTitle
+                ? `AI 正在生成《${currentTitle}》的封面。${progressText}`
+                : `AI 正在后台生成文章封面。${progressText}`
+            );
           } else if (job.status === "succeeded") {
-            const generated = Number(job.output?.generated ?? 0);
             setJobMessage(
               generated > 0
                 ? `已生成 ${generated} 张文章封面，并写入媒体库。`
@@ -120,6 +146,13 @@ export function BulkCoverImageGenerationForm({
     };
   }, [router, state.jobId]);
 
+  const total = Number(progress?.total ?? 0);
+  const processed = Number(progress?.processed ?? 0);
+  const generated = Number(progress?.generated ?? 0);
+  const skipped = Number(progress?.skipped ?? 0);
+  const progressPercent =
+    total > 0 ? Math.min(Math.round((processed / total) * 100), 100) : 0;
+
   return (
     <form action={formAction} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
@@ -129,18 +162,20 @@ export function BulkCoverImageGenerationForm({
             按文章标题、描述和大分类批量生成封面。一次最多处理 10 篇。
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setExpanded((current) => !current)}
-          className={buttonClassName("secondary", "shrink-0")}
-          aria-expanded={expanded}
-        >
-          <ChevronDown
-            size={16}
-            className={`transition ${expanded ? "rotate-180" : ""}`}
-          />
-          {expanded ? "收起" : "展开"}
-        </button>
+        {defaultExpanded ? null : (
+          <button
+            type="button"
+            onClick={() => setExpanded((current) => !current)}
+            className={buttonClassName("secondary", "shrink-0")}
+            aria-expanded={expanded}
+          >
+            <ChevronDown
+              size={16}
+              className={`transition ${expanded ? "rotate-180" : ""}`}
+            />
+            {expanded ? "收起" : "展开"}
+          </button>
+        )}
       </div>
 
       {expanded ? (
@@ -222,6 +257,60 @@ export function BulkCoverImageGenerationForm({
           <p className="text-slate-500">{jobMessage || state.success}</p>
         ) : null}
       </div>
+
+      {progress && total > 0 ? (
+        <div className="mt-4 grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+            <span className="font-medium text-slate-900">
+              任务进度 {progressPercent}%
+            </span>
+            <span className="text-slate-500">
+              已处理 {processed}/{total} · 已生成 {generated} · 已跳过 {skipped}
+            </span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+            <div
+              className="h-full rounded-full bg-slate-700 transition-all"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+          {progress.currentTitle ? (
+            <p className="text-sm text-slate-600">
+              当前文章：{progress.currentTitle}
+            </p>
+          ) : null}
+          {progress.items?.length ? (
+            <div className="max-h-64 overflow-auto rounded-md border border-slate-200 bg-white">
+              {progress.items.map((item) => (
+                <div
+                  key={item.postId}
+                  className="flex items-start gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0"
+                >
+                  {item.status === "generated" ? (
+                    <CheckCircle2 className="mt-0.5 text-emerald-600" size={16} />
+                  ) : item.status === "running" ? (
+                    <Loader2 className="mt-0.5 animate-spin text-slate-600" size={16} />
+                  ) : item.status === "skipped" ? (
+                    <SkipForward className="mt-0.5 text-amber-600" size={16} />
+                  ) : item.status === "failed" ? (
+                    <XCircle className="mt-0.5 text-rose-600" size={16} />
+                  ) : (
+                    <span className="mt-1 h-3.5 w-3.5 rounded-full border border-slate-300" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-slate-900">
+                      {item.title}
+                    </p>
+                    {item.message ? (
+                      <p className="text-xs text-slate-500">{item.message}</p>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </form>
   );
 }
