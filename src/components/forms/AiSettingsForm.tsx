@@ -62,6 +62,7 @@ type SectionState = ActionState & {
 
 const deepSeekBaseUrl = "https://api.deepseek.com";
 const deepSeekModel = "deepseek-v4-pro";
+const deepSeekTimeoutMs = "180000";
 
 function StatusMessage({ state }: { state: SectionState }) {
   if (state.error) {
@@ -261,6 +262,7 @@ export function AiSettingsForm({
               onClick={() => {
                 setApiBaseUrlValue(deepSeekBaseUrl);
                 setModelValue(deepSeekModel);
+                setTimeoutMsValue(deepSeekTimeoutMs);
               }}
             >
               <Sparkles size={16} />

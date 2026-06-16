@@ -241,6 +241,24 @@ function providerLabel(apiBaseUrl: string) {
   return apiBaseUrl.includes("api.openai.com") ? "OpenAI" : "AI provider";
 }
 
+function isDeepSeekProvider(apiBaseUrl: string) {
+  return apiBaseUrl.toLowerCase().includes("deepseek.com");
+}
+
+function isDeepSeekV4Model(model: string) {
+  return model.trim().toLowerCase().startsWith("deepseek-v4");
+}
+
+function deepSeekChatOptions(apiBaseUrl: string, model: string) {
+  if (!isDeepSeekProvider(apiBaseUrl) || !isDeepSeekV4Model(model)) {
+    return {};
+  }
+
+  return {
+    thinking: { type: "disabled" }
+  };
+}
+
 function imageMimeType(outputFormat: string) {
   if (outputFormat === "jpeg") return "image/jpeg";
   if (outputFormat === "webp") return "image/webp";
@@ -612,6 +630,7 @@ async function callResponsesJson({
             })
           : JSON.stringify({
               model,
+              ...deepSeekChatOptions(apiBaseUrl, model),
               messages: [
                 ...inputToChatMessages(input),
                 {

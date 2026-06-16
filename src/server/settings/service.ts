@@ -69,7 +69,7 @@ const LEGACY_HOMEPAGE_SEO_SETTING_KEYS = {
 
 export const DEFAULT_AI_API_BASE_URL = "https://api.deepseek.com";
 export const DEFAULT_AI_MODEL = "deepseek-v4-pro";
-export const DEFAULT_AI_TIMEOUT_MS = 60000;
+export const DEFAULT_AI_TIMEOUT_MS = 180000;
 export const DEFAULT_IMAGE_API_BASE_URL = "https://api.openai.com/v1";
 export const DEFAULT_IMAGE_MODEL = "gpt-image-2";
 export const DEFAULT_IMAGE_SIZE = "1536x1024";
