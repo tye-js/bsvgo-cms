@@ -190,6 +190,19 @@ export const writingStyleSchema = z.object({
   )
 });
 
+export const aiSeoStyleSettingsSchema = z.object({
+  zhSeoStyle: z
+    .string()
+    .trim()
+    .max(2000, "中文 SEO 风格不能超过 2000 个字符")
+    .optional(),
+  enSeoStyle: z
+    .string()
+    .trim()
+    .max(2000, "英文 SEO 风格不能超过 2000 个字符")
+    .optional()
+});
+
 export const aiDraftRewriteSchema = z
   .object({
     writingRole: z.enum(aiWritingRoleIds).optional(),

@@ -1,12 +1,13 @@
 "use client";
 
-import { useActionState, useState, useTransition, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { CheckCircle2 } from "lucide-react";
 
 import { buttonClassName } from "@/components/admin/Button";
 import { Field, inputClassName, textareaClassName } from "@/components/admin/Field";
-import { PendingFieldset } from "@/components/forms/PendingFieldset";
-import { SubmitButton } from "@/components/forms/SubmitButton";
 import type { SeoSuggestionOutput } from "@/server/ai/openai";
+import type { HomepageSeoSettingsInput } from "@/server/settings/actions";
 
 type HomepageSeoValue = {
   enTitle: string;
@@ -49,6 +50,27 @@ type LocalizedFieldsProps = {
   onChange: (key: keyof HomepageSeoValue, value: string) => void;
 };
 
+function StatusMessage({ state }: { state: SaveState }) {
+  if (state.error) {
+    return (
+      <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+        {state.error}
+      </p>
+    );
+  }
+
+  if (state.success) {
+    return (
+      <p className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+        <CheckCircle2 size={16} />
+        {state.success}
+      </p>
+    );
+  }
+
+  return null;
+}
+
 function LocalizedHomepageSeoFields({
   localeLabel,
   titleName,
@@ -68,7 +90,6 @@ function LocalizedHomepageSeoFields({
       </div>
       <Field label={`${localeLabel} SEO 标题`}>
         <input
-          name={titleName}
           value={draft[titleName]}
           onChange={(event) => onChange(titleName, event.target.value)}
           maxLength={255}
@@ -77,7 +98,6 @@ function LocalizedHomepageSeoFields({
       </Field>
       <Field label={`${localeLabel} SEO 描述`}>
         <textarea
-          name={descriptionName}
           value={draft[descriptionName]}
           onChange={(event) => onChange(descriptionName, event.target.value)}
           maxLength={500}
@@ -86,7 +106,6 @@ function LocalizedHomepageSeoFields({
       </Field>
       <Field label={`${localeLabel} SEO 关键词`}>
         <input
-          name={keywordsName}
           value={draft[keywordsName]}
           onChange={(event) => onChange(keywordsName, event.target.value)}
           maxLength={500}
@@ -95,7 +114,6 @@ function LocalizedHomepageSeoFields({
       </Field>
       <Field label={`${localeLabel} Open Graph 标题`}>
         <input
-          name={ogTitleName}
           value={draft[ogTitleName]}
           onChange={(event) => onChange(ogTitleName, event.target.value)}
           maxLength={255}
@@ -104,7 +122,6 @@ function LocalizedHomepageSeoFields({
       </Field>
       <Field label={`${localeLabel} Open Graph 描述`}>
         <textarea
-          name={ogDescriptionName}
           value={draft[ogDescriptionName]}
           onChange={(event) => onChange(ogDescriptionName, event.target.value)}
           maxLength={500}
@@ -116,19 +133,18 @@ function LocalizedHomepageSeoFields({
 }
 
 export function HomepageSeoForm({
-  action,
+  saveAction,
   generateAction,
   value
 }: {
-  action: (previousState: SaveState, formData: FormData) => Promise<SaveState>;
-  generateAction: (
-    previousState: GenerateState,
-    formData: FormData
-  ) => Promise<GenerateState>;
+  saveAction: (input: HomepageSeoSettingsInput) => Promise<SaveState>;
+  generateAction: (input: HomepageSeoSettingsInput) => Promise<GenerateState>;
   value: HomepageSeoValue;
 }) {
-  const [saveState, saveAction] = useActionState(action, {});
+  const router = useRouter();
+  const [saveState, setSaveState] = useState<SaveState>({});
   const [generateState, setGenerateState] = useState<GenerateState>({});
+  const [isSaving, startSaving] = useTransition();
   const [isGenerating, startGenerating] = useTransition();
   const [draft, setDraft] = useState(value);
 
@@ -148,12 +164,27 @@ export function HomepageSeoForm({
     }));
   };
 
-  const handleGenerateSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+  const updateDraft = (key: keyof HomepageSeoValue, nextValue: string) => {
+    setDraft((current) => ({ ...current, [key]: nextValue }));
+  };
 
+  const handleSave = () => {
+    setSaveState({});
+    setGenerateState({});
+    startSaving(async () => {
+      const nextState = await saveAction(draft);
+      setSaveState(nextState);
+      if (!nextState.error) {
+        router.refresh();
+      }
+    });
+  };
+
+  const handleGenerate = () => {
+    setSaveState({});
+    setGenerateState({});
     startGenerating(async () => {
-      const nextState = await generateAction({}, formData);
+      const nextState = await generateAction(draft);
       setGenerateState(nextState);
       if (nextState.suggestion) {
         applySuggestion(nextState.suggestion);
@@ -161,93 +192,74 @@ export function HomepageSeoForm({
     });
   };
 
-  const updateDraft = (key: keyof HomepageSeoValue, nextValue: string) => {
-    setDraft((current) => ({ ...current, [key]: nextValue }));
-  };
-
-  const hiddenFields = Object.entries(draft).map(([key, fieldValue]) => (
-    <input key={key} type="hidden" name={key} value={fieldValue} />
-  ));
-
   return (
     <div className="grid gap-5">
-      {saveState.error || generateState.error ? (
-        <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-          {saveState.error ?? generateState.error}
-        </p>
-      ) : null}
-      {saveState.success || generateState.success ? (
-        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-          {saveState.success ?? generateState.success}
-        </p>
-      ) : null}
+      <StatusMessage state={saveState.error || saveState.success ? saveState : generateState} />
 
-      <form action={saveAction} className="grid gap-5">
-        <PendingFieldset className="gap-5">
-        <div className="grid gap-4 lg:grid-cols-2">
-          <LocalizedHomepageSeoFields
-            localeLabel="英文首页"
-            titleName="enTitle"
-            descriptionName="enDescription"
-            keywordsName="enKeywords"
-            ogTitleName="enOgTitle"
-            ogDescriptionName="enOgDescription"
-            titleHint="对应前台英文首页入口，标题建议 45-60 个英文字符。"
-            draft={draft}
-            onChange={updateDraft}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <LocalizedHomepageSeoFields
+          localeLabel="英文首页"
+          titleName="enTitle"
+          descriptionName="enDescription"
+          keywordsName="enKeywords"
+          ogTitleName="enOgTitle"
+          ogDescriptionName="enOgDescription"
+          titleHint="对应前台英文首页入口，标题建议 45-60 个英文字符。"
+          draft={draft}
+          onChange={updateDraft}
+        />
+        <LocalizedHomepageSeoFields
+          localeLabel="中文首页"
+          titleName="zhTitle"
+          descriptionName="zhDescription"
+          keywordsName="zhKeywords"
+          ogTitleName="zhOgTitle"
+          ogDescriptionName="zhOgDescription"
+          titleHint="对应前台中文首页入口，标题建议短、准、自然。"
+          draft={draft}
+          onChange={updateDraft}
+        />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Field label="Open Graph 图片 URL" hint="中英文首页共用的社交分享图片。">
+          <input
+            type="url"
+            value={draft.ogImage}
+            onChange={(event) => updateDraft("ogImage", event.target.value)}
+            className={inputClassName}
+            placeholder="https://example.com/og-image.jpg"
           />
-          <LocalizedHomepageSeoFields
-            localeLabel="中文首页"
-            titleName="zhTitle"
-            descriptionName="zhDescription"
-            keywordsName="zhKeywords"
-            ogTitleName="zhOgTitle"
-            ogDescriptionName="zhOgDescription"
-            titleHint="对应前台中文首页入口，标题建议短、准、自然。"
-            draft={draft}
-            onChange={updateDraft}
+        </Field>
+        <Field label="Canonical URL" hint="如前台中英文有独立 URL，可留空由前端按语言生成。">
+          <input
+            type="url"
+            value={draft.canonicalUrl}
+            onChange={(event) => updateDraft("canonicalUrl", event.target.value)}
+            className={inputClassName}
+            placeholder="https://example.com/"
           />
-        </div>
+        </Field>
+      </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Open Graph 图片 URL" hint="中英文首页共用的社交分享图片。">
-            <input
-              name="ogImage"
-              type="url"
-              value={draft.ogImage}
-              onChange={(event) => updateDraft("ogImage", event.target.value)}
-              className={inputClassName}
-              placeholder="https://example.com/og-image.jpg"
-            />
-          </Field>
-          <Field label="Canonical URL" hint="如前台中英文有独立 URL，可留空由前端按语言生成。">
-            <input
-              name="canonicalUrl"
-              type="url"
-              value={draft.canonicalUrl}
-              onChange={(event) => updateDraft("canonicalUrl", event.target.value)}
-              className={inputClassName}
-              placeholder="https://example.com/"
-            />
-          </Field>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <SubmitButton>保存双语首页 SEO</SubmitButton>
-        </div>
-        </PendingFieldset>
-      </form>
-
-      <form onSubmit={handleGenerateSubmit}>
-        {hiddenFields}
+      <div className="flex flex-wrap gap-2">
         <button
-          type="submit"
+          type="button"
+          disabled={isSaving}
+          onClick={handleSave}
+          className={buttonClassName("primary")}
+        >
+          {isSaving ? "保存中..." : "保存双语首页 SEO"}
+        </button>
+        <button
+          type="button"
           disabled={isGenerating}
+          onClick={handleGenerate}
           className={buttonClassName("secondary")}
         >
           {isGenerating ? "生成中..." : "用 AI 生成双语首页 SEO 建议"}
         </button>
-      </form>
+      </div>
     </div>
   );
 }

@@ -3,9 +3,12 @@ import { Bot, Database, Image as ImageIcon, Search, ShieldCheck } from "lucide-r
 import { AiSettingsForm } from "@/components/forms/AiSettingsForm";
 import { HomepageSeoForm } from "@/components/forms/HomepageSeoForm";
 import {
-  generateHomepageSeoAction,
-  updateAiSettingsAction,
-  updateHomepageSeoAction
+  generateHomepageSeoSuggestionAction,
+  saveHomepageSeoSettingsAction,
+  updateAiProviderSettingsAction,
+  updateAiSeoStyleSettingsAction,
+  updateAiWritingSettingsAction,
+  updateImageGenerationSettingsAction,
 } from "@/server/settings/actions";
 import { requireContentEditor } from "@/server/auth/session";
 import { getSettingsPageData } from "@/server/settings/service";
@@ -38,7 +41,10 @@ export default async function SettingsPage() {
             </div>
           </div>
           <AiSettingsForm
-            action={updateAiSettingsAction}
+            providerAction={updateAiProviderSettingsAction}
+            writingAction={updateAiWritingSettingsAction}
+            seoStyleAction={updateAiSeoStyleSettingsAction}
+            imageGenerationAction={updateImageGenerationSettingsAction}
             hasApiKey={settings.ai.hasApiKey}
             apiKeyPreview={settings.ai.apiKeyPreview}
             apiBaseUrl={settings.ai.apiBaseUrl}
@@ -67,8 +73,8 @@ export default async function SettingsPage() {
           </div>
         </div>
         <HomepageSeoForm
-          action={updateHomepageSeoAction}
-          generateAction={generateHomepageSeoAction}
+          saveAction={saveHomepageSeoSettingsAction}
+          generateAction={generateHomepageSeoSuggestionAction}
           value={settings.homepageSeo}
         />
       </section>
