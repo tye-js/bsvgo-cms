@@ -28,8 +28,8 @@ export default async function SettingsPage() {
       </div>
 
       {canManageAiSettings ? (
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-5 flex items-start gap-3">
+        <section className="grid gap-4">
+          <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-100 text-slate-600">
               <Bot size={20} />
             </div>

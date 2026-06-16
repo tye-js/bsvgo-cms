@@ -155,14 +155,30 @@ export async function getPostCoverGenerationOptions(limit = 50) {
       updatedAt: posts.updatedAt,
       categorySlug: categories.slug,
       categoryName: sql<string>`coalesce(nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'zh'), ''), ${categories.slug})`,
-      title: sql<string>`coalesce(nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'zh'), ''), nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'en'), ''), ${posts.slug})`
+      title: sql<string>`coalesce(nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'zh'), ''), nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'en'), ''), ${posts.slug})`,
+      coverAssetId: mediaAssets.id,
+      coverMimeType: mediaAssets.mimeType,
+      coverWidth: mediaAssets.width,
+      coverHeight: mediaAssets.height,
+      coverFileSize: mediaAssets.fileSize,
+      coverGeneratedAt: sql<string | null>`nullif(${mediaAssets.metadata}->>'generatedAt', '')`,
+      coverModel: sql<string | null>`nullif(${mediaAssets.metadata}->>'model', '')`,
+      coverStorageProvider: mediaAssets.storageProvider,
+      coverCreatedAt: mediaAssets.createdAt
     })
     .from(posts)
     .innerJoin(categories, eq(categories.id, posts.categoryId))
     .leftJoin(categoryTranslations, eq(categoryTranslations.categoryId, categories.id))
     .leftJoin(postTranslations, eq(postTranslations.postId, posts.id))
+    .leftJoin(
+      mediaAssets,
+      and(
+        or(eq(posts.coverImageId, mediaAssets.id), eq(posts.coverImage, mediaAssets.url)),
+        isNull(mediaAssets.deletedAt)
+      )
+    )
     .where(isNull(posts.deletedAt))
-    .groupBy(posts.id, categories.id)
+    .groupBy(posts.id, categories.id, mediaAssets.id)
     .orderBy(desc(posts.updatedAt))
     .limit(limit);
 }

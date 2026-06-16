@@ -38,7 +38,6 @@ export const IMAGE_GENERATION_SETTING_KEYS = {
   size: "ai.image.size",
   quality: "ai.image.quality",
   outputFormat: "ai.image.output_format",
-  timeoutMs: "ai.image.timeout_ms",
   promptStyle: "ai.image.prompt_style",
   blockchainPromptStyle: "ai.image.prompt_style.blockchain",
   aiPromptStyle: "ai.image.prompt_style.ai",
@@ -80,7 +79,6 @@ export const DEFAULT_IMAGE_MODEL = "gpt-image-2";
 export const DEFAULT_IMAGE_SIZE = "1536x1024";
 export const DEFAULT_IMAGE_QUALITY = "auto";
 export const DEFAULT_IMAGE_OUTPUT_FORMAT = "png";
-export const DEFAULT_IMAGE_TIMEOUT_MS = 180000;
 export const DEFAULT_AI_WRITING_STYLE =
   "面向 BSVgo 技术读者，语言清晰、克制、可信。优先使用结构化小标题、短段落和 Markdown 正文，不输出 HTML。所有事实、数据、人物、时间、链接、代码、产品能力和因果判断必须来自素材或明确标注为推断；素材不足时要保守表达，不编造细节。允许适度营销，但必须具体、可验证、不过度承诺。中文正文自然专业，英文正文面向全球技术读者，避免中式直译。Slug 使用小写英文、数字和连字符，简短表达核心主题。SEO 要分别服务中文入口和英文入口，提炼真实关键词，不堆砌。";
 const LEGACY_IMAGE_PROMPT_STYLE =
@@ -280,9 +278,6 @@ export async function getImageGenerationSettings() {
     );
   }
 
-  const timeoutValue = Number(
-    decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.timeoutMs)).trim()
-  );
   const presetValue = decryptIfNeeded(
     byKey.get(IMAGE_GENERATION_SETTING_KEYS.preset)
   ).trim();
@@ -307,11 +302,7 @@ export async function getImageGenerationSettings() {
       decryptIfNeeded(
         byKey.get(IMAGE_GENERATION_SETTING_KEYS.outputFormat)
       ).trim() || DEFAULT_IMAGE_OUTPUT_FORMAT,
-    promptStyles: imagePromptStyles(byKey),
-    timeoutMs:
-      Number.isFinite(timeoutValue) && timeoutValue > 0
-        ? timeoutValue
-        : DEFAULT_IMAGE_TIMEOUT_MS
+    promptStyles: imagePromptStyles(byKey)
   };
 }
 
@@ -373,9 +364,6 @@ export async function getSettingsPageData() {
   const imageOutputFormat =
     decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.outputFormat)).trim() ||
     DEFAULT_IMAGE_OUTPUT_FORMAT;
-  const imageTimeoutValue =
-    decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.timeoutMs)).trim() ||
-    String(DEFAULT_IMAGE_TIMEOUT_MS);
   const promptStyles = imagePromptStyles(byKey);
   const canReuseTextApiKey = canReuseApiKey(apiBaseUrl, imageApiBaseUrl);
 
@@ -446,7 +434,6 @@ export async function getSettingsPageData() {
       size: imageSize,
       quality: imageQuality,
       outputFormat: imageOutputFormat,
-      timeoutMs: imageTimeoutValue,
       promptStyles
     },
     homepageSeo
@@ -683,7 +670,6 @@ export async function saveImageGenerationSettings({
   size,
   quality,
   outputFormat,
-  timeoutMs,
   blockchainPromptStyle,
   aiPromptStyle,
   infrastructurePromptStyle,
@@ -696,7 +682,6 @@ export async function saveImageGenerationSettings({
   size: string;
   quality: string;
   outputFormat: string;
-  timeoutMs: number;
   blockchainPromptStyle?: string;
   aiPromptStyle?: string;
   infrastructurePromptStyle?: string;
@@ -738,11 +723,6 @@ export async function saveImageGenerationSettings({
     {
       key: IMAGE_GENERATION_SETTING_KEYS.outputFormat,
       value: outputFormat || DEFAULT_IMAGE_OUTPUT_FORMAT,
-      encrypted: false
-    },
-    {
-      key: IMAGE_GENERATION_SETTING_KEYS.timeoutMs,
-      value: String(timeoutMs),
       encrypted: false
     },
     {

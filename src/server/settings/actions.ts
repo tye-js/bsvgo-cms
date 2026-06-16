@@ -50,7 +50,6 @@ export type ImageGenerationSettingsInput = {
   size: string;
   quality: string;
   outputFormat: string;
-  timeoutMs: string;
   blockchainPromptStyle?: string;
   aiPromptStyle?: string;
   infrastructurePromptStyle?: string;
@@ -232,7 +231,6 @@ export async function updateImageGenerationSettingsAction(
       parsed.data.preset === MAIN_COVER_IMAGE_SPEC.preset
         ? MAIN_COVER_IMAGE_SPEC.providerOutputFormat
         : parsed.data.outputFormat,
-    timeoutMs: parsed.data.timeoutMs,
     blockchainPromptStyle: parsed.data.blockchainPromptStyle,
     aiPromptStyle: parsed.data.aiPromptStyle,
     infrastructurePromptStyle: parsed.data.infrastructurePromptStyle,
@@ -319,7 +317,6 @@ export async function updateAiSettingsAction(
     size: stringValue(formData, "imageSize"),
     quality: stringValue(formData, "imageQuality"),
     outputFormat: stringValue(formData, "imageOutputFormat"),
-    timeoutMs: stringValue(formData, "imageTimeoutMs"),
     blockchainPromptStyle: stringValue(formData, "imageBlockchainPromptStyle"),
     aiPromptStyle: stringValue(formData, "imageAiPromptStyle"),
     infrastructurePromptStyle: stringValue(
@@ -370,7 +367,6 @@ export async function updateAiSettingsAction(
       parsedImageGeneration.data.preset === MAIN_COVER_IMAGE_SPEC.preset
         ? MAIN_COVER_IMAGE_SPEC.providerOutputFormat
         : parsedImageGeneration.data.outputFormat,
-    timeoutMs: parsedImageGeneration.data.timeoutMs,
     blockchainPromptStyle: parsedImageGeneration.data.blockchainPromptStyle,
     aiPromptStyle: parsedImageGeneration.data.aiPromptStyle,
     infrastructurePromptStyle:

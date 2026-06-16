@@ -148,14 +148,9 @@ export const imageGenerationSettingsSchema = z.object({
     }, "请输入有效的图片生成 API Base URL"),
   model: z.string().trim().min(1, "图片生成模型为必填项").max(120),
   preset: z.enum(imageGenerationPresetValues),
-  size: z.enum(["auto", "1024x1024", "1024x1536", "1536x1024"]),
+  size: z.enum(["auto", "1024x1024", "1024x1536", "1536x1024", "1600x900"]),
   quality: z.enum(["auto", "low", "medium", "high"]),
   outputFormat: z.enum(["png", "jpeg", "webp"]),
-  timeoutMs: z.coerce
-    .number()
-    .int()
-    .min(10000, "图片生成超时时间至少为 10000 毫秒")
-    .max(300000, "图片生成超时时间不能超过 300000 毫秒"),
   blockchainPromptStyle: z
     .string()
     .trim()

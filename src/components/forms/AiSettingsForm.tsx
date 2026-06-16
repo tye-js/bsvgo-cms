@@ -16,6 +16,7 @@ import { buttonClassName } from "@/components/admin/Button";
 import { Field, inputClassName, textareaClassName } from "@/components/admin/Field";
 import type { AiWritingRoleId } from "@/lib/ai-style";
 import { MAIN_COVER_IMAGE_SPEC } from "@/lib/image-generation";
+import { cn } from "@/lib/utils";
 import type {
   AiProviderSettingsInput,
   AiSeoStyleSettingsInput,
@@ -50,7 +51,6 @@ type ImageGenerationValue = {
   size: string;
   quality: string;
   outputFormat: string;
-  timeoutMs: string;
   promptStyles: {
     blockchain: string;
     ai: string;
@@ -61,6 +61,8 @@ type ImageGenerationValue = {
 type SectionState = ActionState & {
   key?: string;
 };
+
+type SettingsSectionId = "provider" | "writing" | "seo" | "image";
 
 const deepSeekBaseUrl = "https://api.deepseek.com";
 const deepSeekModel = "deepseek-v4-pro";
@@ -87,33 +89,28 @@ function StatusMessage({ state }: { state: SectionState }) {
   return null;
 }
 
-function SectionShell({
+function PanelHeader({
   icon,
   title,
   description,
-  state,
-  children
+  state
 }: {
   icon: React.ReactNode;
   title: string;
   description: string;
   state: SectionState;
-  children: React.ReactNode;
 }) {
   return (
-    <section className="grid gap-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="border-b border-slate-200 pb-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
-            {icon}
-            {title}
-          </div>
-          <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>
+    <div className="grid gap-3 border-b border-slate-200 pb-4">
+      <div>
+        <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+          {icon}
+          {title}
         </div>
+        <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>
       </div>
       <StatusMessage state={state} />
-      {children}
-    </section>
+    </div>
   );
 }
 
@@ -173,6 +170,8 @@ export function AiSettingsForm({
   imageGeneration: ImageGenerationValue;
 }) {
   const [state, setState] = useState<SectionState>({});
+  const [activeSection, setActiveSection] =
+    useState<SettingsSectionId>("provider");
   const [apiKeyValue, setApiKeyValue] = useState("");
   const [apiBaseUrlValue, setApiBaseUrlValue] = useState(apiBaseUrl);
   const [modelValue, setModelValue] = useState(model);
@@ -208,9 +207,6 @@ export function AiSettingsForm({
   const [imageOutputFormatValue, setImageOutputFormatValue] = useState(
     imageGeneration.outputFormat
   );
-  const [imageTimeoutMsValue, setImageTimeoutMsValue] = useState(
-    imageGeneration.timeoutMs
-  );
   const [imageBlockchainPromptStyleValue, setImageBlockchainPromptStyleValue] =
     useState(imageGeneration.promptStyles.blockchain);
   const [imageAiPromptStyleValue, setImageAiPromptStyleValue] = useState(
@@ -242,16 +238,93 @@ export function AiSettingsForm({
       ? "未单独配置，将复用同供应商文本 Key"
       : "未单独配置，请填写图片 API Key";
   const isMainCoverPreset = imagePresetValue === MAIN_COVER_IMAGE_SPEC.preset;
+  const sections: Array<{
+    id: SettingsSectionId;
+    title: string;
+    description: string;
+    icon: React.ReactNode;
+    status: string;
+  }> = [
+    {
+      id: "provider",
+      title: "文本模型",
+      description: "文章、翻译、SEO 和媒体元数据",
+      icon: <KeyRound size={16} />,
+      status: hasApiKey ? `${modelValue} · 已配置 Key` : `${modelValue} · 未配置 Key`
+    },
+    {
+      id: "writing",
+      title: "写作策略",
+      description: "全局底线、默认角色、角色风格",
+      icon: <BookOpen size={16} />,
+      status:
+        writingRoles.find((role) => role.id === defaultWritingRoleValue)?.label ??
+        "未选择默认角色"
+    },
+    {
+      id: "seo",
+      title: "SEO 策略",
+      description: "中文和英文 SEO 生成口径",
+      icon: <Search size={16} />,
+      status: "双语 SEO"
+    },
+    {
+      id: "image",
+      title: "封面生成",
+      description: "图片模型、规格、三类封面风格",
+      icon: <ImageIcon size={16} />,
+      status: `${imageModelValue} · ${imageKeyStatus}`
+    }
+  ];
 
   return (
-    <div className="grid gap-5">
-      <SectionShell
-        icon={<KeyRound size={16} />}
-        title="模型连接"
-        description="文本生成模型连接配置会保存到数据库，用于写文章、翻译、SEO 和媒体元数据生成。"
-        state={state.key === "provider" ? state : {}}
-      >
-        <div className="grid content-start gap-5">
+    <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+      <aside className="grid content-start gap-2 rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+        {sections.map((section) => (
+          <button
+            key={section.id}
+            type="button"
+            onClick={() => setActiveSection(section.id)}
+            className={cn(
+              "grid gap-1 rounded-md px-3 py-3 text-left transition",
+              activeSection === section.id
+                ? "bg-slate-900 text-white"
+                : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+            )}
+          >
+            <span className="flex items-center gap-2 text-sm font-semibold">
+              {section.icon}
+              {section.title}
+            </span>
+            <span
+              className={cn(
+                "text-xs leading-5",
+                activeSection === section.id ? "text-slate-200" : "text-slate-500"
+              )}
+            >
+              {section.description}
+            </span>
+            <span
+              className={cn(
+                "mt-1 truncate text-xs",
+                activeSection === section.id ? "text-slate-300" : "text-slate-400"
+              )}
+            >
+              {section.status}
+            </span>
+          </button>
+        ))}
+      </aside>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        {activeSection === "provider" ? (
+          <div className="grid content-start gap-5">
+            <PanelHeader
+              icon={<KeyRound size={16} />}
+              title="文本模型"
+              description="用于写文章、翻译、SEO 和媒体元数据生成。配置保存到数据库。"
+              state={state.key === "provider" ? state : {}}
+            />
           <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
             API Key 状态：{" "}
             <span className="font-medium text-slate-900">
@@ -339,16 +412,17 @@ export function AiSettingsForm({
               {providerSubmit.isPending ? "保存中..." : "保存文本模型"}
             </button>
           </div>
-        </div>
-      </SectionShell>
+          </div>
+        ) : null}
 
-      <SectionShell
-        icon={<BookOpen size={16} />}
-        title="写作策略"
-        description="维护全局写作底线、默认写作角色，以及每个角色自己的差异化要求。"
-        state={state.key === "writing" ? state : {}}
-      >
-        <div className="grid gap-5">
+        {activeSection === "writing" ? (
+          <div className="grid gap-5">
+            <PanelHeader
+              icon={<BookOpen size={16} />}
+              title="写作策略"
+              description="维护全局写作底线、默认写作角色，以及每个角色自己的差异化要求。"
+              state={state.key === "writing" ? state : {}}
+            />
           <Field
             label="全局写作底线"
             hint="所有角色都会遵守的硬规则。建议覆盖事实约束、受众、Markdown、营销边界、双语语气、Slug 和 SEO。"
@@ -450,16 +524,17 @@ export function AiSettingsForm({
               {writingSubmit.isPending ? "保存中..." : "保存写作策略"}
             </button>
           </div>
-        </div>
-      </SectionShell>
+          </div>
+        ) : null}
 
-      <SectionShell
-        icon={<Search size={16} />}
-        title="AI SEO 策略"
-        description="用于文章、分类、标签和首页的双语 SEO 生成。中文 SEO 和英文 SEO 分别服务对应前端入口。"
-        state={state.key === "seo" ? state : {}}
-      >
-        <div className="grid gap-5">
+        {activeSection === "seo" ? (
+          <div className="grid gap-5">
+            <PanelHeader
+              icon={<Search size={16} />}
+              title="AI SEO 策略"
+              description="用于文章、分类、标签和首页的双语 SEO 生成。中文 SEO 和英文 SEO 分别服务对应前端入口。"
+              state={state.key === "seo" ? state : {}}
+            />
           <Field label="中文 SEO 风格">
             <textarea
               value={zhSeoStyleValue}
@@ -491,16 +566,17 @@ export function AiSettingsForm({
               {seoSubmit.isPending ? "保存中..." : "保存 SEO 策略"}
             </button>
           </div>
-        </div>
-      </SectionShell>
+          </div>
+        ) : null}
 
-      <SectionShell
-        icon={<ImageIcon size={16} />}
-        title="封面生成"
-        description="维护图片模型参数，以及区块链、人工智能、基础设施三类封面的视觉风格。"
-        state={state.key === "image" ? state : {}}
-      >
-        <div className="grid gap-5">
+        {activeSection === "image" ? (
+          <div className="grid gap-5">
+            <PanelHeader
+              icon={<ImageIcon size={16} />}
+              title="封面生成"
+              description="维护图片模型参数，以及区块链、人工智能、基础设施三类封面的视觉风格。"
+              state={state.key === "image" ? state : {}}
+            />
           <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
             图片 API Key 状态：{" "}
             <span className="font-medium text-slate-900">
@@ -537,7 +613,7 @@ export function AiSettingsForm({
               />
             </Field>
           </div>
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px]">
+          <div className="grid gap-4">
             <Field label="图片模型">
               <input
                 value={imageModelValue}
@@ -545,18 +621,6 @@ export function AiSettingsForm({
                 required
                 className={inputClassName}
                 placeholder="gpt-image-2"
-              />
-            </Field>
-            <Field label="超时时间（毫秒）">
-              <input
-                type="number"
-                min={10000}
-                max={300000}
-                step={1000}
-                value={imageTimeoutMsValue}
-                onChange={(event) => setImageTimeoutMsValue(event.target.value)}
-                required
-                className={inputClassName}
               />
             </Field>
           </div>
@@ -613,6 +677,7 @@ export function AiSettingsForm({
                 <option value="auto">auto</option>
                 <option value="1024x1024">1024x1024</option>
                 <option value="1536x1024">1536x1024</option>
+                <option value="1600x900">1600x900 · 16:9</option>
                 <option value="1024x1536">1024x1536</option>
               </select>
             </Field>
@@ -690,7 +755,6 @@ export function AiSettingsForm({
                   size: imageSizeValue,
                   quality: imageQualityValue,
                   outputFormat: imageOutputFormatValue,
-                  timeoutMs: imageTimeoutMsValue,
                   blockchainPromptStyle: imageBlockchainPromptStyleValue,
                   aiPromptStyle: imageAiPromptStyleValue,
                   infrastructurePromptStyle: imageInfrastructurePromptStyleValue
@@ -701,8 +765,9 @@ export function AiSettingsForm({
               {imageSubmit.isPending ? "保存中..." : "保存封面生成"}
             </button>
           </div>
-        </div>
-      </SectionShell>
+          </div>
+        ) : null}
+      </section>
     </div>
   );
 }

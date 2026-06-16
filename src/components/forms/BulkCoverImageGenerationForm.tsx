@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, ChevronDown, ImagePlus, Loader2, SkipForward, XCircle } from "lucide-react";
 
 import { buttonClassName } from "@/components/admin/Button";
+import { formatDate } from "@/lib/utils";
 
 type ActionState = {
   error?: string;
@@ -20,6 +21,15 @@ type PostOption = {
   coverImage: string;
   categorySlug: string;
   categoryName: string;
+  coverAssetId?: string | null;
+  coverMimeType?: string | null;
+  coverWidth?: number | null;
+  coverHeight?: number | null;
+  coverFileSize?: number | null;
+  coverGeneratedAt?: string | null;
+  coverModel?: string | null;
+  coverStorageProvider?: string | null;
+  coverCreatedAt?: Date | string | null;
 };
 
 type AiJobResponse = {
@@ -56,6 +66,25 @@ async function readJob(jobId: string) {
   }
 
   return payload.job;
+}
+
+function formatFileSize(size: number | null | undefined) {
+  if (!size) return "-";
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function imageFormatLabel(mimeType: string | null | undefined) {
+  if (!mimeType) return "格式未知";
+  if (mimeType === "image/webp") return "WebP";
+  if (mimeType === "image/png") return "PNG";
+  if (mimeType === "image/jpeg") return "JPEG";
+  if (mimeType === "image/avif") return "AVIF";
+  return mimeType.replace(/^image\//, "").toUpperCase();
+}
+
+function coverGeneratedDate(post: PostOption) {
+  return post.coverGeneratedAt || post.coverCreatedAt || null;
 }
 
 export function BulkCoverImageGenerationForm({
@@ -128,7 +157,7 @@ export function BulkCoverImageGenerationForm({
         }
 
         if (!cancelled) {
-          setJobError("封面生成任务仍在后台运行，请稍后刷新页面查看结果。");
+          setJobMessage("封面生成任务仍在后台运行，进度已保存，可稍后刷新页面查看。");
         }
       } catch (error) {
         if (!cancelled) {
@@ -233,6 +262,17 @@ export function BulkCoverImageGenerationForm({
                     {post.categoryName || post.categorySlug} · {post.slug} ·{" "}
                     {post.status} · {post.coverImage ? "已有封面" : "无封面"}
                   </span>
+                  {post.coverImage ? (
+                    <span className="mt-1 block text-xs leading-5 text-slate-500">
+                      最新生成：{formatDate(coverGeneratedDate(post))} ·{" "}
+                      {imageFormatLabel(post.coverMimeType)}
+                      {post.coverWidth && post.coverHeight
+                        ? ` · ${post.coverWidth} x ${post.coverHeight}`
+                        : ""}{" "}
+                      · {formatFileSize(post.coverFileSize)}
+                      {post.coverModel ? ` · ${post.coverModel}` : ""}
+                    </span>
+                  ) : null}
                 </span>
               </label>
             ))}

@@ -10,7 +10,7 @@ export const MAIN_COVER_IMAGE_SPEC = {
   width: 1600,
   height: 900,
   aspectRatio: "16:9",
-  sourceSize: "1536x1024",
+  sourceSize: "1600x900",
   providerOutputFormat: "png",
   outputFormat: "webp",
   qualityMin: 80,

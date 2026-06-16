@@ -1302,64 +1302,52 @@ export async function generatePostCoverImage(
   input: CoverImageGenerationInput
 ): Promise<GeneratedCoverImage> {
   const settings = await getImageGenerationSettings();
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), settings.timeoutMs);
   const prompt = buildCoverImagePrompt(
     input,
     settings.promptStyles[input.category],
     settings.preset
   );
 
-  try {
-    const response = await fetch(imageGenerationsUrl(settings.apiBaseUrl), {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${settings.apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: settings.model,
-        prompt,
-        n: 1,
-        size: settings.size,
-        quality: settings.quality,
-        output_format: settings.outputFormat,
-        response_format: "b64_json"
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `${providerLabel(settings.apiBaseUrl)} image generation failed: ${response.status} ${errorText}`
-      );
-    }
-
-    const payload = (await response.json()) as {
-      data?: Array<{
-        b64_json?: string;
-        revised_prompt?: string;
-      }>;
-    };
-    const b64Json = payload.data?.[0]?.b64_json;
-    if (!b64Json) {
-      throw new Error("Image generation provider did not return image data.");
-    }
-
-    return {
-      buffer: Buffer.from(b64Json, "base64"),
-      mimeType: imageMimeType(settings.outputFormat),
-      prompt: payload.data?.[0]?.revised_prompt || prompt,
+  const response = await fetch(imageGenerationsUrl(settings.apiBaseUrl), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${settings.apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
       model: settings.model,
-      preset: settings.preset
-    };
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`${providerLabel(settings.apiBaseUrl)} image generation timed out.`);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timer);
+      prompt,
+      n: 1,
+      size: settings.size,
+      quality: settings.quality,
+      output_format: settings.outputFormat,
+      response_format: "b64_json"
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `${providerLabel(settings.apiBaseUrl)} image generation failed: ${response.status} ${errorText}`
+    );
   }
+
+  const payload = (await response.json()) as {
+    data?: Array<{
+      b64_json?: string;
+      revised_prompt?: string;
+    }>;
+  };
+  const b64Json = payload.data?.[0]?.b64_json;
+  if (!b64Json) {
+    throw new Error("Image generation provider did not return image data.");
+  }
+
+  return {
+    buffer: Buffer.from(b64Json, "base64"),
+    mimeType: imageMimeType(settings.outputFormat),
+    prompt: payload.data?.[0]?.revised_prompt || prompt,
+    model: settings.model,
+    preset: settings.preset
+  };
 }
