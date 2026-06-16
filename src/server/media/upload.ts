@@ -5,6 +5,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 
+import { MAIN_COVER_IMAGE_SPEC } from "@/lib/image-generation";
 import { db } from "@/server/db";
 import { mediaAssets, type MediaAssetVariant } from "@/server/db/schema";
 
@@ -107,6 +108,58 @@ function extensionForMimeType(mimeType: string) {
 function variantStorageKey(originalStorageKey: string, width: number, format: string) {
   const parsed = path.parse(originalStorageKey);
   return `${parsed.dir}/${parsed.name}-${width}.${format}`;
+}
+
+async function mainCoverImageBuffer(inputBuffer: Buffer) {
+  const format = MAIN_COVER_IMAGE_SPEC.outputFormat;
+  const qualities = [
+    MAIN_COVER_IMAGE_SPEC.qualityMax,
+    MAIN_COVER_IMAGE_SPEC.defaultQuality,
+    MAIN_COVER_IMAGE_SPEC.qualityMin
+  ];
+  let bestBuffer: Buffer | null = null;
+  let bestQuality: number = MAIN_COVER_IMAGE_SPEC.defaultQuality;
+
+  for (const candidateQuality of qualities) {
+    const outputBuffer = await sharp(inputBuffer)
+      .resize({
+        width: MAIN_COVER_IMAGE_SPEC.width,
+        height: MAIN_COVER_IMAGE_SPEC.height,
+        fit: "cover",
+        position: "center"
+      })
+      .webp({ quality: candidateQuality })
+      .toBuffer();
+    bestBuffer = outputBuffer;
+    bestQuality = candidateQuality;
+
+    if (
+      outputBuffer.length <= MAIN_COVER_IMAGE_SPEC.targetFileSizeMaxBytes ||
+      candidateQuality === MAIN_COVER_IMAGE_SPEC.qualityMin
+    ) {
+      break;
+    }
+  }
+
+  return {
+    buffer: bestBuffer ?? Buffer.from(inputBuffer),
+    mimeType: "image/webp",
+    extension: format,
+    width: MAIN_COVER_IMAGE_SPEC.width,
+    height: MAIN_COVER_IMAGE_SPEC.height,
+    quality: bestQuality,
+    metadata: {
+      preset: MAIN_COVER_IMAGE_SPEC.preset,
+      label: MAIN_COVER_IMAGE_SPEC.label,
+      width: MAIN_COVER_IMAGE_SPEC.width,
+      height: MAIN_COVER_IMAGE_SPEC.height,
+      aspectRatio: MAIN_COVER_IMAGE_SPEC.aspectRatio,
+      outputFormat: format,
+      quality: bestQuality,
+      targetFileSizeMinBytes: MAIN_COVER_IMAGE_SPEC.targetFileSizeMinBytes,
+      targetFileSizeMaxBytes: MAIN_COVER_IMAGE_SPEC.targetFileSizeMaxBytes
+    }
+  };
 }
 
 export async function generateImageVariants({
@@ -321,8 +374,21 @@ export async function saveGeneratedCoverImage({
     throw new Error("AI 生成的图片为空。");
   }
 
-  const extension = extensionForMimeType(mimeType);
-  const checksum = createHash("sha256").update(buffer).digest("hex");
+  const normalizedImage =
+    metadata?.generationPreset === MAIN_COVER_IMAGE_SPEC.preset
+      ? await mainCoverImageBuffer(buffer)
+      : {
+          buffer,
+          mimeType,
+          extension: extensionForMimeType(mimeType),
+          width: null,
+          height: null,
+          metadata: null
+        };
+  const outputBuffer = normalizedImage.buffer;
+  const outputMimeType = normalizedImage.mimeType;
+  const extension = normalizedImage.extension;
+  const checksum = createHash("sha256").update(outputBuffer).digest("hex");
   const now = new Date();
   const year = String(now.getFullYear());
   const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -330,19 +396,19 @@ export async function saveGeneratedCoverImage({
   const targetPath = safeUploadPath(storageKey);
 
   await mkdir(path.dirname(targetPath), { recursive: true });
-  await writeFile(targetPath, buffer, { flag: "wx" });
+  await writeFile(targetPath, outputBuffer, { flag: "wx" });
 
-  const imageMetadata = await sharp(buffer).metadata();
+  const imageMetadata = await sharp(outputBuffer).metadata();
   const imageSize = {
-    width: imageMetadata.width ?? null,
-    height: imageMetadata.height ?? null
+    width: normalizedImage.width ?? imageMetadata.width ?? null,
+    height: normalizedImage.height ?? imageMetadata.height ?? null
   };
   const url = publicUrl(storageKey, publicOrigin);
   const normalizedZhAltText = zhAltText?.trim() || altText.trim();
   const normalizedEnAltText = enAltText?.trim() ?? "";
   const normalizedAltText = altText.trim() || normalizedZhAltText || normalizedEnAltText;
   const variants = await generateImageVariants({
-    buffer,
+    buffer: outputBuffer,
     storageKey,
     publicOrigin,
     width: imageSize.width,
@@ -365,12 +431,17 @@ export async function saveGeneratedCoverImage({
       storageKey,
       originalFilename: safeOriginalName(originalFilename),
       checksum,
-      mimeType,
+      mimeType: outputMimeType,
       width: imageSize.width,
       height: imageSize.height,
-      fileSize: buffer.length,
+      fileSize: outputBuffer.length,
       variants,
-      metadata: metadata ?? {},
+      metadata: {
+        ...(metadata ?? {}),
+        ...(normalizedImage.metadata
+          ? { outputSpec: normalizedImage.metadata }
+          : {})
+      },
       createdBy: userId
     })
     .returning({

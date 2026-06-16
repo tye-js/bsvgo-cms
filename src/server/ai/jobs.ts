@@ -146,6 +146,18 @@ function friendlyJobError(error: unknown) {
   if (error instanceof Error && error.name === "AbortError") {
     return "链接读取超时。可以把网页关键信息粘贴到素材框后重试。";
   }
+  if (
+    error instanceof Error &&
+    error.message.includes("No available compatible accounts")
+  ) {
+    return "图片生成供应商没有可用的兼容账号。请检查设置里的图片 API Key、Base URL、模型名和供应商账号额度，或更换可用的生图模型后重试。";
+  }
+  if (
+    error instanceof Error &&
+    error.message.includes("image generation failed: 503")
+  ) {
+    return "图片生成供应商暂时不可用或账号不可用。请检查图片生成配置、账号额度和模型可用性后重试。";
+  }
   if (error instanceof Error && error.message.includes("timed out")) {
     return "AI 生成超时。可以稍后重试。";
   }
@@ -384,8 +396,10 @@ async function executeBulkPostCoverImagesJob({
         generatedBy: "ai",
         generatedAt: new Date().toISOString(),
         generationType: "post_cover",
+        generationPreset: image.preset,
         prompt: image.prompt,
         model: image.model,
+        sourceMimeType: image.mimeType,
         seoSummary: zhSeoDescription,
         category,
         categoryName,

@@ -10,6 +10,7 @@ import {
   writingStyleSchema
 } from "@/lib/validators";
 import { aiWritingRoles } from "@/lib/ai-style";
+import { MAIN_COVER_IMAGE_SPEC } from "@/lib/image-generation";
 import { generateSeoSuggestion } from "@/server/ai/openai";
 import { requireContentEditor, requireRole } from "@/server/auth/session";
 import {
@@ -45,6 +46,7 @@ export type ImageGenerationSettingsInput = {
   apiKey?: string;
   apiBaseUrl: string;
   model: string;
+  preset: string;
   size: string;
   quality: string;
   outputFormat: string;
@@ -217,9 +219,19 @@ export async function updateImageGenerationSettingsAction(
     apiKey: parsed.data.apiKey,
     apiBaseUrl: parsed.data.apiBaseUrl,
     model: parsed.data.model,
-    size: parsed.data.size,
-    quality: parsed.data.quality,
-    outputFormat: parsed.data.outputFormat,
+    preset: parsed.data.preset,
+    size:
+      parsed.data.preset === MAIN_COVER_IMAGE_SPEC.preset
+        ? MAIN_COVER_IMAGE_SPEC.sourceSize
+        : parsed.data.size,
+    quality:
+      parsed.data.preset === MAIN_COVER_IMAGE_SPEC.preset
+        ? "high"
+        : parsed.data.quality,
+    outputFormat:
+      parsed.data.preset === MAIN_COVER_IMAGE_SPEC.preset
+        ? MAIN_COVER_IMAGE_SPEC.providerOutputFormat
+        : parsed.data.outputFormat,
     timeoutMs: parsed.data.timeoutMs,
     blockchainPromptStyle: parsed.data.blockchainPromptStyle,
     aiPromptStyle: parsed.data.aiPromptStyle,
@@ -303,6 +315,7 @@ export async function updateAiSettingsAction(
     apiKey: stringValue(formData, "imageApiKey"),
     apiBaseUrl: stringValue(formData, "imageApiBaseUrl"),
     model: stringValue(formData, "imageModel"),
+    preset: stringValue(formData, "imagePreset") || "custom",
     size: stringValue(formData, "imageSize"),
     quality: stringValue(formData, "imageQuality"),
     outputFormat: stringValue(formData, "imageOutputFormat"),
@@ -344,9 +357,19 @@ export async function updateAiSettingsAction(
     apiKey: parsedImageGeneration.data.apiKey,
     apiBaseUrl: parsedImageGeneration.data.apiBaseUrl,
     model: parsedImageGeneration.data.model,
-    size: parsedImageGeneration.data.size,
-    quality: parsedImageGeneration.data.quality,
-    outputFormat: parsedImageGeneration.data.outputFormat,
+    preset: parsedImageGeneration.data.preset,
+    size:
+      parsedImageGeneration.data.preset === MAIN_COVER_IMAGE_SPEC.preset
+        ? MAIN_COVER_IMAGE_SPEC.sourceSize
+        : parsedImageGeneration.data.size,
+    quality:
+      parsedImageGeneration.data.preset === MAIN_COVER_IMAGE_SPEC.preset
+        ? "high"
+        : parsedImageGeneration.data.quality,
+    outputFormat:
+      parsedImageGeneration.data.preset === MAIN_COVER_IMAGE_SPEC.preset
+        ? MAIN_COVER_IMAGE_SPEC.providerOutputFormat
+        : parsedImageGeneration.data.outputFormat,
     timeoutMs: parsedImageGeneration.data.timeoutMs,
     blockchainPromptStyle: parsedImageGeneration.data.blockchainPromptStyle,
     aiPromptStyle: parsedImageGeneration.data.aiPromptStyle,

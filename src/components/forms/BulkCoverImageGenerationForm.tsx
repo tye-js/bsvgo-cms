@@ -61,6 +61,10 @@ export function BulkCoverImageGenerationForm({
   const [jobError, setJobError] = useState("");
   const [isPolling, setIsPolling] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [overwriteExisting, setOverwriteExisting] = useState(false);
+  const availableCount = overwriteExisting
+    ? posts.length
+    : posts.filter((post) => !post.coverImage).length;
 
   useEffect(() => {
     if (!state.jobId) return;
@@ -146,13 +150,15 @@ export function BulkCoverImageGenerationForm({
               <input
                 type="checkbox"
                 name="overwriteExisting"
+                checked={overwriteExisting}
+                onChange={(event) => setOverwriteExisting(event.target.checked)}
                 className="h-4 w-4 rounded border-slate-300 text-slate-700"
               />
               覆盖已有封面的文章
             </label>
             <button
               type="submit"
-              disabled={isPending || isPolling}
+              disabled={isPending || isPolling || availableCount === 0}
               className={buttonClassName("primary", "shrink-0")}
             >
               {isPending || isPolling ? (
@@ -171,12 +177,17 @@ export function BulkCoverImageGenerationForm({
             {posts.map((post) => (
               <label
                 key={post.id}
-                className="flex items-start gap-3 rounded-md px-2 py-2 text-sm hover:bg-slate-50"
+                className={`flex items-start gap-3 rounded-md px-2 py-2 text-sm ${
+                  !overwriteExisting && post.coverImage
+                    ? "cursor-not-allowed opacity-50"
+                    : "hover:bg-slate-50"
+                }`}
               >
                 <input
                   type="checkbox"
                   name="postIds"
                   value={post.id}
+                  disabled={!overwriteExisting && Boolean(post.coverImage)}
                   className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-700"
                 />
                 <span className="min-w-0">
@@ -193,6 +204,11 @@ export function BulkCoverImageGenerationForm({
             {posts.length === 0 ? (
               <p className="px-2 py-6 text-center text-sm text-slate-500">
                 暂无可生成封面的文章。
+              </p>
+            ) : null}
+            {posts.length > 0 && availableCount === 0 ? (
+              <p className="px-2 py-6 text-center text-sm text-slate-500">
+                当前列表文章都已有封面。如需重新生成，请勾选覆盖已有封面的文章。
               </p>
             ) : null}
           </div>

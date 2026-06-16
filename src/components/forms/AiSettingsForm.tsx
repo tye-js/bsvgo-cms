@@ -15,6 +15,7 @@ import {
 import { buttonClassName } from "@/components/admin/Button";
 import { Field, inputClassName, textareaClassName } from "@/components/admin/Field";
 import type { AiWritingRoleId } from "@/lib/ai-style";
+import { MAIN_COVER_IMAGE_SPEC } from "@/lib/image-generation";
 import type {
   AiProviderSettingsInput,
   AiSeoStyleSettingsInput,
@@ -45,6 +46,7 @@ type ImageGenerationValue = {
   apiKeyPreview: string;
   apiBaseUrl: string;
   model: string;
+  preset: string;
   size: string;
   quality: string;
   outputFormat: string;
@@ -196,6 +198,9 @@ export function AiSettingsForm({
     imageGeneration.apiBaseUrl
   );
   const [imageModelValue, setImageModelValue] = useState(imageGeneration.model);
+  const [imagePresetValue, setImagePresetValue] = useState(
+    imageGeneration.preset
+  );
   const [imageSizeValue, setImageSizeValue] = useState(imageGeneration.size);
   const [imageQualityValue, setImageQualityValue] = useState(
     imageGeneration.quality
@@ -236,6 +241,7 @@ export function AiSettingsForm({
     : imageGeneration.canReuseTextApiKey && hasApiKey
       ? "未单独配置，将复用同供应商文本 Key"
       : "未单独配置，请填写图片 API Key";
+  const isMainCoverPreset = imagePresetValue === MAIN_COVER_IMAGE_SPEC.preset;
 
   return (
     <div className="grid gap-5">
@@ -554,6 +560,49 @@ export function AiSettingsForm({
               />
             </Field>
           </div>
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <Field
+              label="生成规格"
+              hint={
+                isMainCoverPreset
+                  ? "最终入库前会统一裁切为 1600 x 900、16:9，并转为 WebP。"
+                  : "自定义模式会按下方尺寸、质量和输出格式保存模型返回结果。"
+              }
+            >
+              <select
+                value={imagePresetValue}
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  setImagePresetValue(nextValue);
+                  if (nextValue === MAIN_COVER_IMAGE_SPEC.preset) {
+                    setImageSizeValue(MAIN_COVER_IMAGE_SPEC.sourceSize);
+                    setImageQualityValue("high");
+                    setImageOutputFormatValue(
+                      MAIN_COVER_IMAGE_SPEC.providerOutputFormat
+                    );
+                  }
+                }}
+                className={inputClassName}
+              >
+                <option value="custom">自定义</option>
+                <option value={MAIN_COVER_IMAGE_SPEC.preset}>
+                  主封面图 · 1600x900 · WebP
+                </option>
+              </select>
+            </Field>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-600">
+              <span className="font-medium text-slate-900">
+                {MAIN_COVER_IMAGE_SPEC.label}
+              </span>
+              ：模型请求 {MAIN_COVER_IMAGE_SPEC.sourceSize}，最终入库{" "}
+              {MAIN_COVER_IMAGE_SPEC.width} x {MAIN_COVER_IMAGE_SPEC.height}，
+              比例 {MAIN_COVER_IMAGE_SPEC.aspectRatio}，WebP，质量{" "}
+              {MAIN_COVER_IMAGE_SPEC.qualityMin}-{MAIN_COVER_IMAGE_SPEC.qualityMax}，
+              目标{" "}
+              {Math.round(MAIN_COVER_IMAGE_SPEC.targetFileSizeMinBytes / 1024)}KB-
+              {Math.round(MAIN_COVER_IMAGE_SPEC.targetFileSizeMaxBytes / 1024)}KB。
+            </div>
+          </div>
           <div className="grid gap-4 md:grid-cols-3">
             <Field label="尺寸">
               <select
@@ -637,6 +686,7 @@ export function AiSettingsForm({
                   apiKey: imageApiKeyValue,
                   apiBaseUrl: imageApiBaseUrlValue,
                   model: imageModelValue,
+                  preset: imagePresetValue,
                   size: imageSizeValue,
                   quality: imageQualityValue,
                   outputFormat: imageOutputFormatValue,

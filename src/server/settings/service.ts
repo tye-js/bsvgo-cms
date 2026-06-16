@@ -11,6 +11,10 @@ import {
   isAiWritingRoleId,
   type AiWritingRoleId
 } from "@/lib/ai-style";
+import {
+  DEFAULT_IMAGE_GENERATION_PRESET,
+  isImageGenerationPreset
+} from "@/lib/image-generation";
 import { decryptSettingValue, encryptSettingValue } from "@/server/settings/crypto";
 import { db } from "@/server/db";
 import { appSettings } from "@/server/db/schema";
@@ -30,6 +34,7 @@ export const IMAGE_GENERATION_SETTING_KEYS = {
   apiKey: "ai.image.api_key",
   apiBaseUrl: "ai.image.api_base_url",
   model: "ai.image.model",
+  preset: "ai.image.preset",
   size: "ai.image.size",
   quality: "ai.image.quality",
   outputFormat: "ai.image.output_format",
@@ -278,6 +283,12 @@ export async function getImageGenerationSettings() {
   const timeoutValue = Number(
     decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.timeoutMs)).trim()
   );
+  const presetValue = decryptIfNeeded(
+    byKey.get(IMAGE_GENERATION_SETTING_KEYS.preset)
+  ).trim();
+  const preset = isImageGenerationPreset(presetValue)
+    ? presetValue
+    : DEFAULT_IMAGE_GENERATION_PRESET;
 
   return {
     apiKey,
@@ -285,6 +296,7 @@ export async function getImageGenerationSettings() {
     model:
       decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.model)).trim() ||
       DEFAULT_IMAGE_MODEL,
+    preset,
     size:
       decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.size)).trim() ||
       DEFAULT_IMAGE_SIZE,
@@ -346,6 +358,12 @@ export async function getSettingsPageData() {
   const imageModel =
     decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.model)).trim() ||
     DEFAULT_IMAGE_MODEL;
+  const imagePresetValue = decryptIfNeeded(
+    byKey.get(IMAGE_GENERATION_SETTING_KEYS.preset)
+  ).trim();
+  const imagePreset = isImageGenerationPreset(imagePresetValue)
+    ? imagePresetValue
+    : DEFAULT_IMAGE_GENERATION_PRESET;
   const imageSize =
     decryptIfNeeded(byKey.get(IMAGE_GENERATION_SETTING_KEYS.size)).trim() ||
     DEFAULT_IMAGE_SIZE;
@@ -424,6 +442,7 @@ export async function getSettingsPageData() {
         : "",
       apiBaseUrl: imageApiBaseUrl,
       model: imageModel,
+      preset: imagePreset,
       size: imageSize,
       quality: imageQuality,
       outputFormat: imageOutputFormat,
@@ -660,6 +679,7 @@ export async function saveImageGenerationSettings({
   apiKey,
   apiBaseUrl,
   model,
+  preset,
   size,
   quality,
   outputFormat,
@@ -672,6 +692,7 @@ export async function saveImageGenerationSettings({
   apiKey?: string;
   apiBaseUrl?: string;
   model: string;
+  preset: string;
   size: string;
   quality: string;
   outputFormat: string;
@@ -695,6 +716,13 @@ export async function saveImageGenerationSettings({
     {
       key: IMAGE_GENERATION_SETTING_KEYS.model,
       value: model.trim() || DEFAULT_IMAGE_MODEL,
+      encrypted: false
+    },
+    {
+      key: IMAGE_GENERATION_SETTING_KEYS.preset,
+      value: isImageGenerationPreset(preset)
+        ? preset
+        : DEFAULT_IMAGE_GENERATION_PRESET,
       encrypted: false
     },
     {

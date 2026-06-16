@@ -210,7 +210,7 @@ export async function bulkGeneratePostCoverImagesAction(
   }
 
   const rows = await db
-    .select({ id: posts.id })
+    .select({ id: posts.id, coverImage: posts.coverImage })
     .from(posts)
     .where(and(inArray(posts.id, uniqueIds), isNull(posts.deletedAt)));
 
@@ -218,17 +218,28 @@ export async function bulkGeneratePostCoverImagesAction(
     return { error: "没有找到可生成封面的文章。" };
   }
 
+  const targetRows = overwriteExisting
+    ? rows
+    : rows.filter((row) => !row.coverImage);
+
+  if (!targetRows.length) {
+    return {
+      error:
+        "选中的文章都已有封面。请勾选“覆盖已有封面的文章”，或选择无封面的文章。"
+    };
+  }
+
   const job = await createAiJob({
     type: "bulk_post_cover_images",
     input: {
-      postIds: rows.map((row) => row.id),
+      postIds: targetRows.map((row) => row.id),
       overwriteExisting
     },
     userId: user.id
   });
 
   return {
-    success: `已提交 ${rows.length} 篇文章的封面生成任务。`,
+    success: `已提交 ${targetRows.length} 篇文章的封面生成任务。`,
     jobId: job.id
   };
 }

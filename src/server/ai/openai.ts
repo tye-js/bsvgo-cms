@@ -2,6 +2,10 @@ import "server-only";
 
 import type { AiWritingRoleId } from "@/lib/ai-style";
 import {
+  MAIN_COVER_IMAGE_SPEC,
+  type ImageGenerationPreset
+} from "@/lib/image-generation";
+import {
   getAiSettingsForGeneration,
   getImageGenerationSettings
 } from "@/server/settings/service";
@@ -148,6 +152,7 @@ export type GeneratedCoverImage = {
   mimeType: string;
   prompt: string;
   model: string;
+  preset: ImageGenerationPreset;
 };
 
 type ResponsesJsonSchema = {
@@ -267,8 +272,19 @@ function imageMimeType(outputFormat: string) {
 
 function buildCoverImagePrompt(
   input: CoverImageGenerationInput,
-  promptStyle: string
+  promptStyle: string,
+  preset: ImageGenerationPreset
 ) {
+  const presetInstructions =
+    preset === MAIN_COVER_IMAGE_SPEC.preset
+      ? [
+          "",
+          `Final CMS output will be cropped to ${MAIN_COVER_IMAGE_SPEC.width} x ${MAIN_COVER_IMAGE_SPEC.height} (${MAIN_COVER_IMAGE_SPEC.aspectRatio}).`,
+          "Compose the image as a wide horizontal cover with the main subject centered and enough safe margins for cropping.",
+          "Avoid important details near the top, bottom, left, or right edges."
+        ]
+      : [];
+
   return [
     promptStyle,
     "",
@@ -279,7 +295,8 @@ function buildCoverImagePrompt(
     `Article title: ${input.title}`,
     input.description ? `Article description: ${input.description}` : "",
     `Major category: ${input.categoryName} (${input.category})`,
-    "Use the title, description, and major category to decide the scene, symbols, materials, and visual mood."
+    "Use the title, description, and major category to decide the scene, symbols, materials, and visual mood.",
+    ...presetInstructions
   ]
     .filter(Boolean)
     .join("\n");
@@ -1287,7 +1304,11 @@ export async function generatePostCoverImage(
   const settings = await getImageGenerationSettings();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), settings.timeoutMs);
-  const prompt = buildCoverImagePrompt(input, settings.promptStyles[input.category]);
+  const prompt = buildCoverImagePrompt(
+    input,
+    settings.promptStyles[input.category],
+    settings.preset
+  );
 
   try {
     const response = await fetch(imageGenerationsUrl(settings.apiBaseUrl), {
@@ -1330,7 +1351,8 @@ export async function generatePostCoverImage(
       buffer: Buffer.from(b64Json, "base64"),
       mimeType: imageMimeType(settings.outputFormat),
       prompt: payload.data?.[0]?.revised_prompt || prompt,
-      model: settings.model
+      model: settings.model,
+      preset: settings.preset
     };
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {

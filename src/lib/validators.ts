@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { aiWritingRoleIds } from "@/lib/ai-style";
+import { imageGenerationPresetValues } from "@/lib/image-generation";
 
 export const placementSchema = z.object({
   enabled: z.boolean().optional(),
@@ -146,6 +147,7 @@ export const imageGenerationSettingsSchema = z.object({
       }
     }, "请输入有效的图片生成 API Base URL"),
   model: z.string().trim().min(1, "图片生成模型为必填项").max(120),
+  preset: z.enum(imageGenerationPresetValues),
   size: z.enum(["auto", "1024x1024", "1024x1536", "1536x1024"]),
   quality: z.enum(["auto", "low", "medium", "high"]),
   outputFormat: z.enum(["png", "jpeg", "webp"]),
