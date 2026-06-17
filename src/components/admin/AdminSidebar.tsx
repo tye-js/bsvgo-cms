@@ -46,6 +46,7 @@ const navGroups: NavGroup[] = [
     match: ["/posts", "/categories", "/tags"],
     children: [
       { href: "/posts", label: "文章列表" },
+      { href: "/posts/drafts", label: "草稿箱" },
       { href: "/posts/new", label: "新建文章" },
       { href: "/categories", label: "分类管理" },
       { href: "/tags", label: "标签管理" },
@@ -95,6 +96,14 @@ function isGroupActive(pathname: string, group: NavGroup) {
   return group.match?.some((href) => isActive(pathname, href)) ?? false;
 }
 
+function activeChildHref(pathname: string, children: NavChild[] | undefined) {
+  if (!children?.length) return "";
+
+  return children
+    .filter((child) => isActive(pathname, child.href))
+    .sort((left, right) => right.href.length - left.href.length)[0]?.href ?? "";
+}
+
 function childIcon(label: string) {
   if (label.includes("新建文章")) return FilePlus2;
   if (label.includes("封面")) return Images;
@@ -115,6 +124,7 @@ export function AdminSidebar() {
       {navGroups.map((group) => {
         const Icon = group.icon;
         const groupActive = isGroupActive(pathname, group);
+        const activeHref = activeChildHref(pathname, group.children);
 
         return (
           <div key={group.label} className="grid gap-1">
@@ -135,7 +145,7 @@ export function AdminSidebar() {
               <div className="ml-5 grid gap-0.5 border-l border-slate-200 pl-3">
                 {group.children.map((child) => {
                   const ChildIcon = childIcon(child.label);
-                  const childActive = isActive(pathname, child.href);
+                  const childActive = activeHref === child.href;
 
                   return (
                     <Link

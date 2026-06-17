@@ -2,7 +2,14 @@
 
 import Image from "next/image";
 import { useActionState, useRef, useState } from "react";
-import { Sparkles } from "lucide-react";
+import {
+  CheckCircle2,
+  Circle,
+  Loader2,
+  RotateCcw,
+  Sparkles,
+  XCircle
+} from "lucide-react";
 
 import { buttonClassName } from "@/components/admin/Button";
 import { Field, inputClassName, textareaClassName } from "@/components/admin/Field";
@@ -91,42 +98,40 @@ type ActionState = {
   success?: string;
 };
 
-type DraftRewriteResult = {
-  zh: {
-    title: string;
-    excerpt: string;
-    content: string;
-  };
-  error?: string;
-};
-
 type DraftRewriteError = {
   error: string;
 };
 
-type DraftTranslationResult = {
-  en: {
-    title: string;
-    excerpt: string;
-    content: string;
-  };
-};
-
-type DraftMetadataResult = {
-  slug: string;
-  zh: {
-    seoTitle: string;
-    seoDescription: string;
-    structuredData: Record<string, unknown>;
-  };
-  en: {
-    seoTitle: string;
-    seoDescription: string;
-    structuredData: Record<string, unknown>;
-  };
-};
-
 type AiJobStatus = "queued" | "running" | "succeeded" | "failed";
+
+type DraftCreateStepStatus =
+  | "pending"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "skipped";
+
+type DraftCreateStepKey =
+  | "source"
+  | "chinese"
+  | "english"
+  | "metadata"
+  | "database"
+  | "cover";
+
+type DraftCreateJobOutput = {
+  postId?: string;
+  postEditUrl?: string;
+  coverJobId?: string;
+  currentStep?: DraftCreateStepKey | "";
+  message?: string;
+  steps?: Array<{
+    key: DraftCreateStepKey;
+    label: string;
+    status: DraftCreateStepStatus;
+    message?: string;
+  }>;
+};
 
 type AiJob<TOutput extends object> = {
   id: string;
@@ -140,6 +145,18 @@ type AiJobResponse<TOutput extends object> = {
 };
 
 const MAX_MARKDOWN_SOURCE_BYTES = 1024 * 1024;
+
+const draftCreateStepDefinitions: Array<{
+  key: DraftCreateStepKey;
+  label: string;
+}> = [
+  { key: "source", label: "读取素材" },
+  { key: "chinese", label: "生成中文稿" },
+  { key: "english", label: "生成英文稿" },
+  { key: "metadata", label: "生成 Slug 和 SEO" },
+  { key: "database", label: "写入草稿" },
+  { key: "cover", label: "排队生成封面" }
+];
 
 function structuredDataText(value: Record<string, unknown> | undefined) {
   if (!value || Object.keys(value).length === 0) return "{}";
@@ -256,49 +273,63 @@ async function createAiJob<TOutput extends object>(
   return payload.job;
 }
 
-async function waitForAiJob<TOutput extends object>(
-  initialJob: AiJob<TOutput>,
-  defaultError: string,
-  onStatus?: (job: AiJob<TOutput>) => void
+async function readAiJob<TOutput extends object>(
+  jobId: string,
+  defaultError: string
 ) {
-  let job = initialJob;
-  onStatus?.(job);
+  const response = await fetch(`/api/ai/jobs/${jobId}`, {
+    cache: "no-store"
+  });
+  const payload = await readJsonResponse<AiJobResponse<TOutput>>(
+    response,
+    defaultError
+  );
 
-  for (let attempt = 0; attempt < 240; attempt += 1) {
-    if (job.status === "succeeded") {
-      if (!job.output) throw new Error(defaultError);
-      return job.output;
-    }
-
-    if (job.status === "failed") {
-      throw new Error(job.error || defaultError);
-    }
-
-    await wait(1500);
-    const response = await fetch(`/api/ai/jobs/${job.id}`, {
-      cache: "no-store"
-    });
-    const payload = await readJsonResponse<AiJobResponse<TOutput>>(
-      response,
-      defaultError
-    );
-
-    if ("error" in payload) {
-      throw new Error(payload.error || defaultError);
-    }
-
-    job = payload.job;
-    onStatus?.(job);
+  if ("error" in payload) {
+    throw new Error(payload.error || defaultError);
   }
 
-  throw new Error("AI 任务仍在后台运行，请稍后再检查。");
+  return payload.job;
 }
 
-function jobStatusMessage<TOutput extends object>(job: AiJob<TOutput>, label: string) {
-  if (job.status === "queued") return `${label}任务已提交，等待执行...`;
-  if (job.status === "running") return `${label}正在后台生成...`;
-  if (job.status === "succeeded") return `${label}已生成。`;
-  return `${label}生成失败。`;
+async function retryAiJob<TOutput extends object>(
+  jobId: string,
+  defaultError: string
+) {
+  const response = await fetch(`/api/ai/jobs/${jobId}`, {
+    method: "POST"
+  });
+  const payload = await readJsonResponse<AiJobResponse<TOutput>>(
+    response,
+    defaultError
+  );
+
+  if ("error" in payload) {
+    throw new Error(payload.error || defaultError);
+  }
+
+  return payload.job;
+}
+
+function draftCreateSteps(output: DraftCreateJobOutput | null | undefined) {
+  const steps = output?.steps ?? [];
+  return draftCreateStepDefinitions.map((definition) => {
+    const current = steps.find((step) => step.key === definition.key);
+    return {
+      ...definition,
+      status: current?.status ?? "pending",
+      message: current?.message
+    };
+  });
+}
+
+function draftCreateProgress(output: DraftCreateJobOutput | null | undefined) {
+  const steps = draftCreateSteps(output);
+  const done = steps.filter(
+    (step) => step.status === "succeeded" || step.status === "skipped"
+  ).length;
+
+  return Math.round((done / steps.length) * 100);
 }
 
 export function PostForm({
@@ -338,15 +369,14 @@ export function PostForm({
     post?.aiAuthorRole ?? defaultWritingRole
   );
   const selectedWritingRole = writingRoles.find((role) => role.id === writingRole);
-  const [draftRewriteError, setDraftRewriteError] = useState("");
-  const [draftRewriteSuccess, setDraftRewriteSuccess] = useState("");
-  const [draftTranslationError, setDraftTranslationError] = useState("");
-  const [draftTranslationPending, setDraftTranslationPending] = useState(false);
-  const [draftMetadataError, setDraftMetadataError] = useState("");
-  const [draftMetadataPending, setDraftMetadataPending] = useState(false);
-  const [isRewritingDraft, setIsRewritingDraft] = useState(false);
+  const [draftCreateJob, setDraftCreateJob] =
+    useState<AiJob<DraftCreateJobOutput> | null>(null);
+  const [draftCreateError, setDraftCreateError] = useState("");
+  const [isCreatingDraft, setIsCreatingDraft] = useState(false);
   const aiGenerationPending =
-    isRewritingDraft || draftTranslationPending || draftMetadataPending;
+    isCreatingDraft ||
+    draftCreateJob?.status === "queued" ||
+    draftCreateJob?.status === "running";
   const submittedWritingRole = generateEnglishFromChinese
     ? writingRole
     : (post?.aiAuthorRole ?? "");
@@ -383,16 +413,12 @@ export function PostForm({
   const [timeZone, setTimeZone] = useState("");
   const formValue = (name: string) =>
     formRef.current ? String(new FormData(formRef.current).get(name) ?? "") : "";
-
-  function syncDraftMetadata(payload: DraftMetadataResult) {
-    setSlug(payload.slug);
-    setZhSeoTitle(payload.zh.seoTitle);
-    setZhSeoDescription(payload.zh.seoDescription);
-    setZhStructuredData(structuredDataText(payload.zh.structuredData));
-    setEnSeoTitle(payload.en.seoTitle);
-    setEnSeoDescription(payload.en.seoDescription);
-    setEnStructuredData(structuredDataText(payload.en.structuredData));
-  }
+  const selectedCategoryId = () =>
+    formRef.current ? String(new FormData(formRef.current).get("categoryId") ?? "") : "";
+  const selectedTagIds = () =>
+    formRef.current
+      ? new FormData(formRef.current).getAll("tagIds").map(String).filter(Boolean)
+      : [];
 
   function syncTimeZoneFields() {
     setTimezoneOffset(String(new Date().getTimezoneOffset()));
@@ -438,125 +464,91 @@ export function PostForm({
 
         setRawDraftInput(trimmedContent);
         setSourceFileName(file.name);
-        setDraftRewriteError("");
-        setDraftRewriteSuccess("");
+        setDraftCreateError("");
       })
       .catch(() => {
         setSourceFileError("Markdown 文件读取失败，请重新选择。");
       });
   }
 
-  function rewriteDraft() {
-    setDraftRewriteError("");
-    setDraftRewriteSuccess("");
-    setDraftTranslationError("");
-    setDraftMetadataError("");
+  async function pollDraftCreateJob(initialJob: AiJob<DraftCreateJobOutput>) {
+    let job = initialJob;
+    setDraftCreateJob(job);
+
+    for (let attempt = 0; attempt < 480; attempt += 1) {
+      if (job.status === "succeeded" || job.status === "failed") return job;
+
+      await wait(1500);
+      job = await readAiJob<DraftCreateJobOutput>(
+        job.id,
+        "AI 文章生成任务状态读取失败。"
+      );
+      setDraftCreateJob(job);
+    }
+
+    setDraftCreateError("AI 任务仍在后台运行，进度已保存，可稍后刷新页面查看。");
+    return job;
+  }
+
+  function createDraftPost() {
+    setDraftCreateError("");
 
     if (aiGenerationPending) return;
 
     void (async () => {
-      setIsRewritingDraft(true);
+      setIsCreatingDraft(true);
 
       try {
-        const rewriteJob = await createAiJob<DraftRewriteResult>(
-          "/api/posts/draft/rewrite",
+        const job = await createAiJob<DraftCreateJobOutput>(
+          "/api/posts/draft/create",
           {
             writingRole,
             rawInput: rawDraftInput,
-            sourceUrl
+            sourceUrl,
+            categoryId: selectedCategoryId(),
+            tagIds: selectedTagIds()
           },
-          "AI 改写文章失败。"
+          "AI 创建文章草稿失败。"
         );
-        const payload = await waitForAiJob<DraftRewriteResult>(
-          rewriteJob,
-          "AI 改写文章失败。",
-          (job) => setDraftRewriteSuccess(jobStatusMessage(job, "中文草稿"))
-        );
-
-        setZhTitle(payload.zh.title);
-        setZhExcerpt(payload.zh.excerpt);
-        setZhContent(payload.zh.content);
-        setEnTitle("");
-        setEnExcerpt("");
-        setEnContent("");
-        setSlug("");
-        setZhSeoTitle("");
-        setZhSeoDescription("");
-        setEnSeoTitle("");
-        setEnSeoDescription("");
-        setDraftRewriteSuccess(
-          "中文草稿已生成。英文稿和双语 SEO 正在后台生成。"
-        );
-
-        setDraftTranslationPending(true);
-        setDraftMetadataPending(false);
-        let downstreamStage: "translation" | "metadata" = "translation";
-
-        try {
-          const translationJob = await createAiJob<DraftTranslationResult>(
-            "/api/posts/draft/translate",
-            {
-              writingRole,
-              zhTitle: payload.zh.title,
-              zhExcerpt: payload.zh.excerpt,
-              zhContent: payload.zh.content
-            },
-            "英文稿自动生成失败。"
+        const finishedJob = await pollDraftCreateJob(job);
+        if (finishedJob.status === "failed") {
+          setDraftCreateError(
+            finishedJob.error || "AI 创建文章草稿失败，可点击继续生成。"
           );
-          const translationPayload = await waitForAiJob<DraftTranslationResult>(
-            translationJob,
-            "英文稿自动生成失败。",
-            (job) => setDraftRewriteSuccess(jobStatusMessage(job, "英文稿"))
-          );
-
-          setEnTitle(translationPayload.en.title);
-          setEnExcerpt(translationPayload.en.excerpt);
-          setEnContent(translationPayload.en.content);
-          setDraftRewriteSuccess("英文稿已生成，Slug 和双语 SEO 正在后台补齐。");
-
-          downstreamStage = "metadata";
-          setDraftMetadataPending(true);
-          const metadataJob = await createAiJob<DraftMetadataResult>(
-            "/api/posts/draft/metadata",
-            {
-              writingRole,
-              zhTitle: payload.zh.title,
-              zhExcerpt: payload.zh.excerpt,
-              zhContent: payload.zh.content,
-              enTitle: translationPayload.en.title,
-              enExcerpt: translationPayload.en.excerpt,
-              enContent: translationPayload.en.content
-            },
-            "Slug 和 SEO 自动生成失败。"
-          );
-          const metadataPayload = await waitForAiJob<DraftMetadataResult>(
-            metadataJob,
-            "Slug 和 SEO 自动生成失败。",
-            (job) => setDraftRewriteSuccess(jobStatusMessage(job, "Slug 和 SEO"))
-          );
-
-          syncDraftMetadata(metadataPayload);
-          setDraftRewriteSuccess(
-            "中文草稿、英文稿、Slug 和双语 SEO 都已补齐，请检查后再提交。"
-          );
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "英文稿自动生成失败。";
-          if (downstreamStage === "metadata") {
-            setDraftMetadataError(message);
-          } else {
-            setDraftTranslationError(message);
-          }
-        } finally {
-          setDraftTranslationPending(false);
-          setDraftMetadataPending(false);
         }
       } catch (error) {
-        setDraftRewriteError(
-          error instanceof Error ? error.message : "AI 改写文章失败。"
+        setDraftCreateError(
+          error instanceof Error ? error.message : "AI 创建文章草稿失败。"
         );
       } finally {
-        setIsRewritingDraft(false);
+        setIsCreatingDraft(false);
+      }
+    })();
+  }
+
+  function retryDraftCreate() {
+    if (!draftCreateJob || aiGenerationPending) return;
+    setDraftCreateError("");
+
+    void (async () => {
+      setIsCreatingDraft(true);
+      try {
+        const job = await retryAiJob<DraftCreateJobOutput>(
+          draftCreateJob.id,
+          "AI 文章生成任务继续失败。"
+        );
+        const finishedJob = await pollDraftCreateJob(job);
+        if (finishedJob.status === "failed") {
+          setDraftCreateError(
+            finishedJob.error || "AI 创建文章草稿失败，可再次点击继续生成。"
+          );
+        }
+      } catch (error) {
+        setDraftCreateError(
+          error instanceof Error ? error.message : "AI 文章生成任务继续失败。"
+        );
+      } finally {
+        setIsCreatingDraft(false);
       }
     })();
   }
@@ -694,26 +686,91 @@ export function PostForm({
                   placeholder="粘贴资料、灵感、链接、要点、碎片化笔记..."
                 />
               </Field>
-              {draftRewriteError ? (
-                <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                  {draftRewriteError}
-                </p>
+              {draftCreateJob ? (
+                <div className="grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+                    <span className="font-medium text-slate-900">
+                      生成进度 {draftCreateProgress(draftCreateJob.output)}%
+                    </span>
+                    <span className="text-slate-500">
+                      {draftCreateJob.output?.message ||
+                        (draftCreateJob.status === "queued"
+                          ? "任务已提交，等待执行。"
+                          : draftCreateJob.status === "running"
+                            ? "AI 正在后台生成文章。"
+                            : draftCreateJob.status === "succeeded"
+                              ? "文章草稿已创建。"
+                              : "任务失败，可继续生成。")}
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                    <div
+                      className="h-full rounded-full bg-slate-700 transition-all"
+                      style={{
+                        width: `${draftCreateProgress(draftCreateJob.output)}%`
+                      }}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    {draftCreateSteps(draftCreateJob.output).map((step) => (
+                      <div
+                        key={step.key}
+                        className="flex items-start gap-2 rounded-md bg-white px-3 py-2 text-sm ring-1 ring-slate-200"
+                      >
+                        {step.status === "succeeded" ? (
+                          <CheckCircle2
+                            size={16}
+                            className="mt-0.5 text-emerald-600"
+                          />
+                        ) : step.status === "running" ? (
+                          <Loader2
+                            size={16}
+                            className="mt-0.5 animate-spin text-slate-600"
+                          />
+                        ) : step.status === "failed" ? (
+                          <XCircle size={16} className="mt-0.5 text-rose-600" />
+                        ) : (
+                          <Circle size={16} className="mt-0.5 text-slate-300" />
+                        )}
+                        <div className="min-w-0">
+                          <p className="font-medium text-slate-800">{step.label}</p>
+                          {step.message ? (
+                            <p className="mt-0.5 text-xs text-slate-500">
+                              {step.message}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {draftCreateJob.status === "succeeded" &&
+                  draftCreateJob.output?.postEditUrl ? (
+                    <a
+                      href={draftCreateJob.output.postEditUrl}
+                      className={buttonClassName("primary", "justify-self-start")}
+                    >
+                      打开草稿继续修改
+                    </a>
+                  ) : null}
+                </div>
               ) : null}
-              {draftRewriteSuccess ? (
-                <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                  {draftRewriteSuccess}
+
+              {draftCreateError ? (
+                <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                  {draftCreateError}
                 </p>
               ) : null}
               <button
                 type="button"
                 disabled={
                   aiGenerationPending ||
+                  Boolean(draftCreateJob?.output?.postId) ||
                   (!sourceUrl.trim() && rawDraftInput.trim().length < 20)
                 }
                 className={buttonClassName("secondary", "justify-self-start")}
-                onClick={rewriteDraft}
+                onClick={createDraftPost}
               >
-                {isRewritingDraft ? (
+                {aiGenerationPending ? (
                   <span
                     aria-hidden="true"
                     className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
@@ -721,23 +778,23 @@ export function PostForm({
                 ) : (
                   <Sparkles size={16} />
                 )}
-                {isRewritingDraft ? "正在生成中文..." : "生成中英文文章"}
+                {aiGenerationPending ? "后台生成中..." : "生成中英文文章并创建草稿"}
               </button>
-              {draftTranslationPending ? (
-                <p className="text-xs text-slate-500">英文稿正在后台生成...</p>
-              ) : null}
-              {draftTranslationError ? (
-                <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                  {draftTranslationError}
-                </p>
-              ) : null}
-              {draftMetadataPending ? (
-                <p className="text-xs text-slate-500">Slug 和 SEO 正在后台生成...</p>
-              ) : null}
-              {draftMetadataError ? (
-                <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                  {draftMetadataError}
-                </p>
+
+              {draftCreateJob?.status === "failed" ? (
+                <button
+                  type="button"
+                  disabled={aiGenerationPending}
+                  className={buttonClassName("secondary", "justify-self-start")}
+                  onClick={retryDraftCreate}
+                >
+                  {aiGenerationPending ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <RotateCcw size={16} />
+                  )}
+                  继续生成
+                </button>
               ) : null}
             </div>
           </section>
@@ -792,7 +849,7 @@ export function PostForm({
                 value={enTitle}
                 onChange={(event) => setEnTitle(event.target.value)}
                 required={!generateEnglishFromChinese}
-                disabled={draftTranslationPending}
+                disabled={aiGenerationPending}
                 className={inputClassName}
               />
             </Field>
@@ -801,7 +858,7 @@ export function PostForm({
                 name="enExcerpt"
                 value={enExcerpt}
                 onChange={(event) => setEnExcerpt(event.target.value)}
-                disabled={draftTranslationPending}
+                disabled={aiGenerationPending}
                 className={textareaClassName}
               />
             </Field>
@@ -811,7 +868,7 @@ export function PostForm({
               required={!generateEnglishFromChinese}
               value={enContent}
               onChange={setEnContent}
-              disabled={draftTranslationPending}
+              disabled={aiGenerationPending}
             />
           </div>
         </section>
@@ -827,7 +884,7 @@ export function PostForm({
                 value={slug}
                 onChange={(event) => setSlug(event.target.value)}
                 required={!generateEnglishFromChinese}
-                disabled={draftMetadataPending}
+                disabled={aiGenerationPending}
                 className={inputClassName}
                 placeholder="my-article-slug"
               />
@@ -911,7 +968,7 @@ export function PostForm({
                 name="enSeoTitle"
                 value={enSeoTitle}
                 onChange={(event) => setEnSeoTitle(event.target.value)}
-                disabled={draftMetadataPending}
+                disabled={aiGenerationPending}
                 className={inputClassName}
               />
             </Field>
@@ -921,7 +978,7 @@ export function PostForm({
                 value={enSeoDescription}
                 onChange={(event) => setEnSeoDescription(event.target.value)}
                 maxLength={500}
-                disabled={draftMetadataPending}
+                disabled={aiGenerationPending}
                 className={textareaClassName}
               />
             </Field>
@@ -968,7 +1025,7 @@ export function PostForm({
                 name="zhSeoTitle"
                 value={zhSeoTitle}
                 onChange={(event) => setZhSeoTitle(event.target.value)}
-                disabled={draftMetadataPending}
+                disabled={aiGenerationPending}
                 className={inputClassName}
               />
             </Field>
@@ -978,7 +1035,7 @@ export function PostForm({
                 value={zhSeoDescription}
                 onChange={(event) => setZhSeoDescription(event.target.value)}
                 maxLength={500}
-                disabled={draftMetadataPending}
+                disabled={aiGenerationPending}
                 className={textareaClassName}
               />
             </Field>
@@ -1076,6 +1133,7 @@ export function PostForm({
               pendingLabel={generateEnglishFromChinese ? "正在创建文章..." : undefined}
               timeoutLabel={generateEnglishFromChinese ? "创建超时" : undefined}
               timeoutMs={submitTimeoutMs}
+              disabled={generateEnglishFromChinese && Boolean(draftCreateJob?.output?.postId)}
             >
               {submitLabel}
             </SubmitButton>

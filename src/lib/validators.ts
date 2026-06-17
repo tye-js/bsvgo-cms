@@ -249,6 +249,14 @@ export const aiDraftMetadataSchema = z.object({
   enContent: z.string().trim().min(1, "英文正文为必填项")
 });
 
+export const aiDraftCreateSchema = aiDraftRewriteSchema.and(
+  z.object({
+    categoryId: z.string().uuid("请选择分类"),
+    tagIds: z.array(z.string().uuid()).default([]),
+    writingRole: z.enum(aiWritingRoleIds).optional()
+  })
+);
+
 export const homepageSeoSchema = z.object({
   enTitle: z.string().trim().max(255).optional(),
   enDescription: z.string().trim().max(500).optional(),

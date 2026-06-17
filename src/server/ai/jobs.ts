@@ -19,6 +19,7 @@ import {
   type MediaMetadataOutput
 } from "@/server/ai/openai";
 import {
+  type AiDraftSource,
   SourceIngestionError,
   fetchAiDraftSource
 } from "@/server/ai/source-ingestion";
@@ -30,10 +31,21 @@ import {
   categoryTranslations,
   mediaAssets,
   postTranslations,
+  postTags,
   posts,
   type AiJobStatus,
   type AiJobType
 } from "@/server/db/schema";
+import { aiAuthorValues } from "@/server/content/ai-author";
+import {
+  fallbackSlug,
+  readingMinutesForContent
+} from "@/server/content/normalizers";
+import {
+  deriveLegacyPostFlags,
+  emptyPostPlacements
+} from "@/server/content/placements";
+import { upsertPostTranslation } from "@/server/content/translations";
 import { saveGeneratedCoverImage } from "@/server/media/upload";
 
 type MediaMetadataJobInput = {
@@ -53,6 +65,46 @@ type BulkPostCoverImagesJobInput = {
   overwriteExisting?: boolean;
   userId?: string;
   jobId?: string;
+};
+
+type PostDraftCreateJobInput = ChineseDraftCoreInput & {
+  categoryId: string;
+  tagIds?: string[];
+  userId?: string;
+  jobId?: string;
+};
+
+type PostDraftCreateStepStatus =
+  | "pending"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "skipped";
+
+type PostDraftCreateStepKey =
+  | "source"
+  | "chinese"
+  | "english"
+  | "metadata"
+  | "database"
+  | "cover";
+
+type PostDraftCreateJobOutput = {
+  postId?: string;
+  postEditUrl?: string;
+  coverJobId?: string;
+  currentStep?: PostDraftCreateStepKey | "";
+  message?: string;
+  source?: AiDraftSource;
+  zh?: ChineseDraftCoreOutput["zh"];
+  en?: DraftTranslationOutput["en"];
+  metadata?: DraftMetadataOutput;
+  steps: Array<{
+    key: PostDraftCreateStepKey;
+    label: string;
+    status: PostDraftCreateStepStatus;
+    message?: string;
+  }>;
 };
 
 type BulkPostCoverImageItemStatus =
@@ -81,6 +133,7 @@ type AiJobInputByType = {
   post_draft_rewrite: ChineseDraftCoreInput;
   post_draft_translate: DraftTranslationInput;
   post_draft_metadata: DraftMetadataInput;
+  post_draft_create: PostDraftCreateJobInput;
   media_metadata: MediaMetadataJobInput;
   bulk_post_seo: BulkPostSeoJobInput;
   bulk_post_cover_images: BulkPostCoverImagesJobInput;
@@ -90,6 +143,7 @@ type AiJobOutputByType = {
   post_draft_rewrite: ChineseDraftCoreOutput;
   post_draft_translate: DraftTranslationOutput;
   post_draft_metadata: DraftMetadataOutput;
+  post_draft_create: PostDraftCreateJobOutput;
   media_metadata: MediaMetadataOutput;
   bulk_post_seo: BulkPostSeoJobOutput;
   bulk_post_cover_images: BulkPostCoverImagesJobOutput;
@@ -109,6 +163,18 @@ type SerializedJob = {
 
 const activeJobIds = new Set<string>();
 
+const postDraftCreateStepDefinitions: Array<{
+  key: PostDraftCreateStepKey;
+  label: string;
+}> = [
+  { key: "source", label: "读取素材" },
+  { key: "chinese", label: "生成中文稿" },
+  { key: "english", label: "生成英文稿" },
+  { key: "metadata", label: "生成 Slug 和 SEO" },
+  { key: "database", label: "写入草稿" },
+  { key: "cover", label: "排队生成封面" }
+];
+
 function coverImageCategoryFromSlug(slug: string): CoverImageCategory {
   if (slug === "ai") return "ai";
   if (slug === "infrastructure") return "infrastructure";
@@ -125,6 +191,17 @@ function mediaSeoDescription(title: string, excerpt: string, fallback: string) {
   return source.slice(0, 500);
 }
 const STALE_RUNNING_JOB_MS = 15 * 60 * 1000;
+
+function defaultPostDraftCreateOutput(): PostDraftCreateJobOutput {
+  return {
+    currentStep: "",
+    message: "等待开始。",
+    steps: postDraftCreateStepDefinitions.map((step) => ({
+      ...step,
+      status: "pending"
+    }))
+  };
+}
 
 function toRecord(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -158,6 +235,118 @@ function serializeJob(row: {
     startedAt: serializeDate(row.startedAt),
     finishedAt: serializeDate(row.finishedAt)
   };
+}
+
+function normalizePostDraftCreateOutput(
+  value: Record<string, unknown> | null | undefined
+): PostDraftCreateJobOutput {
+  const source = toRecord(value);
+  const fallback = defaultPostDraftCreateOutput();
+  const storedSteps = Array.isArray(source.steps) ? source.steps : [];
+
+  return {
+    ...fallback,
+    ...source,
+    postId: typeof source.postId === "string" ? source.postId : undefined,
+    postEditUrl:
+      typeof source.postEditUrl === "string" ? source.postEditUrl : undefined,
+    coverJobId:
+      typeof source.coverJobId === "string" ? source.coverJobId : undefined,
+    currentStep:
+      typeof source.currentStep === "string"
+        ? (source.currentStep as PostDraftCreateStepKey | "")
+        : "",
+    message: typeof source.message === "string" ? source.message : fallback.message,
+    source: toRecord(source.source) as AiDraftSource,
+    zh: toRecord(source.zh) as ChineseDraftCoreOutput["zh"],
+    en: toRecord(source.en) as DraftTranslationOutput["en"],
+    metadata: toRecord(source.metadata) as DraftMetadataOutput,
+    steps: postDraftCreateStepDefinitions.map((definition) => {
+      const stored = storedSteps
+        .map((step) => toRecord(step))
+        .find((step) => step.key === definition.key);
+      const status =
+        stored?.status === "running" ||
+        stored?.status === "succeeded" ||
+        stored?.status === "failed" ||
+        stored?.status === "skipped"
+          ? stored.status
+          : "pending";
+
+      return {
+        ...definition,
+        status,
+        message: typeof stored?.message === "string" ? stored.message : undefined
+      };
+    })
+  };
+}
+
+function setPostDraftCreateStep(
+  output: PostDraftCreateJobOutput,
+  key: PostDraftCreateStepKey,
+  status: PostDraftCreateStepStatus,
+  message?: string
+) {
+  return {
+    ...output,
+    currentStep: status === "running" ? key : output.currentStep,
+    message: message ?? output.message,
+    steps: output.steps.map((step) =>
+      step.key === key
+        ? {
+            ...step,
+            status,
+            message
+          }
+        : step
+    )
+  };
+}
+
+function hasChineseDraft(
+  value: PostDraftCreateJobOutput["zh"]
+): value is NonNullable<PostDraftCreateJobOutput["zh"]> {
+  return Boolean(value?.title?.trim() && value.content?.trim());
+}
+
+function hasEnglishDraft(
+  value: PostDraftCreateJobOutput["en"]
+): value is NonNullable<PostDraftCreateJobOutput["en"]> {
+  return Boolean(value?.title?.trim() && value.content?.trim());
+}
+
+function hasDraftMetadata(
+  value: PostDraftCreateJobOutput["metadata"]
+): value is NonNullable<PostDraftCreateJobOutput["metadata"]> {
+  return Boolean(
+    value?.slug?.trim() &&
+      value.zh?.seoTitle?.trim() &&
+      value.en?.seoTitle?.trim()
+  );
+}
+
+function structuredDataObject(value: Record<string, unknown> | undefined) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+async function uniquePostSlug(candidateSlug: string, fallbackTitle: string) {
+  const base = fallbackSlug(candidateSlug || fallbackTitle).slice(0, 220);
+  let slug = base;
+
+  for (let suffix = 2; suffix < 1000; suffix += 1) {
+    const [existing] = await db
+      .select({ id: posts.id })
+      .from(posts)
+      .where(eq(posts.slug, slug))
+      .limit(1);
+
+    if (!existing) return slug;
+
+    slug = `${base}-${suffix}`.slice(0, 255);
+  }
+
+  return `${base}-${Date.now()}`.slice(0, 255);
 }
 
 function friendlyJobError(error: unknown) {
@@ -320,6 +509,332 @@ async function executeBulkPostSeoJob({
   }
 
   return { updated };
+}
+
+async function createDraftPostFromAiOutput({
+  input,
+  output
+}: {
+  input: PostDraftCreateJobInput;
+  output: PostDraftCreateJobOutput;
+}) {
+  if (!input.userId) {
+    throw new Error("无法确认文章创建人。请重新登录后再试。");
+  }
+
+  const zh = output.zh;
+  const en = output.en;
+  const metadata = output.metadata;
+
+  if (!hasChineseDraft(zh)) {
+    throw new Error("中文稿还没有生成，不能写入草稿。");
+  }
+
+  if (!hasEnglishDraft(en)) {
+    throw new Error("英文稿还没有生成，不能写入草稿。");
+  }
+
+  if (!hasDraftMetadata(metadata)) {
+    throw new Error("Slug 和 SEO 还没有生成，不能写入草稿。");
+  }
+
+  const legacyFlags = deriveLegacyPostFlags(emptyPostPlacements(), "");
+  const slug = await uniquePostSlug(metadata.slug, en.title);
+  const tagIds = Array.from(new Set(input.tagIds ?? [])).slice(0, 30);
+
+  const [created] = await db.transaction(async (tx) => {
+    const [post] = await tx
+      .insert(posts)
+      .values({
+        slug,
+        categoryId: input.categoryId,
+        authorId: input.userId,
+        status: "draft",
+        mark: legacyFlags.mark,
+        ...aiAuthorValues(input.writingRole),
+        coverImage: "",
+        coverImageId: null,
+        publishedAt: null,
+        featured: legacyFlags.featured,
+        pinned: legacyFlags.pinned,
+        sortOrder: 0
+      })
+      .returning({ id: posts.id });
+
+    await upsertPostTranslation(tx, post.id, "zh", {
+      title: zh.title,
+      excerpt: zh.excerpt,
+      content: zh.content,
+      readingMinutes: readingMinutesForContent(zh.content, "zh"),
+      seoTitle: metadata.zh.seoTitle,
+      seoDescription: metadata.zh.seoDescription,
+      canonicalUrl: "",
+      ogImage: "",
+      structuredData: structuredDataObject(metadata.zh.structuredData)
+    });
+    await upsertPostTranslation(tx, post.id, "en", {
+      title: en.title,
+      excerpt: en.excerpt,
+      content: en.content,
+      readingMinutes: readingMinutesForContent(en.content, "en"),
+      seoTitle: metadata.en.seoTitle,
+      seoDescription: metadata.en.seoDescription,
+      canonicalUrl: "",
+      ogImage: "",
+      structuredData: structuredDataObject(metadata.en.structuredData)
+    });
+
+    if (tagIds.length) {
+      await tx
+        .insert(postTags)
+        .values(tagIds.map((tagId) => ({ postId: post.id, tagId })));
+    }
+
+    return [post];
+  });
+
+  return created.id;
+}
+
+async function executePostDraftCreateJob(
+  input: PostDraftCreateJobInput,
+  previousOutput?: Record<string, unknown> | null
+): Promise<PostDraftCreateJobOutput> {
+  if (!input.userId) {
+    throw new Error("无法确认文章创建人。请重新登录后再试。");
+  }
+
+  if (!input.jobId) {
+    throw new Error("无法确认 AI 任务编号。");
+  }
+
+  let output = normalizePostDraftCreateOutput(previousOutput);
+
+  const writeOutput = async (
+    nextOutput: PostDraftCreateJobOutput,
+    extra?: Partial<PostDraftCreateJobOutput>
+  ) => {
+    output = {
+      ...nextOutput,
+      ...extra
+    };
+    await db
+      .update(aiJobs)
+      .set({
+        output: output as unknown as Record<string, unknown>,
+        updatedAt: new Date()
+      })
+      .where(eq(aiJobs.id, input.jobId ?? ""));
+  };
+
+  if (!output.source || Object.keys(output.source).length === 0) {
+    const sourceUrl = input.sourceUrl?.trim() ?? "";
+
+    if (!sourceUrl) {
+      await writeOutput(
+        setPostDraftCreateStep(
+          output,
+          "source",
+          "skipped",
+          "未提供链接，使用粘贴素材。"
+        ),
+        { source: { sourceUrl: "" } }
+      );
+    } else {
+      await writeOutput(
+        setPostDraftCreateStep(output, "source", "running", "正在读取链接素材。")
+      );
+      try {
+        const source = await fetchAiDraftSource(sourceUrl);
+        await writeOutput(
+          setPostDraftCreateStep(output, "source", "succeeded", "素材读取完成。"),
+          { source }
+        );
+      } catch (error) {
+        await writeOutput(
+          setPostDraftCreateStep(
+            output,
+            "source",
+            "failed",
+            friendlyJobError(error)
+          )
+        );
+        throw error;
+      }
+    }
+  }
+
+  if (!hasChineseDraft(output.zh)) {
+    await writeOutput(
+      setPostDraftCreateStep(output, "chinese", "running", "正在生成中文草稿。")
+    );
+    try {
+      const zh = await generateChineseDraftCore({
+        writingRole: input.writingRole,
+        rawInput: input.rawInput,
+        sourceUrl: input.sourceUrl,
+        ...(output.source ?? {})
+      });
+      await writeOutput(
+        setPostDraftCreateStep(output, "chinese", "succeeded", "中文草稿已生成。"),
+        { zh: zh.zh }
+      );
+    } catch (error) {
+      await writeOutput(
+        setPostDraftCreateStep(
+          output,
+          "chinese",
+          "failed",
+          friendlyJobError(error)
+        )
+      );
+      throw error;
+    }
+  }
+
+  if (!hasEnglishDraft(output.en)) {
+    await writeOutput(
+      setPostDraftCreateStep(output, "english", "running", "正在生成英文稿。")
+    );
+    try {
+      const en = await translateDraftToEnglish({
+        writingRole: input.writingRole,
+        zhTitle: output.zh?.title ?? "",
+        zhExcerpt: output.zh?.excerpt ?? "",
+        zhContent: output.zh?.content ?? ""
+      });
+      await writeOutput(
+        setPostDraftCreateStep(output, "english", "succeeded", "英文稿已生成。"),
+        { en: en.en }
+      );
+    } catch (error) {
+      await writeOutput(
+        setPostDraftCreateStep(
+          output,
+          "english",
+          "failed",
+          friendlyJobError(error)
+        )
+      );
+      throw error;
+    }
+  }
+
+  if (!hasDraftMetadata(output.metadata)) {
+    await writeOutput(
+      setPostDraftCreateStep(
+        output,
+        "metadata",
+        "running",
+        "正在生成 Slug 和双语 SEO。"
+      )
+    );
+    try {
+      const metadata = await generateDraftMetadata({
+        writingRole: input.writingRole,
+        zhTitle: output.zh?.title ?? "",
+        zhExcerpt: output.zh?.excerpt ?? "",
+        zhContent: output.zh?.content ?? "",
+        enTitle: output.en?.title ?? "",
+        enExcerpt: output.en?.excerpt ?? "",
+        enContent: output.en?.content ?? ""
+      });
+      await writeOutput(
+        setPostDraftCreateStep(
+          output,
+          "metadata",
+          "succeeded",
+          "Slug 和双语 SEO 已生成。"
+        ),
+        { metadata }
+      );
+    } catch (error) {
+      await writeOutput(
+        setPostDraftCreateStep(
+          output,
+          "metadata",
+          "failed",
+          friendlyJobError(error)
+        )
+      );
+      throw error;
+    }
+  }
+
+  if (!output.postId) {
+    await writeOutput(
+      setPostDraftCreateStep(output, "database", "running", "正在写入文章草稿。")
+    );
+    try {
+      const postId = await createDraftPostFromAiOutput({ input, output });
+      await writeOutput(
+        setPostDraftCreateStep(output, "database", "succeeded", "草稿已写入数据库。"),
+        {
+          postId,
+          postEditUrl: `/posts/${postId}/edit`
+        }
+      );
+    } catch (error) {
+      await writeOutput(
+        setPostDraftCreateStep(
+          output,
+          "database",
+          "failed",
+          friendlyJobError(error)
+        )
+      );
+      throw error;
+    }
+  }
+
+  if (!output.coverJobId && output.postId) {
+    await writeOutput(
+      setPostDraftCreateStep(output, "cover", "running", "正在排队生成封面。")
+    );
+    try {
+      const coverJob = await createAiJob({
+        type: "bulk_post_cover_images",
+        input: {
+          postIds: [output.postId],
+          overwriteExisting: false
+        },
+        userId: input.userId
+      });
+      await writeOutput(
+        setPostDraftCreateStep(
+          output,
+          "cover",
+          "succeeded",
+          "封面生成任务已提交。"
+        ),
+        {
+          coverJobId: coverJob.id,
+          currentStep: "",
+          message: "文章草稿已创建，封面生成任务已提交。"
+        }
+      );
+    } catch (error) {
+      await writeOutput(
+        setPostDraftCreateStep(
+          output,
+          "cover",
+          "failed",
+          friendlyJobError(error)
+        ),
+        {
+          message:
+            "文章草稿已创建，但封面任务提交失败。可进入文章编辑页或媒体库重新生成封面。"
+        }
+      );
+      throw error;
+    }
+  }
+
+  return {
+    ...output,
+    currentStep: "",
+    message: output.message || "文章草稿已创建。"
+  };
 }
 
 async function executeBulkPostCoverImagesJob({
@@ -517,7 +1032,8 @@ async function executeBulkPostCoverImagesJob({
 
 async function executeJob<TType extends AiJobType>(
   type: TType,
-  input: AiJobInputByType[TType]
+  input: AiJobInputByType[TType],
+  previousOutput?: Record<string, unknown> | null
 ): Promise<AiJobOutputByType[TType]> {
   if (type === "post_draft_rewrite") {
     const rewriteInput = input as AiJobInputByType["post_draft_rewrite"];
@@ -531,6 +1047,13 @@ async function executeJob<TType extends AiJobType>(
   if (type === "post_draft_translate") {
     return translateDraftToEnglish(
       input as AiJobInputByType["post_draft_translate"]
+    ) as Promise<AiJobOutputByType[TType]>;
+  }
+
+  if (type === "post_draft_create") {
+    return executePostDraftCreateJob(
+      input as AiJobInputByType["post_draft_create"],
+      previousOutput
     ) as Promise<AiJobOutputByType[TType]>;
   }
 
@@ -568,6 +1091,7 @@ async function runAiJob(jobId: string) {
         type: aiJobs.type,
         status: aiJobs.status,
         input: aiJobs.input,
+        output: aiJobs.output,
         attempts: aiJobs.attempts,
         createdBy: aiJobs.createdBy
       })
@@ -597,7 +1121,8 @@ async function runAiJob(jobId: string) {
           ...toRecord(job.input),
           userId: job.createdBy ?? undefined,
           jobId: job.id
-        } as AiJobInputByType[AiJobType]
+        } as AiJobInputByType[AiJobType],
+        job.output
       );
       const finishedAt = new Date();
       await db
