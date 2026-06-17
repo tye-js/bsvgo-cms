@@ -1,3 +1,6 @@
+import Link from "next/link";
+import { Search } from "lucide-react";
+
 import { PostPlacementsForm } from "@/components/forms/PostPlacementsForm";
 import { buttonClassName } from "@/components/admin/Button";
 import { inputClassName } from "@/components/admin/Field";
@@ -34,6 +37,15 @@ export default async function PlacementsPage({
     page
   });
   const pageCount = Math.max(Math.ceil(total / pageSize), 1);
+  const activePosts = rows.filter((post) =>
+    Object.values(post.placements).some((placement) => placement?.enabled)
+  ).length;
+  const activeSlots = rows.reduce(
+    (count, post) =>
+      count +
+      Object.values(post.placements).filter((placement) => placement?.enabled).length,
+    0
+  );
 
   const preserveParams = (nextPage: number) => {
     const search = new URLSearchParams();
@@ -46,22 +58,44 @@ export default async function PlacementsPage({
 
   return (
     <div className="grid gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
-          展示位
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">
-          集中管理首页和分类页的置顶、推广文章。文章内容和 SEO 仍在文章编辑页维护。
-        </p>
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
+            展示位
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            集中管理首页和分类页的置顶、推广文章。文章内容和 SEO 仍在文章编辑页维护。
+          </p>
+        </div>
+        <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-slate-200 bg-white text-sm shadow-sm">
+          <div className="border-r border-slate-200 px-4 py-3">
+            <p className="text-xs text-slate-500">当前页文章</p>
+            <p className="mt-1 font-semibold text-slate-950">{rows.length}</p>
+          </div>
+          <div className="border-r border-slate-200 px-4 py-3">
+            <p className="text-xs text-slate-500">已配置文章</p>
+            <p className="mt-1 font-semibold text-slate-950">{activePosts}</p>
+          </div>
+          <div className="px-4 py-3">
+            <p className="text-xs text-slate-500">启用槽位</p>
+            <p className="mt-1 font-semibold text-slate-950">{activeSlots}</p>
+          </div>
+        </div>
       </div>
 
       <form className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_180px_220px_auto]">
-        <input
-          name="q"
-          defaultValue={params.q ?? ""}
-          className={inputClassName}
-          placeholder="搜索标题或 slug"
-        />
+        <label className="relative">
+          <Search
+            size={17}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+          />
+          <input
+            name="q"
+            defaultValue={params.q ?? ""}
+            className={`${inputClassName} w-full pl-10`}
+            placeholder="搜索标题或 slug"
+          />
+        </label>
         <select name="status" defaultValue={status} className={inputClassName}>
           <option value="all">全部状态</option>
           <option value="draft">草稿</option>
@@ -82,35 +116,37 @@ export default async function PlacementsPage({
         </button>
       </form>
 
-      <PostPlacementsForm
-        posts={rows}
-        action={updatePostPlacementsAction}
-      />
-
-      <div className="flex items-center justify-between text-sm text-slate-500">
-        <span>
-          第 {page} / {pageCount} 页，共 {total} 条
-        </span>
-        <div className="flex gap-2">
-          <a
-            className={buttonClassName(
-              "secondary",
-              page <= 1 ? "pointer-events-none opacity-50" : ""
-            )}
-            href={preserveParams(Math.max(page - 1, 1))}
-          >
-            上一页
-          </a>
-          <a
-            className={buttonClassName(
-              "secondary",
-              page >= pageCount ? "pointer-events-none opacity-50" : ""
-            )}
-            href={preserveParams(Math.min(page + 1, pageCount))}
-          >
-            下一页
-          </a>
+      <div className="grid gap-3">
+        <div className="flex flex-col justify-between gap-3 text-sm text-slate-500 sm:flex-row sm:items-center">
+          <span>
+            第 {page} / {pageCount} 页，共 {total} 条
+          </span>
+          <div className="flex gap-2">
+            <Link
+              className={buttonClassName(
+                "secondary",
+                page <= 1 ? "pointer-events-none opacity-50" : ""
+              )}
+              href={preserveParams(Math.max(page - 1, 1))}
+            >
+              上一页
+            </Link>
+            <Link
+              className={buttonClassName(
+                "secondary",
+                page >= pageCount ? "pointer-events-none opacity-50" : ""
+              )}
+              href={preserveParams(Math.min(page + 1, pageCount))}
+            >
+              下一页
+            </Link>
+          </div>
         </div>
+
+        <PostPlacementsForm
+          posts={rows}
+          action={updatePostPlacementsAction}
+        />
       </div>
     </div>
   );
