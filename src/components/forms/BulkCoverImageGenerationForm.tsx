@@ -1,8 +1,15 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, ChevronDown, ImagePlus, Loader2, SkipForward, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  ChevronDown,
+  ImagePlus,
+  Loader2,
+  SkipForward,
+  XCircle
+} from "lucide-react";
 
 import { buttonClassName } from "@/components/admin/Button";
 import { formatDate } from "@/lib/utils";
@@ -87,6 +94,11 @@ function coverGeneratedDate(post: PostOption) {
   return post.coverGeneratedAt || post.coverCreatedAt || null;
 }
 
+function coverDimensions(post: PostOption) {
+  if (!post.coverWidth || !post.coverHeight) return "-";
+  return `${post.coverWidth} x ${post.coverHeight}`;
+}
+
 export function BulkCoverImageGenerationForm({
   action,
   posts,
@@ -103,10 +115,38 @@ export function BulkCoverImageGenerationForm({
   const [isPolling, setIsPolling] = useState(false);
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [overwriteExisting, setOverwriteExisting] = useState(false);
+  const [selectedPostIds, setSelectedPostIds] = useState<string[]>([]);
   const [progress, setProgress] = useState<NonNullable<AiJobResponse["job"]>["output"]>(null);
-  const availableCount = overwriteExisting
-    ? posts.length
-    : posts.filter((post) => !post.coverImage).length;
+  const eligiblePostIds = useMemo(
+    () =>
+      posts
+        .filter((post) => overwriteExisting || !post.coverImage)
+        .map((post) => post.id),
+    [overwriteExisting, posts]
+  );
+  const eligiblePostIdSet = useMemo(() => new Set(eligiblePostIds), [eligiblePostIds]);
+  const batchSelectablePostIds = useMemo(() => eligiblePostIds.slice(0, 10), [eligiblePostIds]);
+  const batchSelectablePostIdSet = useMemo(
+    () => new Set(batchSelectablePostIds),
+    [batchSelectablePostIds]
+  );
+  const availableCount = eligiblePostIds.length;
+  const selectedEligibleCount = selectedPostIds.filter((id) =>
+    eligiblePostIdSet.has(id)
+  ).length;
+  const batchSelectableCount = batchSelectablePostIds.length;
+  const selectedBatchCount = selectedPostIds.filter((id) =>
+    batchSelectablePostIdSet.has(id)
+  ).length;
+  const allVisibleSelected =
+    batchSelectableCount > 0 &&
+    batchSelectablePostIds.every((id) => selectedPostIds.includes(id));
+  const someVisibleSelected =
+    selectedBatchCount > 0 && selectedBatchCount < batchSelectableCount;
+
+  useEffect(() => {
+    setSelectedPostIds((current) => current.filter((id) => eligiblePostIdSet.has(id)));
+  }, [eligiblePostIdSet]);
 
   useEffect(() => {
     if (!state.jobId) return;
@@ -182,6 +222,24 @@ export function BulkCoverImageGenerationForm({
   const progressPercent =
     total > 0 ? Math.min(Math.round((processed / total) * 100), 100) : 0;
 
+  function togglePostSelection(postId: string, checked: boolean) {
+    setSelectedPostIds((current) => {
+      if (checked) {
+        if (current.includes(postId)) return current;
+        return [...current, postId].slice(0, 10);
+      }
+
+      return current.filter((id) => id !== postId);
+    });
+  }
+
+  function toggleAllVisible(checked: boolean) {
+    setSelectedPostIds((current) => {
+      if (checked) return batchSelectablePostIds;
+      return current.filter((id) => !batchSelectablePostIdSet.has(id));
+    });
+  }
+
   return (
     <form action={formAction} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
@@ -220,9 +278,12 @@ export function BulkCoverImageGenerationForm({
               />
               覆盖已有封面的文章
             </label>
+            <span className="text-sm text-slate-500">
+              已选 {selectedEligibleCount}/{batchSelectableCount}
+            </span>
             <button
               type="submit"
-              disabled={isPending || isPolling || availableCount === 0}
+              disabled={isPending || isPolling || selectedEligibleCount === 0}
               className={buttonClassName("primary", "shrink-0")}
             >
               {isPending || isPolling ? (
@@ -237,52 +298,119 @@ export function BulkCoverImageGenerationForm({
             </button>
           </div>
 
-          <div className="mt-4 grid max-h-72 gap-2 overflow-auto rounded-md border border-slate-200 p-2">
-            {posts.map((post) => (
-              <label
-                key={post.id}
-                className={`flex items-start gap-3 rounded-md px-2 py-2 text-sm ${
-                  !overwriteExisting && post.coverImage
-                    ? "cursor-not-allowed opacity-50"
-                    : "hover:bg-slate-50"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  name="postIds"
-                  value={post.id}
-                  disabled={!overwriteExisting && Boolean(post.coverImage)}
-                  className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-700"
-                />
-                <span className="min-w-0">
-                  <span className="block truncate font-medium text-slate-900">
-                    {post.title}
-                  </span>
-                  <span className="mt-0.5 block truncate text-xs text-slate-500">
-                    {post.categoryName || post.categorySlug} · {post.slug} ·{" "}
-                    {post.status} · {post.coverImage ? "已有封面" : "无封面"}
-                  </span>
-                  {post.coverImage ? (
-                    <span className="mt-1 block text-xs leading-5 text-slate-500">
-                      最新生成：{formatDate(coverGeneratedDate(post))} ·{" "}
-                      {imageFormatLabel(post.coverMimeType)}
-                      {post.coverWidth && post.coverHeight
-                        ? ` · ${post.coverWidth} x ${post.coverHeight}`
-                        : ""}{" "}
-                      · {formatFileSize(post.coverFileSize)}
-                      {post.coverModel ? ` · ${post.coverModel}` : ""}
-                    </span>
-                  ) : null}
-                </span>
-              </label>
-            ))}
+          <div className="mt-4 max-h-[420px] overflow-auto rounded-md border border-slate-200">
+            <table className="min-w-[1160px] w-full border-collapse text-left text-sm">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-medium uppercase text-slate-500">
+                <tr className="border-b border-slate-200">
+                  <th className="w-12 px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      ref={(input) => {
+                        if (input) input.indeterminate = someVisibleSelected;
+                      }}
+                      onChange={(event) => toggleAllVisible(event.target.checked)}
+                      disabled={batchSelectableCount === 0}
+                      className="h-4 w-4 rounded border-slate-300 text-slate-700"
+                      aria-label="选择当前列表前 10 篇可生成封面的文章"
+                    />
+                  </th>
+                  <th className="px-3 py-2">文章</th>
+                  <th className="w-36 px-3 py-2">分类</th>
+                  <th className="w-24 px-3 py-2">状态</th>
+                  <th className="w-28 px-3 py-2">当前封面</th>
+                  <th className="w-40 px-3 py-2">最新生成</th>
+                  <th className="w-24 px-3 py-2">格式</th>
+                  <th className="w-28 px-3 py-2">尺寸</th>
+                  <th className="w-28 px-3 py-2">文件大小</th>
+                  <th className="w-44 px-3 py-2">模型</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {posts.map((post) => {
+                  const isDisabled = !overwriteExisting && Boolean(post.coverImage);
+                  const isSelected = selectedPostIds.includes(post.id);
+
+                  return (
+                    <tr
+                      key={post.id}
+                      className={`align-top ${
+                        isDisabled
+                          ? "bg-slate-50 text-slate-400"
+                          : "text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      <td className="px-3 py-3">
+                        <input
+                          type="checkbox"
+                          name="postIds"
+                          value={post.id}
+                          checked={isSelected}
+                          onChange={(event) =>
+                            togglePostSelection(post.id, event.target.checked)
+                          }
+                          disabled={isDisabled || (!isSelected && selectedEligibleCount >= 10)}
+                          className="h-4 w-4 rounded border-slate-300 text-slate-700"
+                          aria-label={`选择文章：${post.title}`}
+                        />
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="max-w-[340px]">
+                          <p className="truncate font-medium text-slate-900">
+                            {post.title}
+                          </p>
+                          <p className="mt-1 truncate text-xs text-slate-500">
+                            {post.slug}
+                          </p>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className="inline-flex max-w-[140px] items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                          <span className="truncate">
+                            {post.categoryName || post.categorySlug || "-"}
+                          </span>
+                        </span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className="rounded-full border border-slate-200 px-2 py-0.5 text-xs text-slate-600">
+                          {post.status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3">
+                        {post.coverImage ? (
+                          <span className="text-slate-700">已有封面</span>
+                        ) : (
+                          <span className="text-slate-500">无封面</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-slate-600">
+                        {formatDate(coverGeneratedDate(post))}
+                      </td>
+                      <td className="px-3 py-3">
+                        {post.coverImage ? imageFormatLabel(post.coverMimeType) : "-"}
+                      </td>
+                      <td className="px-3 py-3">{coverDimensions(post)}</td>
+                      <td className="px-3 py-3">
+                        {formatFileSize(post.coverFileSize)}
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className="block max-w-[180px] truncate">
+                          {post.coverModel || "-"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
             {posts.length === 0 ? (
               <p className="px-2 py-6 text-center text-sm text-slate-500">
                 暂无可生成封面的文章。
               </p>
             ) : null}
             {posts.length > 0 && availableCount === 0 ? (
-              <p className="px-2 py-6 text-center text-sm text-slate-500">
+              <p className="border-t border-slate-200 px-2 py-6 text-center text-sm text-slate-500">
                 当前列表文章都已有封面。如需重新生成，请勾选覆盖已有封面的文章。
               </p>
             ) : null}
