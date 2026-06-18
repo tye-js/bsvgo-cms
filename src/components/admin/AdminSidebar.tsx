@@ -14,6 +14,7 @@ import {
   SearchCheck,
   Settings,
   Shield,
+  Sparkles,
   Tags,
   Users
 } from "lucide-react";
@@ -47,7 +48,8 @@ const navGroups: NavGroup[] = [
     children: [
       { href: "/posts", label: "文章列表" },
       { href: "/posts/drafts", label: "草稿箱" },
-      { href: "/posts/new", label: "新建文章" },
+      { href: "/posts/ai-progress", label: "AI 进度" },
+      { href: "/posts/new", label: "AI 改写" },
       { href: "/categories", label: "分类管理" },
       { href: "/tags", label: "标签管理" },
       { href: "/tags/new", label: "新建标签" }
@@ -106,13 +108,14 @@ function activeChildHref(pathname: string, children: NavChild[] | undefined) {
 
 function childIcon(label: string) {
   if (label.includes("新建文章")) return FilePlus2;
+  if (label.includes("AI")) return Sparkles;
   if (label.includes("封面")) return Images;
   if (label.includes("图片")) return Image;
   if (label.includes("分类")) return FolderTree;
   if (label.includes("标签")) return Tags;
   if (label.includes("展示")) return Pin;
   if (label.includes("管理员")) return Users;
-  if (label.includes("设置") || label.includes("AI")) return Settings;
+  if (label.includes("设置")) return Settings;
   return Gauge;
 }
 

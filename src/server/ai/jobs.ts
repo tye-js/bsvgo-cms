@@ -1275,6 +1275,42 @@ export async function listRecentCoverImageJobsForUser(
   return rows.map(serializeJob);
 }
 
+export async function listRecentPostDraftJobsForUser(
+  user: CurrentUser,
+  limit = 50
+) {
+  const filters = [
+    inArray(aiJobs.type, [
+      "post_draft_create",
+      "post_draft_rewrite",
+      "post_draft_translate",
+      "post_draft_metadata"
+    ])
+  ];
+  if (user.role !== "admin") {
+    filters.push(eq(aiJobs.createdBy, user.id));
+  }
+
+  const rows = await db
+    .select({
+      id: aiJobs.id,
+      type: aiJobs.type,
+      status: aiJobs.status,
+      output: aiJobs.output,
+      errorMessage: aiJobs.errorMessage,
+      attempts: aiJobs.attempts,
+      createdAt: aiJobs.createdAt,
+      startedAt: aiJobs.startedAt,
+      finishedAt: aiJobs.finishedAt
+    })
+    .from(aiJobs)
+    .where(and(...filters))
+    .orderBy(desc(aiJobs.createdAt))
+    .limit(Math.min(Math.max(limit, 1), 100));
+
+  return rows.map(serializeJob);
+}
+
 export async function retryAiJobForUser(jobId: string, user: CurrentUser) {
   const filters = [eq(aiJobs.id, jobId), eq(aiJobs.status, "failed")];
   if (user.role !== "admin") {

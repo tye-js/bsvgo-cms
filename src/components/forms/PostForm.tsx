@@ -341,7 +341,8 @@ export function PostForm({
   submitLabel,
   generateEnglishFromChinese = false,
   writingRoles = [],
-  defaultWritingRole = writingRoles[0]?.id ?? "technical_editor"
+  defaultWritingRole = writingRoles[0]?.id ?? "technical_editor",
+  aiOnlyCreate = false
 }: {
   action: (
     previousState: ActionState,
@@ -355,12 +356,14 @@ export function PostForm({
   generateEnglishFromChinese?: boolean;
   writingRoles?: WritingRoleOption[];
   defaultWritingRole?: AiWritingRoleId;
+  aiOnlyCreate?: boolean;
 }) {
   const [state, formAction] = useActionState(action, {});
   const formRef = useRef<HTMLFormElement>(null);
   const en = getTranslation(post, "en");
   const zh = getTranslation(post, "zh");
   const submitTimeoutMs = generateEnglishFromChinese ? 30000 : undefined;
+  const isAiDrivenCreate = generateEnglishFromChinese && aiOnlyCreate;
   const [rawDraftInput, setRawDraftInput] = useState("");
   const [sourceFileName, setSourceFileName] = useState("");
   const [sourceFileError, setSourceFileError] = useState("");
@@ -557,8 +560,19 @@ export function PostForm({
     <form
       ref={formRef}
       action={formAction}
-      onSubmit={syncTimeZoneFields}
-      className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]"
+      onSubmit={(event) => {
+        if (isAiDrivenCreate) {
+          event.preventDefault();
+          return;
+        }
+
+        syncTimeZoneFields();
+      }}
+      className={
+        isAiDrivenCreate
+          ? "mx-auto grid w-full max-w-5xl gap-6"
+          : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]"
+      }
     >
       <input
         type="hidden"
@@ -588,9 +602,11 @@ export function PostForm({
         {generateEnglishFromChinese ? (
           <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-5">
-              <h2 className="font-semibold text-slate-950">生成初稿</h2>
+              <h2 className="font-semibold text-slate-950">
+                AI 改写生成文章
+              </h2>
               <p className="mt-1 text-sm text-slate-500">
-                选择写作角色并放入素材，系统会生成中文稿、英文稿、Slug 和双语 SEO。
+                放入素材后，系统会生成中文稿、英文稿、Slug、双语 SEO，并写入草稿箱。
               </p>
             </div>
             <div className="grid gap-4">
@@ -640,6 +656,52 @@ export function PostForm({
                       </div>
                     </div>
                   ) : null}
+                </div>
+              ) : null}
+              {isAiDrivenCreate ? (
+                <div className="grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
+                  <Field label="分类">
+                    <select
+                      name="categoryId"
+                      defaultValue={post?.categoryId ?? categories[0]?.id}
+                      required
+                      disabled={aiGenerationPending}
+                      className={inputClassName}
+                    >
+                      {categories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {optionLabel(category)}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <div className="grid gap-2">
+                    <p className="text-sm font-medium text-slate-700">标签</p>
+                    <div className="grid max-h-36 gap-1 overflow-y-auto rounded-md border border-slate-200 bg-white p-2">
+                      {tags.map((tag) => (
+                        <label
+                          key={tag.id}
+                          className="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-700 hover:bg-slate-50"
+                        >
+                          <input
+                            type="checkbox"
+                            name="tagIds"
+                            value={tag.id}
+                            disabled={aiGenerationPending}
+                            className="h-4 w-4 rounded border-slate-300 text-slate-700"
+                          />
+                          <span className="min-w-0 truncate">
+                            {optionLabel(tag)}
+                          </span>
+                        </label>
+                      ))}
+                      {tags.length === 0 ? (
+                        <p className="px-2 py-3 text-sm text-slate-500">
+                          请先创建标签，再分配给文章。
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
               ) : null}
               <Field
@@ -800,6 +862,8 @@ export function PostForm({
           </section>
         ) : null}
 
+        {isAiDrivenCreate ? null : (
+          <>
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <div className="mb-5">
             <h2 className="font-semibold text-slate-950">中文内容</h2>
@@ -872,8 +936,11 @@ export function PostForm({
             />
           </div>
         </section>
+          </>
+        )}
       </div>
 
+      {isAiDrivenCreate ? null : (
       <aside className="grid content-start gap-4">
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="mb-4 font-semibold text-slate-950">发布设置</h2>
@@ -1143,6 +1210,7 @@ export function PostForm({
           </a>
         </div>
       </aside>
+      )}
       </PendingFieldset>
     </form>
   );

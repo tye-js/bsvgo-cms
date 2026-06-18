@@ -1,6 +1,6 @@
 "use client";
 
-import { ImagePlus, Trash2 } from "lucide-react";
+import { Images, ImagePlus, Search, Trash2, X } from "lucide-react";
 import { useRef, useState, useTransition } from "react";
 
 import { buttonClassName } from "@/components/admin/Button";
@@ -49,6 +49,7 @@ export function CoverImageField({
   const [url, setUrl] = useState(defaultUrl ?? "");
   const [altText, setAltText] = useState(defaultAlt ?? "");
   const [assetQuery, setAssetQuery] = useState("");
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -94,6 +95,7 @@ export function CoverImageField({
     setAltText(asset.zhAltText || asset.altText || asset.enAltText);
     setError("");
     setSuccess("已选择媒体库图片。");
+    setLibraryOpen(false);
   }
 
   function uploadFile(file: File | undefined) {
@@ -162,6 +164,17 @@ export function CoverImageField({
           <ImagePlus size={16} />
           {isPending ? "上传中..." : "上传"}
         </button>
+        {mediaAssets.length ? (
+          <button
+            type="button"
+            disabled={isPending}
+            className={buttonClassName("secondary", "min-h-9 px-3")}
+            onClick={() => setLibraryOpen(true)}
+          >
+            <Images size={16} />
+            图库中选择
+          </button>
+        ) : null}
         <button
           type="button"
           className={buttonClassName("ghost", "min-h-9 px-3")}
@@ -172,55 +185,89 @@ export function CoverImageField({
         </button>
       </div>
 
-      {mediaAssets.length ? (
-        <div className="grid gap-2">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-medium text-slate-700">图库中选择</p>
-            <p className="text-xs text-slate-500">显示前 24 个匹配结果</p>
-          </div>
-          <input
-            value={assetQuery}
-            onChange={(event) => setAssetQuery(event.target.value)}
-            disabled={isPending}
-            className={inputClassName}
-            placeholder="搜索标题、替代文本、SEO 或 URL"
-          />
-          <div className="grid max-h-[420px] grid-cols-2 gap-3 overflow-y-auto rounded-md border border-slate-200 bg-slate-50 p-2">
-            {filteredAssets.map((asset) => (
+      {libraryOpen ? (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 px-3 py-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label="从图库中选择封面"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setLibraryOpen(false);
+          }}
+        >
+          <div className="grid max-h-[min(760px,92vh)] w-full max-w-5xl overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+              <div>
+                <h3 className="font-semibold text-slate-950">图库中选择</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  显示前 24 个匹配结果，选择后会自动填入文章封面。
+                </p>
+              </div>
               <button
-                key={asset.id}
                 type="button"
-                disabled={isPending}
-                className={cn(
-                  "group overflow-hidden rounded-md border bg-white text-left transition hover:border-slate-400",
-                  asset.url === url
-                    ? "border-slate-700 ring-2 ring-slate-200"
-                    : "border-slate-200"
-                )}
-                onClick={() => chooseAsset(asset.id)}
-                title={asset.zhAltText || asset.enAltText || asset.altText || asset.url}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                onClick={() => setLibraryOpen(false)}
+                aria-label="关闭图库选择"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={asset.url}
-                  alt={asset.zhAltText || asset.altText || asset.enAltText}
-                  className="aspect-[16/10] w-full object-cover"
-                />
-                <span className="grid gap-0.5 px-2 py-2">
-                  <span className="truncate text-xs font-medium text-slate-800">
-                    {asset.zhAltText || asset.altText || asset.zhSeoTitle || "未填写中文信息"}
-                  </span>
-                  <span className="truncate text-[11px] text-slate-500">
-                    {asset.enAltText || asset.enSeoTitle || "No English metadata"}
-                  </span>
-                </span>
+                <X size={18} />
               </button>
-            ))}
-            {filteredAssets.length === 0 ? (
-              <p className="col-span-2 px-2 py-6 text-center text-xs text-slate-500">
-                没有匹配的图片。
-              </p>
-            ) : null}
+            </div>
+            <div className="grid gap-4 overflow-y-auto p-5">
+              <label className="relative">
+                <Search
+                  size={16}
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+                <input
+                  value={assetQuery}
+                  onChange={(event) => setAssetQuery(event.target.value)}
+                  disabled={isPending}
+                  className={`${inputClassName} pl-9`}
+                  placeholder="搜索标题、替代文本、SEO 或 URL"
+                  autoFocus
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {filteredAssets.map((asset) => (
+                  <button
+                    key={asset.id}
+                    type="button"
+                    disabled={isPending}
+                    className={cn(
+                      "group overflow-hidden rounded-md border bg-white text-left transition hover:border-slate-400",
+                      asset.url === url
+                        ? "border-slate-700 ring-2 ring-slate-200"
+                        : "border-slate-200"
+                    )}
+                    onClick={() => chooseAsset(asset.id)}
+                    title={asset.zhAltText || asset.enAltText || asset.altText || asset.url}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={asset.url}
+                      alt={asset.zhAltText || asset.altText || asset.enAltText}
+                      className="aspect-[16/10] w-full bg-slate-100 object-cover"
+                    />
+                    <span className="grid gap-0.5 px-2 py-2">
+                      <span className="truncate text-xs font-medium text-slate-800">
+                        {asset.zhAltText ||
+                          asset.altText ||
+                          asset.zhSeoTitle ||
+                          "未填写中文信息"}
+                      </span>
+                      <span className="truncate text-[11px] text-slate-500">
+                        {asset.enAltText || asset.enSeoTitle || "No English metadata"}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+                {filteredAssets.length === 0 ? (
+                  <p className="col-span-full rounded-md border border-slate-200 bg-slate-50 px-3 py-10 text-center text-sm text-slate-500">
+                    没有匹配的图片。
+                  </p>
+                ) : null}
+              </div>
+            </div>
           </div>
         </div>
       ) : null}
