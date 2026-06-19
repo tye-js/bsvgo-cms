@@ -41,6 +41,12 @@ const navGroups: NavGroup[] = [
     icon: LayoutDashboard
   },
   {
+    href: "/ai/jobs",
+    label: "AI 任务",
+    icon: Sparkles,
+    match: ["/ai/jobs"]
+  },
+  {
     href: "/posts",
     label: "内容管理",
     icon: FileText,

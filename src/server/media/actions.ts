@@ -11,6 +11,7 @@ import { db } from "@/server/db";
 import { mediaAssets, posts } from "@/server/db/schema";
 import {
   getMediaAsset,
+  getMediaAssetIdsForBulkCompletion,
   getUnusedMediaAssetIds,
   upsertMediaAssetFromUrl
 } from "@/server/media/service";
@@ -194,6 +195,59 @@ export async function generateMediaMetadataAction(
   });
 
   return { success: "图片 SEO 任务已提交。", jobId: job.id };
+}
+
+const providerValues = ["all", "local", "external_url"] as const;
+const usageValues = ["all", "used", "unused"] as const;
+const mediaNeedsValues = [
+  "all",
+  "missing_zh_alt",
+  "missing_en_seo",
+  "unused",
+  "missing_variants"
+] as const;
+
+function enumValue<TValue extends string>(
+  value: string,
+  values: readonly TValue[],
+  fallback: TValue
+) {
+  return values.includes(value as TValue) ? (value as TValue) : fallback;
+}
+
+export async function bulkGenerateMediaMetadataAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const user = await requireContentEditor();
+  const query = stringValue(formData, "q");
+  const provider = enumValue(stringValue(formData, "provider"), providerValues, "all");
+  const usage = enumValue(stringValue(formData, "usage"), usageValues, "all");
+  const needs = enumValue(stringValue(formData, "needs"), mediaNeedsValues, "all");
+  const ids = await getMediaAssetIdsForBulkCompletion({
+    query,
+    provider,
+    usage,
+    needs,
+    limit: 20
+  });
+
+  if (!ids.length) {
+    return { error: "当前筛选下没有可补全的媒体资源。" };
+  }
+
+  const job = await createAiJob({
+    type: "bulk_media_metadata",
+    input: {
+      mediaAssetIds: ids
+    },
+    userId: user.id
+  });
+
+  return {
+    success: `已提交 ${ids.length} 张图片的 AI 补全任务。`,
+    jobId: job.id
+  };
 }
 
 export async function bulkGeneratePostCoverImagesAction(

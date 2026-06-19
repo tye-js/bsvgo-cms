@@ -8,6 +8,16 @@ import { updatePostPlacementsAction } from "@/server/content/actions";
 import { getPostEditorOptions, listPlacementPosts } from "@/server/content/queries";
 import type { PostStatus } from "@/server/db/schema";
 
+const placementFilters = [
+  "all",
+  "homeFeatured",
+  "homePromoted",
+  "categoryFeatured",
+  "categoryPromoted"
+] as const;
+
+type PlacementFilter = (typeof placementFilters)[number];
+
 export default async function PlacementsPage({
   searchParams
 }: {
@@ -15,6 +25,7 @@ export default async function PlacementsPage({
     q?: string;
     status?: string;
     categoryId?: string;
+    placement?: string;
     page?: string;
   }>;
 }) {
@@ -30,10 +41,14 @@ export default async function PlacementsPage({
   const categoryId = categories.some((category) => category.id === selectedCategoryId)
     ? selectedCategoryId
     : "all";
+  const placement = placementFilters.includes(params.placement as PlacementFilter)
+    ? (params.placement as PlacementFilter)
+    : "all";
   const { rows, total, pageSize } = await listPlacementPosts({
     query: params.q,
     status,
     categoryId,
+    placement,
     page
   });
   const pageCount = Math.max(Math.ceil(total / pageSize), 1);
@@ -52,6 +67,7 @@ export default async function PlacementsPage({
     if (params.q) search.set("q", params.q);
     if (status !== "all") search.set("status", status);
     if (categoryId !== "all") search.set("categoryId", categoryId);
+    if (placement !== "all") search.set("placement", placement);
     search.set("page", String(nextPage));
     return `/placements?${search.toString()}`;
   };
@@ -83,7 +99,7 @@ export default async function PlacementsPage({
         </div>
       </div>
 
-      <form className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_180px_220px_auto]">
+      <form className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_160px_190px_180px_auto]">
         <label className="relative">
           <Search
             size={17}
@@ -109,6 +125,13 @@ export default async function PlacementsPage({
               {category.name}
             </option>
           ))}
+        </select>
+        <select name="placement" defaultValue={placement} className={inputClassName}>
+          <option value="all">全部展示位</option>
+          <option value="homeFeatured">首页置顶</option>
+          <option value="homePromoted">首页推广</option>
+          <option value="categoryFeatured">分类置顶</option>
+          <option value="categoryPromoted">分类推广</option>
         </select>
         <input type="hidden" name="page" value="1" />
         <button className={buttonClassName("secondary")} type="submit">

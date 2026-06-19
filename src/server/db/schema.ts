@@ -26,6 +26,7 @@ export type AiJobType =
   | "post_draft_metadata"
   | "post_draft_create"
   | "media_metadata"
+  | "bulk_media_metadata"
   | "bulk_post_seo"
   | "bulk_post_cover_images";
 export type AiJobStatus = "queued" | "running" | "succeeded" | "failed";
@@ -133,7 +134,7 @@ export const aiJobs = pgTable(
     ),
     typeCheck: check(
       "ai_jobs_type_check",
-      sql`${table.type} in ('post_draft_rewrite', 'post_draft_translate', 'post_draft_metadata', 'post_draft_create', 'media_metadata', 'bulk_post_seo', 'bulk_post_cover_images')`
+      sql`${table.type} in ('post_draft_rewrite', 'post_draft_translate', 'post_draft_metadata', 'post_draft_create', 'media_metadata', 'bulk_media_metadata', 'bulk_post_seo', 'bulk_post_cover_images')`
     ),
     statusCheck: check(
       "ai_jobs_status_check",

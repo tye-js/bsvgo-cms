@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
 
 import {
   generateDraftMetadata,
@@ -46,10 +46,19 @@ import {
   emptyPostPlacements
 } from "@/server/content/placements";
 import { upsertPostTranslation } from "@/server/content/translations";
-import { saveGeneratedCoverImage } from "@/server/media/upload";
+import {
+  regenerateMediaAssetVariants,
+  saveGeneratedCoverImage
+} from "@/server/media/upload";
 
 type MediaMetadataJobInput = {
   mediaAssetId: string;
+};
+
+type BulkMediaMetadataJobInput = {
+  mediaAssetIds: string[];
+  userId?: string;
+  jobId?: string;
 };
 
 type BulkPostSeoJobInput = {
@@ -59,6 +68,31 @@ type BulkPostSeoJobInput = {
 type BulkPostSeoJobOutput = {
   updated: number;
 };
+
+type BulkMediaMetadataItemStatus =
+  | "pending"
+  | "running"
+  | "updated"
+  | "skipped"
+  | "failed";
+
+type BulkMediaMetadataJobOutput = {
+  updated: number;
+  total?: number;
+  processed?: number;
+  skipped?: number;
+  failed?: number;
+  currentAssetId?: string;
+  currentLabel?: string;
+  items?: Array<{
+    mediaAssetId: string;
+    label: string;
+    status: BulkMediaMetadataItemStatus;
+    message?: string;
+  }>;
+};
+
+type MediaAssetForMetadata = typeof mediaAssets.$inferSelect;
 
 type BulkPostCoverImagesJobInput = {
   postIds: string[];
@@ -135,6 +169,7 @@ type AiJobInputByType = {
   post_draft_metadata: DraftMetadataInput;
   post_draft_create: PostDraftCreateJobInput;
   media_metadata: MediaMetadataJobInput;
+  bulk_media_metadata: BulkMediaMetadataJobInput;
   bulk_post_seo: BulkPostSeoJobInput;
   bulk_post_cover_images: BulkPostCoverImagesJobInput;
 };
@@ -145,6 +180,7 @@ type AiJobOutputByType = {
   post_draft_metadata: DraftMetadataOutput;
   post_draft_create: PostDraftCreateJobOutput;
   media_metadata: MediaMetadataOutput;
+  bulk_media_metadata: BulkMediaMetadataJobOutput;
   bulk_post_seo: BulkPostSeoJobOutput;
   bulk_post_cover_images: BulkPostCoverImagesJobOutput;
 };
@@ -160,6 +196,28 @@ type SerializedJob = {
   startedAt: string | null;
   finishedAt: string | null;
 };
+
+type SerializedJobDetail = SerializedJob & {
+  input: Record<string, unknown>;
+};
+
+export const aiJobTypeValues = [
+  "post_draft_rewrite",
+  "post_draft_translate",
+  "post_draft_metadata",
+  "post_draft_create",
+  "media_metadata",
+  "bulk_media_metadata",
+  "bulk_post_seo",
+  "bulk_post_cover_images"
+] as const satisfies AiJobType[];
+
+export const aiJobStatusValues = [
+  "queued",
+  "running",
+  "succeeded",
+  "failed"
+] as const satisfies AiJobStatus[];
 
 const activeJobIds = new Set<string>();
 
@@ -234,6 +292,24 @@ function serializeJob(row: {
     createdAt: row.createdAt.toISOString(),
     startedAt: serializeDate(row.startedAt),
     finishedAt: serializeDate(row.finishedAt)
+  };
+}
+
+function serializeJobDetail(row: {
+  id: string;
+  type: string;
+  status: string;
+  input: Record<string, unknown>;
+  output: Record<string, unknown> | null;
+  errorMessage: string | null;
+  attempts: number;
+  createdAt: Date;
+  startedAt: Date | null;
+  finishedAt: Date | null;
+}): SerializedJobDetail {
+  return {
+    ...serializeJob(row),
+    input: row.input
   };
 }
 
@@ -388,6 +464,12 @@ async function executeMediaMetadataJob({
     throw new Error("媒体资源不存在或已删除。");
   }
 
+  return updateMediaAssetWithAiMetadata(asset);
+}
+
+async function updateMediaAssetWithAiMetadata(
+  asset: MediaAssetForMetadata
+): Promise<MediaMetadataOutput> {
   const metadata = await generateMediaMetadata({
     url: asset.url,
     originalFilename: asset.originalFilename,
@@ -422,9 +504,130 @@ async function executeMediaMetadataJob({
       },
       updatedAt: new Date()
     })
-    .where(eq(mediaAssets.id, mediaAssetId));
+    .where(eq(mediaAssets.id, asset.id));
 
   return metadata;
+}
+
+function mediaAssetLabel(asset: Pick<MediaAssetForMetadata, "originalFilename" | "zhAltText" | "altText" | "enAltText" | "url">) {
+  return (
+    asset.zhAltText ||
+    asset.altText ||
+    asset.enAltText ||
+    asset.originalFilename ||
+    asset.url
+  );
+}
+
+async function executeBulkMediaMetadataJob({
+  mediaAssetIds,
+  jobId
+}: BulkMediaMetadataJobInput): Promise<BulkMediaMetadataJobOutput> {
+  const uniqueIds = Array.from(new Set(mediaAssetIds)).slice(0, 50);
+  if (!uniqueIds.length) {
+    throw new Error("请选择需要补全的媒体资源。");
+  }
+
+  const assets = await db
+    .select()
+    .from(mediaAssets)
+    .where(and(inArray(mediaAssets.id, uniqueIds), isNull(mediaAssets.deletedAt)));
+
+  if (!assets.length) {
+    throw new Error("没有找到可补全的媒体资源。");
+  }
+
+  const items: NonNullable<BulkMediaMetadataJobOutput["items"]> = uniqueIds.map((id) => {
+    const asset = assets.find((item) => item.id === id);
+    return {
+      mediaAssetId: id,
+      label: asset ? mediaAssetLabel(asset) : id,
+      status: asset ? "pending" : "skipped",
+      message: asset ? undefined : "媒体资源不存在或已删除。"
+    };
+  });
+  let updated = 0;
+  let skipped = items.filter((item) => item.status === "skipped").length;
+  let failed = 0;
+  let processed = skipped;
+
+  const writeProgress = async (
+    status: BulkMediaMetadataItemStatus,
+    currentAssetId?: string,
+    currentLabel?: string
+  ) => {
+    if (!jobId) return;
+
+    await db
+      .update(aiJobs)
+      .set({
+        output: {
+          updated,
+          skipped,
+          failed,
+          processed,
+          total: items.length,
+          currentAssetId: currentAssetId ?? "",
+          currentLabel: currentLabel ?? "",
+          status,
+          items
+        },
+        updatedAt: new Date()
+      })
+      .where(eq(aiJobs.id, jobId));
+  };
+
+  await writeProgress("pending");
+
+  for (const asset of assets) {
+    const item = items.find((value) => value.mediaAssetId === asset.id);
+    if (!item) continue;
+
+    item.status = "running";
+    item.message = "正在生成双语替代文本和 SEO。";
+    await writeProgress("running", asset.id, item.label);
+
+    try {
+      await updateMediaAssetWithAiMetadata(asset);
+
+      if (
+        asset.storageProvider === "local" &&
+        asset.storageKey &&
+        (!asset.variants || asset.variants.length === 0)
+      ) {
+        const variants = await regenerateMediaAssetVariants({
+          storageKey: asset.storageKey
+        });
+        await db
+          .update(mediaAssets)
+          .set({ variants, updatedAt: new Date() })
+          .where(eq(mediaAssets.id, asset.id));
+      }
+
+      updated += 1;
+      processed += 1;
+      item.status = "updated";
+      item.message = "媒体 SEO 已补全。";
+      await writeProgress("updated", asset.id, item.label);
+    } catch (error) {
+      failed += 1;
+      processed += 1;
+      item.status = "failed";
+      item.message = friendlyJobError(error);
+      await writeProgress("failed", asset.id, item.label);
+    }
+  }
+
+  return {
+    updated,
+    skipped,
+    failed,
+    processed,
+    total: items.length,
+    currentAssetId: "",
+    currentLabel: "",
+    items
+  };
 }
 
 async function executeBulkPostSeoJob({
@@ -1063,6 +1266,12 @@ async function executeJob<TType extends AiJobType>(
     ) as Promise<AiJobOutputByType[TType]>;
   }
 
+  if (type === "bulk_media_metadata") {
+    return executeBulkMediaMetadataJob(
+      input as AiJobInputByType["bulk_media_metadata"]
+    ) as Promise<AiJobOutputByType[TType]>;
+  }
+
   if (type === "bulk_post_seo") {
     return executeBulkPostSeoJob(
       input as AiJobInputByType["bulk_post_seo"]
@@ -1244,6 +1453,95 @@ export async function getAiJobForUser(jobId: string, user: CurrentUser) {
   if (!job) return null;
   await resumeJobIfRecoverable(job);
   return serializeJob(job);
+}
+
+export async function getAiJobDetailForUser(jobId: string, user: CurrentUser) {
+  const filters = [eq(aiJobs.id, jobId)];
+  if (user.role !== "admin") {
+    filters.push(eq(aiJobs.createdBy, user.id));
+  }
+
+  const [job] = await db
+    .select({
+      id: aiJobs.id,
+      type: aiJobs.type,
+      status: aiJobs.status,
+      input: aiJobs.input,
+      output: aiJobs.output,
+      errorMessage: aiJobs.errorMessage,
+      attempts: aiJobs.attempts,
+      createdAt: aiJobs.createdAt,
+      startedAt: aiJobs.startedAt,
+      finishedAt: aiJobs.finishedAt
+    })
+    .from(aiJobs)
+    .where(and(...filters))
+    .limit(1);
+
+  if (!job) return null;
+  await resumeJobIfRecoverable(job);
+  return serializeJobDetail(job);
+}
+
+export async function listAiJobsForUser({
+  user,
+  type = "all",
+  status = "all",
+  page = 1,
+  pageSize = 20
+}: {
+  user: CurrentUser;
+  type?: AiJobType | "all";
+  status?: AiJobStatus | "all";
+  page?: number;
+  pageSize?: number;
+}) {
+  const safePage = Number.isFinite(page) ? Math.max(page, 1) : 1;
+  const safePageSize = Number.isFinite(pageSize)
+    ? Math.min(Math.max(pageSize, 1), 100)
+    : 20;
+  const filters = [
+    type === "all" ? undefined : eq(aiJobs.type, type),
+    status === "all" ? undefined : eq(aiJobs.status, status),
+    user.role !== "admin" ? eq(aiJobs.createdBy, user.id) : undefined
+  ].filter(Boolean);
+  const where = filters.length ? and(...filters) : undefined;
+
+  const rows = await db
+    .select({
+      id: aiJobs.id,
+      type: aiJobs.type,
+      status: aiJobs.status,
+      output: aiJobs.output,
+      errorMessage: aiJobs.errorMessage,
+      attempts: aiJobs.attempts,
+      createdAt: aiJobs.createdAt,
+      startedAt: aiJobs.startedAt,
+      finishedAt: aiJobs.finishedAt
+    })
+    .from(aiJobs)
+    .where(where)
+    .orderBy(desc(aiJobs.createdAt))
+    .limit(safePageSize)
+    .offset((safePage - 1) * safePageSize);
+
+  const [totalRow] = await db
+    .select({ total: count() })
+    .from(aiJobs)
+    .where(where);
+
+  await Promise.all(
+    rows
+      .filter((job) => job.status === "queued" || job.status === "running")
+      .map((job) => resumeJobIfRecoverable(job))
+  );
+
+  return {
+    rows: rows.map(serializeJob),
+    total: Number(totalRow?.total ?? 0),
+    page: safePage,
+    pageSize: safePageSize
+  };
 }
 
 export async function listRecentCoverImageJobsForUser(

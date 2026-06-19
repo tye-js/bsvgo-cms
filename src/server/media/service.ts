@@ -39,6 +39,7 @@ export async function listMediaAssets(options: {
   query?: string;
   provider?: "all" | "local" | "external_url";
   usage?: "all" | "used" | "unused";
+  needs?: "all" | "missing_zh_alt" | "missing_en_seo" | "unused" | "missing_variants";
   page?: number;
   pageSize?: number;
 } = {}) {
@@ -49,12 +50,28 @@ export async function listMediaAssets(options: {
   const query = options.query?.trim();
   const provider = options.provider ?? "all";
   const usage = options.usage ?? "all";
+  const needs = options.needs ?? "all";
   const isUsedExpression = mediaAssetUsedExpression();
+  const missingVariantsExpression = sql`
+    ${mediaAssets.storageProvider} = 'local'
+    and coalesce(jsonb_array_length(${mediaAssets.variants}), 0) = 0
+  `;
   const filters = [
     isNull(mediaAssets.deletedAt),
     provider === "all" ? undefined : eq(mediaAssets.storageProvider, provider),
     usage === "used" ? isUsedExpression : undefined,
     usage === "unused" ? sql`not ${isUsedExpression}` : undefined,
+    needs === "missing_zh_alt"
+      ? sql`nullif(trim(${mediaAssets.zhAltText}), '') is null`
+      : undefined,
+    needs === "missing_en_seo"
+      ? sql`(
+          nullif(trim(${mediaAssets.enSeoTitle}), '') is null
+          or nullif(trim(${mediaAssets.enSeoDescription}), '') is null
+        )`
+      : undefined,
+    needs === "unused" ? sql`not ${isUsedExpression}` : undefined,
+    needs === "missing_variants" ? missingVariantsExpression : undefined,
     query
       ? or(
           ilike(mediaAssets.url, `%${query}%`),
@@ -117,6 +134,31 @@ export async function listMediaAssets(options: {
     page,
     pageSize
   };
+}
+
+export async function getMediaAssetIdsForBulkCompletion({
+  query,
+  provider = "all",
+  usage = "all",
+  needs = "all",
+  limit = 20
+}: {
+  query?: string;
+  provider?: "all" | "local" | "external_url";
+  usage?: "all" | "used" | "unused";
+  needs?: "all" | "missing_zh_alt" | "missing_en_seo" | "unused" | "missing_variants";
+  limit?: number;
+}) {
+  const result = await listMediaAssets({
+    query,
+    provider,
+    usage,
+    needs,
+    page: 1,
+    pageSize: Math.min(Math.max(limit, 1), 50)
+  });
+
+  return result.rows.map((asset) => asset.id);
 }
 
 export async function getMediaAssetOptions(limit = 80) {

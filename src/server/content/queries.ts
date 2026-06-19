@@ -80,8 +80,8 @@ export async function listPosts(options: {
   const pageSize = options.pageSize ?? 12;
   const query = options.query?.trim();
   const status = options.status ?? "all";
-  const titleExpression = sql<string>`coalesce(nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'en'), ''), nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'zh'), ''), ${posts.slug})`;
-  const categoryNameExpression = sql<string>`coalesce(nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'en'), ''), nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'zh'), ''), ${categories.slug})`;
+  const titleExpression = sql<string>`coalesce(nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'zh'), ''), nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'en'), ''), ${posts.slug})`;
+  const categoryNameExpression = sql<string>`coalesce(nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'zh'), ''), nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'en'), ''), ${categories.slug})`;
 
   const filters = [
     isNull(posts.deletedAt),
@@ -383,6 +383,7 @@ export async function listPlacementPosts(options: {
   query?: string;
   status?: PostStatus | "all";
   categoryId?: string | "all";
+  placement?: "all" | "homeFeatured" | "homePromoted" | "categoryFeatured" | "categoryPromoted";
   page?: number;
   pageSize?: number;
 } = {}) {
@@ -391,8 +392,20 @@ export async function listPlacementPosts(options: {
   const query = options.query?.trim();
   const status = options.status ?? "all";
   const categoryId = options.categoryId ?? "all";
-  const titleExpression = sql<string>`coalesce(nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'en'), ''), nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'zh'), ''), ${posts.slug})`;
+  const placement = options.placement ?? "all";
+  const titleExpression = sql<string>`coalesce(nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'zh'), ''), nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'en'), ''), ${posts.slug})`;
   const categoryNameExpression = sql<string>`coalesce(nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'zh'), ''), nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'en'), ''), ${categories.slug})`;
+  const placementFilters: Record<
+    Exclude<typeof placement, "all">,
+    { scope: "home" | "category"; slot: "featured" | "promoted" }
+  > = {
+    homeFeatured: { scope: "home", slot: "featured" },
+    homePromoted: { scope: "home", slot: "promoted" },
+    categoryFeatured: { scope: "category", slot: "featured" },
+    categoryPromoted: { scope: "category", slot: "promoted" }
+  };
+  const selectedPlacement =
+    placement === "all" ? null : placementFilters[placement];
   const filters = [
     isNull(posts.deletedAt),
     status === "all" ? undefined : eq(posts.status, status),
@@ -401,6 +414,13 @@ export async function listPlacementPosts(options: {
       ? or(ilike(posts.slug, `%${query}%`), ilike(postTranslations.title, `%${query}%`))
       : undefined
   ].filter(Boolean);
+  const placementWhere = selectedPlacement
+    ? and(
+        eq(postPlacements.scope, selectedPlacement.scope),
+        eq(postPlacements.slot, selectedPlacement.slot),
+        eq(postPlacements.enabled, true)
+      )
+    : undefined;
   const where = filters.length ? and(...filters) : undefined;
 
   const rows = await db
@@ -418,7 +438,20 @@ export async function listPlacementPosts(options: {
     .leftJoin(postTranslations, eq(postTranslations.postId, posts.id))
     .innerJoin(categories, eq(categories.id, posts.categoryId))
     .leftJoin(categoryTranslations, eq(categoryTranslations.categoryId, categories.id))
-    .where(where)
+    .$dynamic()
+    .where(
+      placementWhere
+        ? and(
+            where,
+            sql`exists (
+              select 1
+              from ${postPlacements}
+              where ${postPlacements.postId} = ${posts.id}
+                and ${placementWhere}
+            )`
+          )
+        : where
+    )
     .groupBy(posts.id, categories.id)
     .orderBy(desc(posts.updatedAt))
     .limit(pageSize)
@@ -428,7 +461,20 @@ export async function listPlacementPosts(options: {
     .select({ total: sql<number>`count(distinct ${posts.id})` })
     .from(posts)
     .leftJoin(postTranslations, eq(postTranslations.postId, posts.id))
-    .where(where);
+    .$dynamic()
+    .where(
+      placementWhere
+        ? and(
+            where,
+            sql`exists (
+              select 1
+              from ${postPlacements}
+              where ${postPlacements.postId} = ${posts.id}
+                and ${placementWhere}
+            )`
+          )
+        : where
+    );
 
   const placements = rows.length
     ? await db

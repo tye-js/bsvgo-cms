@@ -4,9 +4,11 @@ import { Images, ImagePlus } from "lucide-react";
 import { ButtonLink, buttonClassName } from "@/components/admin/Button";
 import { CopyButton } from "@/components/admin/CopyButton";
 import { inputClassName } from "@/components/admin/Field";
+import { BulkMediaMetadataForm } from "@/components/forms/BulkMediaMetadataForm";
 import { ConfirmSubmitButton } from "@/components/forms/ConfirmSubmitButton";
 import { formatDate } from "@/lib/utils";
 import {
+  bulkGenerateMediaMetadataAction,
   deleteMediaAssetAction,
   deleteUnusedMediaAssetsAction
 } from "@/server/media/actions";
@@ -20,6 +22,13 @@ function formatFileSize(size: number | null) {
 
 const providerFilters = ["all", "local", "external_url"] as const;
 const usageFilters = ["all", "used", "unused"] as const;
+const needsFilters = [
+  "all",
+  "missing_zh_alt",
+  "missing_en_seo",
+  "unused",
+  "missing_variants"
+] as const;
 
 export default async function MediaPage({
   searchParams
@@ -28,6 +37,7 @@ export default async function MediaPage({
     q?: string;
     provider?: string;
     usage?: string;
+    needs?: string;
     page?: string;
   }>;
 }) {
@@ -40,12 +50,16 @@ export default async function MediaPage({
   const usage = usageFilters.includes(params.usage as (typeof usageFilters)[number])
     ? (params.usage as (typeof usageFilters)[number])
     : "all";
+  const needs = needsFilters.includes(params.needs as (typeof needsFilters)[number])
+    ? (params.needs as (typeof needsFilters)[number])
+    : "all";
   const requestedPage = Number(params.page ?? "1");
   const page = Number.isFinite(requestedPage) ? Math.max(requestedPage, 1) : 1;
   const { rows: assets, total, pageSize } = await listMediaAssets({
     query: params.q,
     provider,
     usage,
+    needs,
     page
   });
   const pageCount = Math.max(Math.ceil(total / pageSize), 1);
@@ -55,6 +69,7 @@ export default async function MediaPage({
     if (params.q) search.set("q", params.q);
     if (provider !== "all") search.set("provider", provider);
     if (usage !== "all") search.set("usage", usage);
+    if (needs !== "all") search.set("needs", needs);
     search.set("page", String(nextPage));
     return `/media?${search.toString()}`;
   };
@@ -80,7 +95,7 @@ export default async function MediaPage({
         </div>
       </div>
 
-      <form className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_180px_180px_auto]">
+      <form className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_160px_160px_180px_auto]">
         <input
           name="q"
           defaultValue={params.q ?? ""}
@@ -97,6 +112,13 @@ export default async function MediaPage({
           <option value="used">已使用</option>
           <option value="unused">未使用</option>
         </select>
+        <select name="needs" defaultValue={needs} className={inputClassName}>
+          <option value="all">全部补全状态</option>
+          <option value="missing_zh_alt">缺中文 alt</option>
+          <option value="missing_en_seo">缺英文 SEO</option>
+          <option value="unused">未使用</option>
+          <option value="missing_variants">无衍生图</option>
+        </select>
         <input type="hidden" name="page" value="1" />
         <button type="submit" className={buttonClassName("secondary")}>
           搜索
@@ -106,16 +128,28 @@ export default async function MediaPage({
       <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <form id="bulk-delete-unused-media" action={deleteUnusedMediaAssetsAction} />
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-3">
-          <p className="text-sm text-slate-500">
-            未使用图片指未作为任何未删除文章封面关联的媒体资源。
-          </p>
-          <ConfirmSubmitButton
-            form="bulk-delete-unused-media"
-            message="确定删除当前勾选的未使用图片吗？已使用图片会被自动跳过。"
-            className="min-h-9 px-3"
-          >
-            批量删除未使用图片
-          </ConfirmSubmitButton>
+          <div className="max-w-2xl text-sm text-slate-500">
+            <p>未使用图片指未作为任何未删除文章封面关联的媒体资源。</p>
+            <p className="mt-1 text-xs">
+              批量 AI 补全会按当前筛选取前 20 张图片，补齐双语替代文本和 SEO；本地图片无衍生图时会顺带补齐。
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <BulkMediaMetadataForm
+              action={bulkGenerateMediaMetadataAction}
+              q={params.q ?? ""}
+              provider={provider}
+              usage={usage}
+              needs={needs}
+            />
+            <ConfirmSubmitButton
+              form="bulk-delete-unused-media"
+              message="确定删除当前勾选的未使用图片吗？已使用图片会被自动跳过。"
+              className="min-h-9 px-3"
+            >
+              批量删除未使用图片
+            </ConfirmSubmitButton>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-left text-sm">

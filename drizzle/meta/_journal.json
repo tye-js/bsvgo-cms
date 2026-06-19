@@ -120,6 +120,13 @@
       "when": 1781712000000,
       "tag": "0016_ai_post_draft_create_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1781798400000,
+      "tag": "0017_bulk_media_metadata_jobs",
+      "breakpoints": true
     }
   ]
 }
