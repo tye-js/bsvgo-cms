@@ -586,6 +586,13 @@ export function PostForm({
       />
       <input type="hidden" name="publishedAtTimeZone" value={timeZone} />
       <input type="hidden" name="mark" value="" />
+      {isAiDrivenCreate ? (
+        <input
+          type="hidden"
+          name="categoryId"
+          value={post?.categoryId ?? categories[0]?.id ?? ""}
+        />
+      ) : null}
       <PendingFieldset className="grid gap-6 lg:contents">
       <div className="grid gap-6">
         {state.error ? (
@@ -656,52 +663,6 @@ export function PostForm({
                       </div>
                     </div>
                   ) : null}
-                </div>
-              ) : null}
-              {isAiDrivenCreate ? (
-                <div className="grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
-                  <Field label="分类">
-                    <select
-                      name="categoryId"
-                      defaultValue={post?.categoryId ?? categories[0]?.id}
-                      required
-                      disabled={aiGenerationPending}
-                      className={inputClassName}
-                    >
-                      {categories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {optionLabel(category)}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <div className="grid gap-2">
-                    <p className="text-sm font-medium text-slate-700">标签</p>
-                    <div className="grid max-h-36 gap-1 overflow-y-auto rounded-md border border-slate-200 bg-white p-2">
-                      {tags.map((tag) => (
-                        <label
-                          key={tag.id}
-                          className="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-700 hover:bg-slate-50"
-                        >
-                          <input
-                            type="checkbox"
-                            name="tagIds"
-                            value={tag.id}
-                            disabled={aiGenerationPending}
-                            className="h-4 w-4 rounded border-slate-300 text-slate-700"
-                          />
-                          <span className="min-w-0 truncate">
-                            {optionLabel(tag)}
-                          </span>
-                        </label>
-                      ))}
-                      {tags.length === 0 ? (
-                        <p className="px-2 py-3 text-sm text-slate-500">
-                          请先创建标签，再分配给文章。
-                        </p>
-                      ) : null}
-                    </div>
-                  </div>
                 </div>
               ) : null}
               <Field
