@@ -69,6 +69,27 @@ export const postPlacementSchema = z.object({
   })
 });
 
+export const topicCollectionPostSchema = z.object({
+  collectionId: z.string().uuid("请选择专题"),
+  postId: z.string().uuid("请选择文章"),
+  sortOrder: z.preprocess(
+    (value) => (value === "" || value === null ? undefined : value),
+    z.coerce.number().int().min(0).max(1000000).optional()
+  )
+});
+
+export const topicCollectionSortSchema = z.object({
+  collectionId: z.string().uuid("请选择专题"),
+  items: z
+    .array(
+      z.object({
+        postId: z.string().uuid("请选择文章"),
+        sortOrder: z.coerce.number().int().min(0).max(1000000)
+      })
+    )
+    .max(300, "一次最多调整 300 篇文章")
+});
+
 export const newPostSchema = postSchema.extend({
   writingRole: z.enum(aiWritingRoleIds).optional(),
   slug: slugSchema.or(z.literal("")),

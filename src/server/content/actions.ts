@@ -11,6 +11,8 @@ import {
   postPlacementSchema,
   postSchema,
   tagSchema,
+  topicCollectionPostSchema,
+  topicCollectionSortSchema,
   userSchema
 } from "@/lib/validators";
 import { createAiJob } from "@/server/ai/jobs";
@@ -26,6 +28,8 @@ import {
   posts,
   tagTranslations,
   tags,
+  topicCollectionPosts,
+  topicCollections,
   users
 } from "@/server/db/schema";
 import { aiAuthorValues } from "@/server/content/ai-author";
@@ -334,6 +338,162 @@ export async function updatePostPlacementsAction(
   revalidatePath("/posts");
   revalidatePath(`/posts/${data.postId}/edit`);
   return { success: "展示位已保存。" };
+}
+
+export async function addTopicCollectionPostAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  await requireContentEditor();
+  const parsed = topicCollectionPostSchema.safeParse({
+    collectionId: stringValue(formData, "collectionId"),
+    postId: stringValue(formData, "postId"),
+    sortOrder: stringValue(formData, "sortOrder")
+  });
+
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "专题文章数据无效" };
+  }
+
+  const data = parsed.data;
+
+  try {
+    await db.transaction(async (tx) => {
+      const [collection] = await tx
+        .select({ id: topicCollections.id })
+        .from(topicCollections)
+        .where(
+          and(
+            eq(topicCollections.id, data.collectionId),
+            isNull(topicCollections.deletedAt)
+          )
+        )
+        .limit(1);
+
+      if (!collection) throw new Error("专题不存在");
+
+      const [post] = await tx
+        .select({ id: posts.id })
+        .from(posts)
+        .where(and(eq(posts.id, data.postId), isNull(posts.deletedAt)))
+        .limit(1);
+
+      if (!post) throw new Error("文章不存在");
+
+      const [maxSortRow] = await tx
+        .select({
+          maxSortOrder: sql<number>`coalesce(max(${topicCollectionPosts.sortOrder}), 0)`
+        })
+        .from(topicCollectionPosts)
+        .where(eq(topicCollectionPosts.collectionId, data.collectionId));
+      const sortOrder = data.sortOrder ?? Number(maxSortRow?.maxSortOrder ?? 0) + 1000;
+
+      await tx
+        .insert(topicCollectionPosts)
+        .values({
+          collectionId: data.collectionId,
+          postId: data.postId,
+          sortOrder
+        })
+        .onConflictDoUpdate({
+          target: [
+            topicCollectionPosts.collectionId,
+            topicCollectionPosts.postId
+          ],
+          set: {
+            sortOrder
+          }
+        });
+
+      await tx
+        .update(topicCollections)
+        .set({ updatedAt: new Date() })
+        .where(eq(topicCollections.id, data.collectionId));
+    });
+  } catch (error) {
+    return { error: friendlyDatabaseError(error) };
+  }
+
+  revalidatePath("/collections");
+  revalidatePath(`/collections/${data.collectionId}`);
+  return { success: "文章已加入专题。" };
+}
+
+export async function updateTopicCollectionSortAction(
+  _previousState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  await requireContentEditor();
+  const postIds = formData.getAll("postId").map(String);
+  const sortOrders = formData.getAll("sortOrder").map(String);
+  const parsed = topicCollectionSortSchema.safeParse({
+    collectionId: stringValue(formData, "collectionId"),
+    items: postIds.map((postId, index) => ({
+      postId,
+      sortOrder: sortOrders[index] ?? "0"
+    }))
+  });
+
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "专题排序数据无效" };
+  }
+
+  const data = parsed.data;
+
+  try {
+    await db.transaction(async (tx) => {
+      for (const item of data.items) {
+        await tx
+          .update(topicCollectionPosts)
+          .set({ sortOrder: item.sortOrder })
+          .where(
+            and(
+              eq(topicCollectionPosts.collectionId, data.collectionId),
+              eq(topicCollectionPosts.postId, item.postId)
+            )
+          );
+      }
+
+      await tx
+        .update(topicCollections)
+        .set({ updatedAt: new Date() })
+        .where(eq(topicCollections.id, data.collectionId));
+    });
+  } catch (error) {
+    return { error: friendlyDatabaseError(error) };
+  }
+
+  revalidatePath("/collections");
+  revalidatePath(`/collections/${data.collectionId}`);
+  return { success: "专题文章排序已保存。" };
+}
+
+export async function removeTopicCollectionPostAction(formData: FormData) {
+  await requireContentEditor();
+  const parsed = topicCollectionPostSchema.safeParse({
+    collectionId: stringValue(formData, "collectionId"),
+    postId: stringValue(formData, "postId")
+  });
+
+  if (!parsed.success) return;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(topicCollectionPosts)
+      .where(
+        and(
+          eq(topicCollectionPosts.collectionId, parsed.data.collectionId),
+          eq(topicCollectionPosts.postId, parsed.data.postId)
+        )
+      );
+    await tx
+      .update(topicCollections)
+      .set({ updatedAt: new Date() })
+      .where(eq(topicCollections.id, parsed.data.collectionId));
+  });
+
+  revalidatePath("/collections");
+  revalidatePath(`/collections/${parsed.data.collectionId}`);
 }
 
 export async function deletePostAction(formData: FormData) {

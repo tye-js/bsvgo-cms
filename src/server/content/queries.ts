@@ -14,10 +14,14 @@ import {
   posts,
   tags,
   tagTranslations,
+  topicCollectionPosts,
+  topicCollectionTranslations,
+  topicCollections,
   users,
   type Locale,
   type PostMark,
-  type PostStatus
+  type PostStatus,
+  type TopicCollectionStatus
 } from "@/server/db/schema";
 
 export async function getDashboardStats() {
@@ -543,6 +547,137 @@ export async function listCategories() {
     .where(isNull(categories.deletedAt))
     .groupBy(categories.id)
     .orderBy(asc(categories.sortOrder));
+}
+
+export async function listTopicCollections() {
+  const rows = await db
+    .select({
+      id: topicCollections.id,
+      slug: topicCollections.slug,
+      status: topicCollections.status,
+      sortOrder: topicCollections.sortOrder,
+      updatedAt: topicCollections.updatedAt,
+      zhTitle: sql<string>`coalesce(max(${topicCollectionTranslations.title}) filter (where ${topicCollectionTranslations.locale} = 'zh'), '')`,
+      enTitle: sql<string>`coalesce(max(${topicCollectionTranslations.title}) filter (where ${topicCollectionTranslations.locale} = 'en'), '')`,
+      postCount: sql<number>`count(distinct ${topicCollectionPosts.postId})`
+    })
+    .from(topicCollections)
+    .leftJoin(
+      topicCollectionTranslations,
+      eq(topicCollectionTranslations.collectionId, topicCollections.id)
+    )
+    .leftJoin(
+      topicCollectionPosts,
+      eq(topicCollectionPosts.collectionId, topicCollections.id)
+    )
+    .where(isNull(topicCollections.deletedAt))
+    .groupBy(topicCollections.id)
+    .orderBy(asc(topicCollections.sortOrder), asc(topicCollections.slug));
+
+  return rows.map((row) => ({
+    ...row,
+    status: row.status as TopicCollectionStatus,
+    title: row.zhTitle || row.enTitle || row.slug,
+    postCount: Number(row.postCount ?? 0)
+  }));
+}
+
+export async function getTopicCollectionForManage(id: string) {
+  const [collection] = await db
+    .select({
+      id: topicCollections.id,
+      slug: topicCollections.slug,
+      status: topicCollections.status,
+      sortOrder: topicCollections.sortOrder,
+      updatedAt: topicCollections.updatedAt,
+      zhTitle: sql<string>`coalesce(max(${topicCollectionTranslations.title}) filter (where ${topicCollectionTranslations.locale} = 'zh'), '')`,
+      enTitle: sql<string>`coalesce(max(${topicCollectionTranslations.title}) filter (where ${topicCollectionTranslations.locale} = 'en'), '')`,
+      zhDescription: sql<string>`coalesce(max(${topicCollectionTranslations.description}) filter (where ${topicCollectionTranslations.locale} = 'zh'), '')`,
+      enDescription: sql<string>`coalesce(max(${topicCollectionTranslations.description}) filter (where ${topicCollectionTranslations.locale} = 'en'), '')`
+    })
+    .from(topicCollections)
+    .leftJoin(
+      topicCollectionTranslations,
+      eq(topicCollectionTranslations.collectionId, topicCollections.id)
+    )
+    .where(and(eq(topicCollections.id, id), isNull(topicCollections.deletedAt)))
+    .groupBy(topicCollections.id)
+    .limit(1);
+
+  if (!collection) return null;
+
+  const articleRows = await db
+    .select({
+      postId: posts.id,
+      slug: posts.slug,
+      status: posts.status,
+      createdAt: posts.createdAt,
+      updatedAt: posts.updatedAt,
+      publishedAt: posts.publishedAt,
+      sortOrder: topicCollectionPosts.sortOrder,
+      title: sql<string>`coalesce(nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'zh'), ''), nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'en'), ''), ${posts.slug})`,
+      categoryName: sql<string>`coalesce(nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'zh'), ''), nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'en'), ''), ${categories.slug})`
+    })
+    .from(topicCollectionPosts)
+    .innerJoin(posts, eq(posts.id, topicCollectionPosts.postId))
+    .innerJoin(categories, eq(categories.id, posts.categoryId))
+    .leftJoin(categoryTranslations, eq(categoryTranslations.categoryId, categories.id))
+    .leftJoin(postTranslations, eq(postTranslations.postId, posts.id))
+    .where(
+      and(
+        eq(topicCollectionPosts.collectionId, id),
+        isNull(posts.deletedAt)
+      )
+    )
+    .groupBy(topicCollectionPosts.collectionId, topicCollectionPosts.postId, posts.id, categories.id)
+    .orderBy(
+      asc(topicCollectionPosts.sortOrder),
+      asc(posts.createdAt),
+      asc(posts.id)
+    );
+
+  return {
+    ...collection,
+    status: collection.status as TopicCollectionStatus,
+    title: collection.zhTitle || collection.enTitle || collection.slug,
+    posts: articleRows.map((row) => ({
+      ...row,
+      status: row.status as PostStatus
+    }))
+  };
+}
+
+export async function listTopicCollectionPostCandidates(collectionId: string) {
+  const titleExpression = sql<string>`coalesce(nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'zh'), ''), nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'en'), ''), ${posts.slug})`;
+  const categoryNameExpression = sql<string>`coalesce(nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'zh'), ''), nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'en'), ''), ${categories.slug})`;
+
+  return db
+    .select({
+      id: posts.id,
+      slug: posts.slug,
+      title: titleExpression,
+      status: posts.status,
+      categoryName: categoryNameExpression,
+      createdAt: posts.createdAt
+    })
+    .from(posts)
+    .innerJoin(categories, eq(categories.id, posts.categoryId))
+    .leftJoin(categoryTranslations, eq(categoryTranslations.categoryId, categories.id))
+    .leftJoin(postTranslations, eq(postTranslations.postId, posts.id))
+    .where(
+      and(
+        isNull(posts.deletedAt),
+        sql`not exists (
+          select 1
+          from ${topicCollectionPosts}
+          where ${topicCollectionPosts.collectionId} = ${collectionId}
+            and ${topicCollectionPosts.postId} = ${posts.id}
+        )`
+      )
+    )
+    .groupBy(posts.id, categories.id)
+    .orderBy(desc(posts.createdAt))
+    .limit(300);
 }
 
 export async function getCategoryForEdit(id: string) {

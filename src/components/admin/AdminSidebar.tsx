@@ -50,12 +50,13 @@ const navGroups: NavGroup[] = [
     href: "/posts",
     label: "内容管理",
     icon: FileText,
-    match: ["/posts", "/categories", "/tags"],
+    match: ["/posts", "/collections", "/categories", "/tags"],
     children: [
       { href: "/posts", label: "文章列表" },
       { href: "/posts/drafts", label: "草稿箱" },
       { href: "/posts/ai-progress", label: "AI 进度" },
       { href: "/posts/new", label: "AI 改写" },
+      { href: "/collections", label: "专题辑" },
       { href: "/categories", label: "分类管理" },
       { href: "/tags", label: "标签管理" },
       { href: "/tags/new", label: "新建标签" }
