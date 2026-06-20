@@ -134,6 +134,13 @@
       "when": 1781919509000,
       "tag": "0018_setting_audit_logs",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1781925454000,
+      "tag": "0019_topic_collections",
+      "breakpoints": true
     }
   ]
 }

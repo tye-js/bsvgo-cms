@@ -20,6 +20,7 @@ export type Locale = "en" | "zh";
 export type PostMark = "" | "featured" | "pinned" | "sponsored";
 export type PostPlacementScope = "home" | "category";
 export type PostPlacementSlot = "featured" | "promoted";
+export type TopicCollectionStatus = "draft" | "published" | "archived";
 export type AiJobType =
   | "post_draft_rewrite"
   | "post_draft_translate"
@@ -380,6 +381,81 @@ export const postTags = pgTable(
   })
 );
 
+export const topicCollections = pgTable(
+  "topic_collections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    slug: varchar("slug", { length: 140 }).notNull(),
+    status: varchar("status", { length: 20 }).notNull().default("draft"),
+    coverImageId: uuid("cover_image_id").references(() => mediaAssets.id, {
+      onDelete: "set null"
+    }),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    deletedAt: timestamp("deleted_at")
+  },
+  (table) => ({
+    slugIdx: uniqueIndex("topic_collections_slug_unique").on(table.slug),
+    statusSortIdx: index("topic_collections_status_sort_idx").on(
+      table.status,
+      table.sortOrder
+    ),
+    statusCheck: check(
+      "topic_collections_status_check",
+      sql`${table.status} in ('draft', 'published', 'archived')`
+    )
+  })
+);
+
+export const topicCollectionTranslations = pgTable(
+  "topic_collection_translations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    collectionId: uuid("collection_id")
+      .notNull()
+      .references(() => topicCollections.id, { onDelete: "cascade" }),
+    locale: varchar("locale", { length: 10 }).notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    description: text("description").notNull().default(""),
+    seoTitle: varchar("seo_title", { length: 255 }).notNull().default(""),
+    seoDescription: varchar("seo_description", { length: 500 }).notNull().default(""),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull()
+  },
+  (table) => ({
+    collectionLocaleIdx: uniqueIndex(
+      "topic_collection_translations_collection_locale_unique"
+    ).on(table.collectionId, table.locale),
+    localeCheck: check(
+      "topic_collection_translations_locale_check",
+      sql`${table.locale} in ('en', 'zh')`
+    )
+  })
+);
+
+export const topicCollectionPosts = pgTable(
+  "topic_collection_posts",
+  {
+    collectionId: uuid("collection_id")
+      .notNull()
+      .references(() => topicCollections.id, { onDelete: "cascade" }),
+    postId: uuid("post_id")
+      .notNull()
+      .references(() => posts.id, { onDelete: "cascade" }),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull()
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.collectionId, table.postId] }),
+    collectionSortIdx: index("topic_collection_posts_collection_sort_idx").on(
+      table.collectionId,
+      table.sortOrder
+    ),
+    postIdx: index("topic_collection_posts_post_idx").on(table.postId)
+  })
+);
+
 export const postPlacements = pgTable(
   "post_placements",
   {
@@ -544,8 +620,45 @@ export const postsRelations = relations(posts, ({ one, many }) => ({
   }),
   translations: many(postTranslations),
   postTags: many(postTags),
+  topicCollectionPosts: many(topicCollectionPosts),
   placements: many(postPlacements)
 }));
+
+export const topicCollectionsRelations = relations(
+  topicCollections,
+  ({ one, many }) => ({
+    coverAsset: one(mediaAssets, {
+      fields: [topicCollections.coverImageId],
+      references: [mediaAssets.id]
+    }),
+    translations: many(topicCollectionTranslations),
+    collectionPosts: many(topicCollectionPosts)
+  })
+);
+
+export const topicCollectionTranslationsRelations = relations(
+  topicCollectionTranslations,
+  ({ one }) => ({
+    collection: one(topicCollections, {
+      fields: [topicCollectionTranslations.collectionId],
+      references: [topicCollections.id]
+    })
+  })
+);
+
+export const topicCollectionPostsRelations = relations(
+  topicCollectionPosts,
+  ({ one }) => ({
+    collection: one(topicCollections, {
+      fields: [topicCollectionPosts.collectionId],
+      references: [topicCollections.id]
+    }),
+    post: one(posts, {
+      fields: [topicCollectionPosts.postId],
+      references: [posts.id]
+    })
+  })
+);
 
 export const postPlacementsRelations = relations(postPlacements, ({ one }) => ({
   post: one(posts, {
@@ -563,7 +676,8 @@ export const mediaAssetsRelations = relations(mediaAssets, ({ one, many }) => ({
     fields: [mediaAssets.createdBy],
     references: [users.id]
   }),
-  posts: many(posts)
+  posts: many(posts),
+  topicCollections: many(topicCollections)
 }));
 
 export const postTranslationsRelations = relations(postTranslations, ({ one }) => ({

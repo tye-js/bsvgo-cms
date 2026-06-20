@@ -372,9 +372,11 @@ export function PostForm({
     post?.aiAuthorRole ?? defaultWritingRole
   );
   const selectedWritingRole = writingRoles.find((role) => role.id === writingRole);
+  const sourceFileInputRef = useRef<HTMLInputElement>(null);
   const [draftCreateJob, setDraftCreateJob] =
     useState<AiJob<DraftCreateJobOutput> | null>(null);
   const [draftCreateError, setDraftCreateError] = useState("");
+  const [draftCreateNotice, setDraftCreateNotice] = useState("");
   const [isCreatingDraft, setIsCreatingDraft] = useState(false);
   const aiGenerationPending =
     isCreatingDraft ||
@@ -434,6 +436,7 @@ export function PostForm({
 
   function importMarkdownFile(file: File | undefined) {
     setSourceFileError("");
+    setDraftCreateNotice("");
 
     if (!file) return;
 
@@ -468,10 +471,22 @@ export function PostForm({
         setRawDraftInput(trimmedContent);
         setSourceFileName(file.name);
         setDraftCreateError("");
+        setDraftCreateNotice("");
       })
       .catch(() => {
         setSourceFileError("Markdown 文件读取失败，请重新选择。");
       });
+  }
+
+  function resetAiRewriteInputs() {
+    setRawDraftInput("");
+    setSourceFileName("");
+    setSourceFileError("");
+    setSourceUrl("");
+    setDraftCreateJob(null);
+    if (sourceFileInputRef.current) {
+      sourceFileInputRef.current.value = "";
+    }
   }
 
   async function pollDraftCreateJob(initialJob: AiJob<DraftCreateJobOutput>) {
@@ -495,6 +510,7 @@ export function PostForm({
 
   function createDraftPost() {
     setDraftCreateError("");
+    setDraftCreateNotice("");
 
     if (aiGenerationPending) return;
 
@@ -513,6 +529,14 @@ export function PostForm({
           },
           "AI 创建文章草稿失败。"
         );
+        if (isAiDrivenCreate) {
+          resetAiRewriteInputs();
+          setDraftCreateNotice(
+            `AI 改写任务已提交到后台：${job.id}。你可以继续添加新的改写素材。`
+          );
+          return;
+        }
+
         const finishedJob = await pollDraftCreateJob(job);
         if (finishedJob.status === "failed") {
           setDraftCreateError(
@@ -608,13 +632,34 @@ export function PostForm({
 
         {generateEnglishFromChinese ? (
           <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-5">
-              <h2 className="font-semibold text-slate-950">
-                AI 改写生成文章
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                放入素材后，系统会生成中文稿、英文稿、Slug、双语 SEO，并写入草稿箱。
-              </p>
+            <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+              <div>
+                <h2 className="font-semibold text-slate-950">
+                  AI 改写生成文章
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  放入素材后，系统会生成中文稿、英文稿、Slug、双语 SEO，并写入草稿箱。
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={
+                  aiGenerationPending ||
+                  (!sourceUrl.trim() && rawDraftInput.trim().length < 20)
+                }
+                className={buttonClassName("primary", "shrink-0")}
+                onClick={createDraftPost}
+              >
+                {aiGenerationPending ? (
+                  <span
+                    aria-hidden="true"
+                    className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                  />
+                ) : (
+                  <Sparkles size={16} />
+                )}
+                {aiGenerationPending ? "提交中..." : "生成中英文文章"}
+              </button>
             </div>
             <div className="grid gap-4">
               {writingRoles.length ? (
@@ -672,7 +717,10 @@ export function PostForm({
                 <input
                   type="url"
                   value={sourceUrl}
-                  onChange={(event) => setSourceUrl(event.target.value)}
+                  onChange={(event) => {
+                    setSourceUrl(event.target.value);
+                    setDraftCreateNotice("");
+                  }}
                   disabled={aiGenerationPending}
                   className={inputClassName}
                   placeholder="https://..."
@@ -683,6 +731,7 @@ export function PostForm({
                 hint="可选。支持 .md 和 .markdown，读取后会填入下方素材框，可继续编辑。"
               >
                 <input
+                  ref={sourceFileInputRef}
                   type="file"
                   accept=".md,.markdown,text/markdown,text/plain"
                   disabled={aiGenerationPending}
@@ -703,12 +752,29 @@ export function PostForm({
               <Field label="未整理素材">
                 <textarea
                   value={rawDraftInput}
-                  onChange={(event) => setRawDraftInput(event.target.value)}
+                  onChange={(event) => {
+                    setRawDraftInput(event.target.value);
+                    setDraftCreateNotice("");
+                  }}
                   disabled={aiGenerationPending}
                   className={`${textareaClassName} min-h-52`}
                   placeholder="粘贴资料、灵感、链接、要点、碎片化笔记..."
                 />
               </Field>
+              {draftCreateNotice ? (
+                <div className="flex flex-col gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 sm:flex-row sm:items-center sm:justify-between">
+                  <span>{draftCreateNotice}</span>
+                  <a
+                    href="/posts/ai-progress"
+                    className={buttonClassName(
+                      "secondary",
+                      "min-h-8 shrink-0 border-emerald-200 bg-white px-2 text-emerald-700 hover:bg-emerald-50"
+                    )}
+                  >
+                    查看进度
+                  </a>
+                </div>
+              ) : null}
               {draftCreateJob ? (
                 <div className="grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
                   <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
@@ -783,26 +849,6 @@ export function PostForm({
                   {draftCreateError}
                 </p>
               ) : null}
-              <button
-                type="button"
-                disabled={
-                  aiGenerationPending ||
-                  Boolean(draftCreateJob?.output?.postId) ||
-                  (!sourceUrl.trim() && rawDraftInput.trim().length < 20)
-                }
-                className={buttonClassName("secondary", "justify-self-start")}
-                onClick={createDraftPost}
-              >
-                {aiGenerationPending ? (
-                  <span
-                    aria-hidden="true"
-                    className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
-                  />
-                ) : (
-                  <Sparkles size={16} />
-                )}
-                {aiGenerationPending ? "后台生成中..." : "生成中英文文章并创建草稿"}
-              </button>
 
               {draftCreateJob?.status === "failed" ? (
                 <button
