@@ -3,8 +3,6 @@ import { notFound } from "next/navigation";
 
 import { Badge } from "@/components/admin/Badge";
 import { buttonClassName } from "@/components/admin/Button";
-import { inputClassName } from "@/components/admin/Field";
-import { ConfirmSubmitButton } from "@/components/forms/ConfirmSubmitButton";
 import {
   AddTopicCollectionPostForm,
   TopicCollectionSortForm
@@ -84,7 +82,7 @@ export default async function TopicCollectionManagePage({
         <div className="border-b border-slate-200 px-5 py-4">
           <h2 className="font-semibold text-slate-950">专题文章排序</h2>
           <p className="mt-1 text-sm text-slate-500">
-            排序值越小越靠前。建议使用 1000 间隔，方便在两篇文章中间插入新文章。
+            支持拖拽手动排序、按创建/发布时间规则排序，以及批量重编号。
           </p>
         </div>
 
@@ -92,96 +90,8 @@ export default async function TopicCollectionManagePage({
           collectionId={collection.id}
           posts={collection.posts}
           action={updateTopicCollectionSortAction}
-        >
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1120px] table-fixed text-left text-sm">
-              <colgroup>
-                <col className="w-[110px]" />
-                <col className="w-[320px]" />
-                <col className="w-[140px]" />
-                <col className="w-[120px]" />
-                <col className="w-[180px]" />
-                <col className="w-[180px]" />
-                <col className="w-[120px]" />
-              </colgroup>
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-5 py-3 font-medium">排序</th>
-                  <th className="px-5 py-3 font-medium">文章</th>
-                  <th className="px-5 py-3 font-medium">分类</th>
-                  <th className="px-5 py-3 font-medium">状态</th>
-                  <th className="px-5 py-3 font-medium">创建时间</th>
-                  <th className="px-5 py-3 font-medium">更新时间</th>
-                  <th className="px-5 py-3 font-medium">操作</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {collection.posts.map((post, index) => {
-                  const removeFormId = `remove-topic-post-${post.postId}`;
-
-                  return (
-                    <tr key={post.postId} className="align-top">
-                      <td className="px-5 py-4">
-                        <input type="hidden" name="postId" value={post.postId} />
-                        <input
-                          name="sortOrder"
-                          type="number"
-                          min={0}
-                          max={1000000}
-                          step={1}
-                          defaultValue={post.sortOrder}
-                          className={`${inputClassName} w-28`}
-                          aria-label={`第 ${index + 1} 篇文章排序`}
-                        />
-                      </td>
-                      <td className="px-5 py-4">
-                        <Link
-                          href={`/posts/${post.postId}/edit`}
-                          className="font-medium text-slate-950 hover:text-slate-700 hover:underline"
-                        >
-                          {post.title}
-                        </Link>
-                        <p className="mt-1 break-all text-xs text-slate-500">
-                          {post.slug}
-                        </p>
-                      </td>
-                      <td className="px-5 py-4 text-slate-600">
-                        {post.categoryName}
-                      </td>
-                      <td className="px-5 py-4">
-                        <Badge tone={post.status}>
-                          {postStatusLabel(post.status)}
-                        </Badge>
-                      </td>
-                      <td className="px-5 py-4 text-slate-500">
-                        {formatDate(post.createdAt)}
-                      </td>
-                      <td className="px-5 py-4 text-slate-500">
-                        {formatDate(post.updatedAt)}
-                      </td>
-                      <td className="px-5 py-4">
-                        <ConfirmSubmitButton
-                          form={removeFormId}
-                          message="确定从专题中移除这篇文章吗？文章本身不会被删除。"
-                          className="min-h-8 px-2"
-                        >
-                          移除
-                        </ConfirmSubmitButton>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {collection.posts.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-5 py-10 text-center text-slate-500">
-                      这个专题还没有文章。
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </TopicCollectionSortForm>
+          removeFormId={(postId) => `remove-topic-post-${postId}`}
+        />
 
         {collection.posts.map((post) => (
           <form

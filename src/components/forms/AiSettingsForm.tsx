@@ -19,6 +19,7 @@ import { MAIN_COVER_IMAGE_SPEC } from "@/lib/image-generation";
 import { cn } from "@/lib/utils";
 import type {
   AiProviderSettingsInput,
+  AiSettingsDiagnostic,
   AiSeoStyleSettingsInput,
   AiWritingSettingsInput,
   ImageGenerationSettingsInput
@@ -27,6 +28,7 @@ import type {
 type ActionState = {
   error?: string;
   success?: string;
+  diagnostic?: AiSettingsDiagnostic;
 };
 
 type AiSettingsAction<Input> = (input: Input) => Promise<ActionState>;
@@ -89,6 +91,47 @@ function StatusMessage({ state }: { state: SectionState }) {
   return null;
 }
 
+function DiagnosticPanel({ diagnostic }: { diagnostic?: AiSettingsDiagnostic }) {
+  if (!diagnostic) return null;
+
+  return (
+    <div className="grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+      <div className="grid gap-2 md:grid-cols-2">
+        <p className="text-slate-600">
+          兼容性：{" "}
+          <span
+            className={diagnostic.compatible ? "text-emerald-700" : "text-rose-700"}
+          >
+            {diagnostic.compatible ? "通过" : "失败"}
+          </span>
+        </p>
+        <p className="text-slate-600">耗时：{diagnostic.elapsedMs} ms</p>
+        <p className="text-slate-600">接口：{diagnostic.provider}</p>
+        <p className="text-slate-600">HTTP：{diagnostic.httpStatus ?? "-"}</p>
+      </div>
+      <p className="break-all text-xs leading-5 text-slate-500">
+        Endpoint：{diagnostic.endpoint}
+      </p>
+      <div className="grid gap-2">
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+          模型返回
+        </p>
+        <pre className="max-h-40 overflow-auto rounded bg-white p-3 text-xs leading-5 text-slate-700">
+          {diagnostic.responseText || "无文本响应"}
+        </pre>
+      </div>
+      <details>
+        <summary className="cursor-pointer text-xs font-medium text-slate-600">
+          查看真实响应 JSON
+        </summary>
+        <pre className="mt-2 max-h-72 overflow-auto rounded bg-slate-950 p-3 text-xs leading-5 text-slate-100">
+          {diagnostic.rawResponse || "{}"}
+        </pre>
+      </details>
+    </div>
+  );
+}
+
 function PanelHeader({
   icon,
   title,
@@ -117,17 +160,19 @@ function PanelHeader({
 function useSettingsSubmit<Input>(
   action: AiSettingsAction<Input>,
   stateKey: string,
-  setState: (state: SectionState) => void
+  setState: (state: SectionState) => void,
+  options: { refreshOnSuccess?: boolean } = {}
 ) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const refreshOnSuccess = options.refreshOnSuccess ?? true;
 
   const submit = (input: Input) => {
     setState({ key: stateKey });
     startTransition(async () => {
       const nextState = await action(input);
       setState({ ...nextState, key: stateKey });
-      if (!nextState.error) {
+      if (!nextState.error && refreshOnSuccess) {
         router.refresh();
       }
     });
@@ -138,9 +183,11 @@ function useSettingsSubmit<Input>(
 
 export function AiSettingsForm({
   providerAction,
+  providerTestAction,
   writingAction,
   seoStyleAction,
   imageGenerationAction,
+  imageGenerationTestAction,
   hasApiKey,
   apiKeyPreview,
   apiBaseUrl,
@@ -154,9 +201,11 @@ export function AiSettingsForm({
   imageGeneration
 }: {
   providerAction: AiSettingsAction<AiProviderSettingsInput>;
+  providerTestAction: AiSettingsAction<AiProviderSettingsInput>;
   writingAction: AiSettingsAction<AiWritingSettingsInput>;
   seoStyleAction: AiSettingsAction<AiSeoStyleSettingsInput>;
   imageGenerationAction: AiSettingsAction<ImageGenerationSettingsInput>;
+  imageGenerationTestAction: AiSettingsAction<ImageGenerationSettingsInput>;
   hasApiKey: boolean;
   apiKeyPreview: string;
   apiBaseUrl: string;
@@ -222,12 +271,24 @@ export function AiSettingsForm({
     "provider",
     setState
   );
+  const providerTest = useSettingsSubmit(
+    providerTestAction,
+    "providerTest",
+    setState,
+    { refreshOnSuccess: false }
+  );
   const writingSubmit = useSettingsSubmit(writingAction, "writing", setState);
   const seoSubmit = useSettingsSubmit(seoStyleAction, "seo", setState);
   const imageSubmit = useSettingsSubmit(
     imageGenerationAction,
     "image",
     setState
+  );
+  const imageTest = useSettingsSubmit(
+    imageGenerationTestAction,
+    "imageTest",
+    setState,
+    { refreshOnSuccess: false }
   );
 
   const editingRole =
@@ -323,7 +384,11 @@ export function AiSettingsForm({
               icon={<KeyRound size={16} />}
               title="文本模型"
               description="用于写文章、翻译、SEO 和媒体元数据生成。配置保存到数据库。"
-              state={state.key === "provider" ? state : {}}
+              state={
+                state.key === "provider" || state.key === "providerTest"
+                  ? state
+                  : {}
+              }
             />
           <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
             API Key 状态：{" "}
@@ -395,7 +460,22 @@ export function AiSettingsForm({
               />
             </Field>
           </div>
-          <div className="flex justify-end">
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              disabled={providerTest.isPending}
+              onClick={() =>
+                providerTest.submit({
+                  apiKey: apiKeyValue,
+                  apiBaseUrl: apiBaseUrlValue,
+                  model: modelValue,
+                  timeoutMs: timeoutMsValue
+                })
+              }
+              className={buttonClassName("secondary")}
+            >
+              {providerTest.isPending ? "测试中..." : "测试文本模型"}
+            </button>
             <button
               type="button"
               disabled={providerSubmit.isPending}
@@ -412,6 +492,9 @@ export function AiSettingsForm({
               {providerSubmit.isPending ? "保存中..." : "保存文本模型"}
             </button>
           </div>
+          {state.key === "providerTest" ? (
+            <DiagnosticPanel diagnostic={state.diagnostic} />
+          ) : null}
           </div>
         ) : null}
 
@@ -575,13 +658,18 @@ export function AiSettingsForm({
               icon={<ImageIcon size={16} />}
               title="封面生成"
               description="维护图片模型参数，以及区块链、人工智能、基础设施三类封面的视觉风格。"
-              state={state.key === "image" ? state : {}}
+              state={
+                state.key === "image" || state.key === "imageTest" ? state : {}
+              }
             />
           <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
             图片 API Key 状态：{" "}
             <span className="font-medium text-slate-900">
               {imageKeyStatus}
             </span>
+          </div>
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            测试生图模型会向当前 Base URL 真实提交一次图片生成请求，可能产生供应商费用。
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <Field
@@ -742,7 +830,28 @@ export function AiSettingsForm({
               className={`${textareaClassName} min-h-32`}
             />
           </Field>
-          <div className="flex justify-end">
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              disabled={imageTest.isPending}
+              onClick={() =>
+                imageTest.submit({
+                  apiKey: imageApiKeyValue,
+                  apiBaseUrl: imageApiBaseUrlValue,
+                  model: imageModelValue,
+                  preset: imagePresetValue,
+                  size: imageSizeValue,
+                  quality: imageQualityValue,
+                  outputFormat: imageOutputFormatValue,
+                  blockchainPromptStyle: imageBlockchainPromptStyleValue,
+                  aiPromptStyle: imageAiPromptStyleValue,
+                  infrastructurePromptStyle: imageInfrastructurePromptStyleValue
+                })
+              }
+              className={buttonClassName("secondary")}
+            >
+              {imageTest.isPending ? "测试中..." : "测试生图模型"}
+            </button>
             <button
               type="button"
               disabled={imageSubmit.isPending}
@@ -765,6 +874,9 @@ export function AiSettingsForm({
               {imageSubmit.isPending ? "保存中..." : "保存封面生成"}
             </button>
           </div>
+          {state.key === "imageTest" ? (
+            <DiagnosticPanel diagnostic={state.diagnostic} />
+          ) : null}
           </div>
         ) : null}
       </section>

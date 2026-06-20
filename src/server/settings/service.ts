@@ -346,6 +346,32 @@ function canReuseApiKey(sourceBaseUrl: string, targetBaseUrl: string) {
   return Boolean(sourceOrigin && targetOrigin && sourceOrigin === targetOrigin);
 }
 
+export async function getSavedAiProviderSecret() {
+  const rows = await getSettings([AI_SETTING_KEYS.apiKey]);
+  const byKey = new Map(rows.map((row) => [row.key, row]));
+  return decryptIfNeeded(byKey.get(AI_SETTING_KEYS.apiKey)).trim();
+}
+
+export async function getSavedImageGenerationSecret(apiBaseUrl: string) {
+  const rows = await getSettings([
+    AI_SETTING_KEYS.apiKey,
+    AI_SETTING_KEYS.apiBaseUrl,
+    IMAGE_GENERATION_SETTING_KEYS.apiKey
+  ]);
+  const byKey = new Map(rows.map((row) => [row.key, row]));
+  const imageApiKey = decryptIfNeeded(
+    byKey.get(IMAGE_GENERATION_SETTING_KEYS.apiKey)
+  ).trim();
+  if (imageApiKey) return imageApiKey;
+
+  const fallbackApiKey = decryptIfNeeded(byKey.get(AI_SETTING_KEYS.apiKey)).trim();
+  const fallbackApiBaseUrl =
+    decryptIfNeeded(byKey.get(AI_SETTING_KEYS.apiBaseUrl)).trim() ||
+    DEFAULT_AI_API_BASE_URL;
+
+  return canReuseApiKey(fallbackApiBaseUrl, apiBaseUrl) ? fallbackApiKey : "";
+}
+
 export async function getAiSettingsForGeneration(roleId?: string) {
   const rows = await getSettings(aiSettingKeys());
   const byKey = new Map(rows.map((row) => [row.key, row]));

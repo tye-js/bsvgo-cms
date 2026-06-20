@@ -15,6 +15,8 @@ import { generateSeoSuggestion } from "@/server/ai/openai";
 import { requireContentEditor, requireRole } from "@/server/auth/session";
 import {
   saveAiSettings,
+  getSavedAiProviderSecret,
+  getSavedImageGenerationSecret,
   saveImageGenerationSettings,
   saveHomepageSeoSettings
 } from "@/server/settings/service";
@@ -22,6 +24,17 @@ import {
 type ActionState = {
   error?: string;
   success?: string;
+};
+
+export type AiSettingsDiagnostic = {
+  provider: string;
+  endpoint: string;
+  model: string;
+  httpStatus: number | null;
+  elapsedMs: number;
+  compatible: boolean;
+  responseText: string;
+  rawResponse: string;
 };
 
 export type AiProviderSettingsInput = {
@@ -53,6 +66,10 @@ export type ImageGenerationSettingsInput = {
   blockchainPromptStyle?: string;
   aiPromptStyle?: string;
   infrastructurePromptStyle?: string;
+};
+
+type DiagnosticActionState = ActionState & {
+  diagnostic?: AiSettingsDiagnostic;
 };
 
 export type HomepageSeoSettingsInput = {
@@ -107,6 +124,358 @@ async function currentAiSettingsForPreserve() {
     zhSeoStyle: settings.ai.zhSeoStyle,
     enSeoStyle: settings.ai.enSeoStyle
   };
+}
+
+function normalizeBaseUrl(apiBaseUrl: string) {
+  return apiBaseUrl.trim().replace(/\/+$/, "");
+}
+
+function responsesUrl(apiBaseUrl: string) {
+  const normalized = normalizeBaseUrl(apiBaseUrl);
+  return normalized.endsWith("/responses") ? normalized : `${normalized}/responses`;
+}
+
+function chatCompletionsUrl(apiBaseUrl: string) {
+  const normalized = normalizeBaseUrl(apiBaseUrl);
+  if (normalized.endsWith("/chat/completions")) return normalized;
+  return normalized.endsWith("/v1")
+    ? `${normalized}/chat/completions`
+    : `${normalized}/v1/chat/completions`;
+}
+
+function imageGenerationsUrl(apiBaseUrl: string) {
+  const normalized = normalizeBaseUrl(apiBaseUrl);
+  if (normalized.endsWith("/images/generations")) return normalized;
+  return normalized.endsWith("/v1")
+    ? `${normalized}/images/generations`
+    : `${normalized}/v1/images/generations`;
+}
+
+function isResponsesProvider(apiBaseUrl: string) {
+  return apiBaseUrl.includes("api.openai.com") || apiBaseUrl.endsWith("/responses");
+}
+
+function isDeepSeekProvider(apiBaseUrl: string) {
+  return apiBaseUrl.toLowerCase().includes("deepseek.com");
+}
+
+function isDeepSeekV4Model(model: string) {
+  return model.trim().toLowerCase().startsWith("deepseek-v4");
+}
+
+function deepSeekChatOptions(apiBaseUrl: string, model: string) {
+  if (!isDeepSeekProvider(apiBaseUrl) || !isDeepSeekV4Model(model)) return {};
+  return {
+    thinking: { type: "disabled" }
+  };
+}
+
+function providerLabel(apiBaseUrl: string) {
+  if (apiBaseUrl.includes("deepseek.com")) return "DeepSeek";
+  if (apiBaseUrl.includes("api.openai.com")) return "OpenAI";
+  return "AI provider";
+}
+
+function truncateText(value: string, maxLength = 4000) {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength)}\n... 已截断 ${value.length - maxLength} 个字符`;
+}
+
+function safePayloadPreview(payload: unknown) {
+  return truncateText(
+    JSON.stringify(
+      payload,
+      (key, value) => {
+        if (key === "b64_json" && typeof value === "string") {
+          return `[base64 image data: ${value.length} chars]`;
+        }
+        return value;
+      },
+      2
+    )
+  );
+}
+
+function chatOutputText(payload: unknown) {
+  const record = payload as {
+    choices?: Array<{
+      message?: {
+        content?: string;
+      };
+    }>;
+  };
+
+  return record.choices?.[0]?.message?.content ?? "";
+}
+
+function responsesOutputText(payload: unknown) {
+  const record = payload as {
+    output_text?: string;
+    output?: Array<{
+      content?: Array<{
+        text?: string;
+      }>;
+    }>;
+  };
+
+  return (
+    record.output_text ??
+    record.output
+      ?.flatMap((item) => item.content ?? [])
+      .map((content) => content.text ?? "")
+      .filter(Boolean)
+      .join("\n") ??
+    ""
+  );
+}
+
+function diagnosticErrorMessage(responseText: string, status: number) {
+  const normalized = responseText.replace(/\s+/g, " ").trim();
+  if (!normalized) return `模型测试失败：HTTP ${status}`;
+  return `模型测试失败：HTTP ${status} ${truncateText(normalized, 500)}`;
+}
+
+export async function testAiProviderSettingsAction(
+  input: AiProviderSettingsInput
+): Promise<DiagnosticActionState> {
+  await requireRole(["admin"]);
+  const parsed = aiSettingsSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "AI 模型连接设置无效" };
+  }
+
+  const apiKey =
+    parsed.data.apiKey?.trim() || (await getSavedAiProviderSecret());
+  if (!apiKey) {
+    return { error: "请先填写并保存文本 API Key，或在测试前临时输入 API Key。" };
+  }
+
+  const provider = isResponsesProvider(parsed.data.apiBaseUrl)
+    ? "Responses API"
+    : "Chat Completions";
+  const endpoint =
+    provider === "Responses API"
+      ? responsesUrl(parsed.data.apiBaseUrl)
+      : chatCompletionsUrl(parsed.data.apiBaseUrl);
+  const controller = new AbortController();
+  const startedAt = Date.now();
+  const timer = setTimeout(() => controller.abort(), parsed.data.timeoutMs);
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body:
+        provider === "Responses API"
+          ? JSON.stringify({
+              model: parsed.data.model,
+              input: [
+                {
+                  role: "user",
+                  content: [
+                    {
+                      type: "input_text",
+                      text:
+                        'Return exactly one short JSON object like {"ok":true,"message":"BSVgo CMS text model test passed"}.'
+                    }
+                  ]
+                }
+              ]
+            })
+          : JSON.stringify({
+              model: parsed.data.model,
+              ...deepSeekChatOptions(parsed.data.apiBaseUrl, parsed.data.model),
+              messages: [
+                {
+                  role: "user",
+                  content:
+                    'Return exactly one short JSON object like {"ok":true,"message":"BSVgo CMS text model test passed"}.'
+                }
+              ],
+              response_format: { type: "json_object" }
+            })
+    });
+    const elapsedMs = Date.now() - startedAt;
+    const rawText = await response.text();
+    let payload: unknown = rawText;
+    try {
+      payload = JSON.parse(rawText);
+    } catch {
+      payload = rawText;
+    }
+
+    const responseText =
+      provider === "Responses API"
+        ? responsesOutputText(payload)
+        : chatOutputText(payload);
+    const diagnostic = {
+      provider,
+      endpoint,
+      model: parsed.data.model,
+      httpStatus: response.status,
+      elapsedMs,
+      compatible: response.ok,
+      responseText: truncateText(responseText || rawText, 1000),
+      rawResponse: safePayloadPreview(payload)
+    };
+
+    if (!response.ok) {
+      return {
+        error: diagnosticErrorMessage(rawText, response.status),
+        diagnostic
+      };
+    }
+
+    return {
+      success: `${providerLabel(parsed.data.apiBaseUrl)} 文本模型测试成功。`,
+      diagnostic
+    };
+  } catch (error) {
+    const elapsedMs = Date.now() - startedAt;
+    return {
+      error:
+        error instanceof Error && error.name === "AbortError"
+          ? "文本模型测试超时，请检查 Base URL、模型名、Key 或供应商账号状态。"
+          : error instanceof Error
+            ? error.message
+            : "文本模型测试失败。",
+      diagnostic: {
+        provider,
+        endpoint,
+        model: parsed.data.model,
+        httpStatus: null,
+        elapsedMs,
+        compatible: false,
+        responseText: "",
+        rawResponse: ""
+      }
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function testImageGenerationSettingsAction(
+  input: ImageGenerationSettingsInput
+): Promise<DiagnosticActionState> {
+  await requireRole(["admin"]);
+  const parsed = imageGenerationSettingsSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      error: parsed.error.issues[0]?.message ?? "AI 图片生成设置无效"
+    };
+  }
+
+  const apiKey =
+    parsed.data.apiKey?.trim() ||
+    (await getSavedImageGenerationSecret(parsed.data.apiBaseUrl));
+  if (!apiKey) {
+    return {
+      error:
+        "请先填写并保存图片 API Key，或在测试前临时输入图片 API Key。图片供应商与文本供应商不同时不能复用文本 Key。"
+    };
+  }
+
+  const endpoint = imageGenerationsUrl(parsed.data.apiBaseUrl);
+  const controller = new AbortController();
+  const startedAt = Date.now();
+  const timer = setTimeout(() => controller.abort(), 180000);
+  const size =
+    parsed.data.preset === MAIN_COVER_IMAGE_SPEC.preset
+      ? MAIN_COVER_IMAGE_SPEC.sourceSize
+      : parsed.data.size;
+  const quality =
+    parsed.data.preset === MAIN_COVER_IMAGE_SPEC.preset
+      ? "high"
+      : parsed.data.quality;
+  const outputFormat =
+    parsed.data.preset === MAIN_COVER_IMAGE_SPEC.preset
+      ? MAIN_COVER_IMAGE_SPEC.providerOutputFormat
+      : parsed.data.outputFormat;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: parsed.data.model,
+        prompt:
+          "BSVgo CMS image model connection test. Create a clean abstract technology blog cover with no readable text, no logos, and a professional editorial style.",
+        n: 1,
+        size,
+        quality,
+        output_format: outputFormat,
+        response_format: "b64_json"
+      })
+    });
+    const elapsedMs = Date.now() - startedAt;
+    const rawText = await response.text();
+    let payload: unknown = rawText;
+    try {
+      payload = JSON.parse(rawText);
+    } catch {
+      payload = rawText;
+    }
+    const firstImage = (payload as { data?: Array<Record<string, unknown>> }).data?.[0];
+    const imageSource =
+      typeof firstImage?.b64_json === "string"
+        ? `收到 base64 图片数据，长度 ${firstImage.b64_json.length}`
+        : typeof firstImage?.url === "string"
+          ? `收到图片 URL：${firstImage.url}`
+          : rawText;
+    const diagnostic = {
+      provider: "Images Generations",
+      endpoint,
+      model: parsed.data.model,
+      httpStatus: response.status,
+      elapsedMs,
+      compatible: response.ok,
+      responseText: truncateText(imageSource, 1000),
+      rawResponse: safePayloadPreview(payload)
+    };
+
+    if (!response.ok) {
+      return {
+        error: diagnosticErrorMessage(rawText, response.status),
+        diagnostic
+      };
+    }
+
+    return {
+      success: "图片生成模型测试成功。",
+      diagnostic
+    };
+  } catch (error) {
+    const elapsedMs = Date.now() - startedAt;
+    return {
+      error:
+        error instanceof Error && error.name === "AbortError"
+          ? "图片模型测试超时，请检查 Base URL、模型名、Key、尺寸规格或供应商账号状态。"
+          : error instanceof Error
+            ? error.message
+            : "图片模型测试失败。",
+      diagnostic: {
+        provider: "Images Generations",
+        endpoint,
+        model: parsed.data.model,
+        httpStatus: null,
+        elapsedMs,
+        compatible: false,
+        responseText: "",
+        rawResponse: ""
+      }
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function updateAiProviderSettingsAction(

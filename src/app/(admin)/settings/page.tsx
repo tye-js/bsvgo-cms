@@ -5,6 +5,8 @@ import { HomepageSeoForm } from "@/components/forms/HomepageSeoForm";
 import {
   generateHomepageSeoSuggestionAction,
   saveHomepageSeoSettingsAction,
+  testAiProviderSettingsAction,
+  testImageGenerationSettingsAction,
   updateAiProviderSettingsAction,
   updateAiSeoStyleSettingsAction,
   updateAiWritingSettingsAction,
@@ -42,9 +44,11 @@ export default async function SettingsPage() {
           </div>
           <AiSettingsForm
             providerAction={updateAiProviderSettingsAction}
+            providerTestAction={testAiProviderSettingsAction}
             writingAction={updateAiWritingSettingsAction}
             seoStyleAction={updateAiSeoStyleSettingsAction}
             imageGenerationAction={updateImageGenerationSettingsAction}
+            imageGenerationTestAction={testImageGenerationSettingsAction}
             hasApiKey={settings.ai.hasApiKey}
             apiKeyPreview={settings.ai.apiKeyPreview}
             apiBaseUrl={settings.ai.apiBaseUrl}

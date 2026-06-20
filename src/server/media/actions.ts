@@ -1,12 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { mediaAssetSchema } from "@/lib/validators";
 import { createAiJob } from "@/server/ai/jobs";
+import { redirectWithToast } from "@/server/admin/toast";
 import { requireContentEditor } from "@/server/auth/session";
+import { friendlyDatabaseError } from "@/server/content/errors";
 import { db } from "@/server/db";
 import { mediaAssets, posts } from "@/server/db/schema";
 import {
@@ -48,21 +49,28 @@ export async function createMediaAssetAction(
     return { error: parsed.error.issues[0]?.message ?? "媒体资源无效" };
   }
 
-  await upsertMediaAssetFromUrl({
-    url: parsed.data.url,
-    altText: parsed.data.altText ?? "",
-    caption: parsed.data.caption,
-    zhAltText: parsed.data.zhAltText,
-    enAltText: parsed.data.enAltText,
-    zhSeoTitle: parsed.data.zhSeoTitle,
-    zhSeoDescription: parsed.data.zhSeoDescription,
-    enSeoTitle: parsed.data.enSeoTitle,
-    enSeoDescription: parsed.data.enSeoDescription,
-    userId: user.id
-  });
+  try {
+    await upsertMediaAssetFromUrl({
+      url: parsed.data.url,
+      altText: parsed.data.altText ?? "",
+      caption: parsed.data.caption,
+      zhAltText: parsed.data.zhAltText,
+      enAltText: parsed.data.enAltText,
+      zhSeoTitle: parsed.data.zhSeoTitle,
+      zhSeoDescription: parsed.data.zhSeoDescription,
+      enSeoTitle: parsed.data.enSeoTitle,
+      enSeoDescription: parsed.data.enSeoDescription,
+      userId: user.id
+    });
+  } catch (error) {
+    return { error: friendlyDatabaseError(error) };
+  }
 
   revalidatePath("/media");
-  redirect("/media");
+  redirectWithToast({
+    path: "/media",
+    message: "媒体资源已创建。"
+  });
 }
 
 export async function updateMediaAssetMetadataAction(
@@ -96,26 +104,30 @@ export async function updateMediaAssetMetadataAction(
   const zhSeoDescription = parsed.data.zhSeoDescription ?? "";
   const enSeoDescription = parsed.data.enSeoDescription ?? "";
 
-  await db
-    .update(mediaAssets)
-    .set({
-      altText,
-      caption: parsed.data.caption ?? "",
-      zhAltText,
-      enAltText,
-      zhSeoTitle: parsed.data.zhSeoTitle ?? "",
-      zhSeoDescription,
-      enSeoTitle: parsed.data.enSeoTitle ?? "",
-      enSeoDescription,
-      metadata: {
-        ...(asset.metadata ?? {}),
-        seoSummary: zhSeoDescription || enSeoDescription,
-        manuallyEdited: true,
-        editedAt: new Date().toISOString()
-      },
-      updatedAt: new Date()
-    })
-    .where(and(eq(mediaAssets.id, id), isNull(mediaAssets.deletedAt)));
+  try {
+    await db
+      .update(mediaAssets)
+      .set({
+        altText,
+        caption: parsed.data.caption ?? "",
+        zhAltText,
+        enAltText,
+        zhSeoTitle: parsed.data.zhSeoTitle ?? "",
+        zhSeoDescription,
+        enSeoTitle: parsed.data.enSeoTitle ?? "",
+        enSeoDescription,
+        metadata: {
+          ...(asset.metadata ?? {}),
+          seoSummary: zhSeoDescription || enSeoDescription,
+          manuallyEdited: true,
+          editedAt: new Date().toISOString()
+        },
+        updatedAt: new Date()
+      })
+      .where(and(eq(mediaAssets.id, id), isNull(mediaAssets.deletedAt)));
+  } catch (error) {
+    return { error: friendlyDatabaseError(error) };
+  }
 
   revalidatePath("/media");
   revalidatePath(`/media/${id}`);
@@ -125,24 +137,55 @@ export async function updateMediaAssetMetadataAction(
 export async function deleteMediaAssetAction(formData: FormData) {
   await requireContentEditor();
   const id = stringValue(formData, "id");
+  if (!id) {
+    redirectWithToast({
+      path: "/media",
+      type: "error",
+      message: "缺少媒体 ID，无法删除。"
+    });
+  }
 
-  await db
+  const [asset] = await db
     .update(mediaAssets)
     .set({ deletedAt: new Date(), updatedAt: new Date() })
-    .where(eq(mediaAssets.id, id));
+    .where(and(eq(mediaAssets.id, id), isNull(mediaAssets.deletedAt)))
+    .returning({ id: mediaAssets.id });
 
   revalidatePath("/media");
-  redirect("/media");
+  if (!asset) {
+    redirectWithToast({
+      path: "/media",
+      type: "error",
+      message: "媒体资源不存在或已删除。"
+    });
+  }
+
+  redirectWithToast({
+    path: "/media",
+    message: "媒体资源已删除。"
+  });
 }
 
 export async function deleteUnusedMediaAssetsAction(formData: FormData) {
   await requireContentEditor();
   const requestedIds = formData.getAll("ids").map(String).filter(Boolean);
+  if (!requestedIds.length) {
+    redirectWithToast({
+      path: "/media",
+      type: "error",
+      message: "请先勾选要删除的未使用图片。"
+    });
+  }
+
   const ids = await getUnusedMediaAssetIds(requestedIds);
 
   if (!ids.length) {
     revalidatePath("/media");
-    return;
+    redirectWithToast({
+      path: "/media",
+      type: "error",
+      message: "勾选的图片都正在使用，未执行删除。"
+    });
   }
 
   await db
@@ -151,21 +194,51 @@ export async function deleteUnusedMediaAssetsAction(formData: FormData) {
     .where(and(inArray(mediaAssets.id, ids), isNull(mediaAssets.deletedAt)));
 
   revalidatePath("/media");
+  redirectWithToast({
+    path: "/media",
+    message: `已删除 ${ids.length} 张未使用图片。`
+  });
 }
 
 export async function regenerateMediaVariantsAction(formData: FormData) {
   await requireContentEditor();
   const id = stringValue(formData, "id");
+  if (!id) {
+    redirectWithToast({
+      path: "/media",
+      type: "error",
+      message: "缺少媒体 ID，无法生成衍生图。"
+    });
+  }
+
   const asset = await getMediaAsset(id);
 
   if (!asset || asset.storageProvider !== "local" || !asset.storageKey) {
     revalidatePath("/media");
-    return;
+    redirectWithToast({
+      path: asset ? `/media/${id}` : "/media",
+      type: "error",
+      message: asset
+        ? "只有已上传到本地的图片才能生成衍生图。"
+        : "媒体资源不存在或已删除。"
+    });
   }
 
-  const variants = await regenerateMediaAssetVariants({
-    storageKey: asset.storageKey
-  });
+  let variants;
+  try {
+    variants = await regenerateMediaAssetVariants({
+      storageKey: asset.storageKey
+    });
+  } catch (error) {
+    redirectWithToast({
+      path: `/media/${id}`,
+      type: "error",
+      message:
+        error instanceof Error
+          ? error.message
+          : "衍生图生成失败，请检查图片文件。"
+    });
+  }
 
   await db
     .update(mediaAssets)
@@ -174,6 +247,10 @@ export async function regenerateMediaVariantsAction(formData: FormData) {
 
   revalidatePath("/media");
   revalidatePath(`/media/${id}`);
+  redirectWithToast({
+    path: `/media/${id}`,
+    message: "图片衍生图已重新生成。"
+  });
 }
 
 export async function generateMediaMetadataAction(

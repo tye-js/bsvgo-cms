@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 
 import {
   generateDraftMetadata,
@@ -33,6 +33,7 @@ import {
   postTranslations,
   postTags,
   posts,
+  users,
   type AiJobStatus,
   type AiJobType
 } from "@/server/db/schema";
@@ -189,9 +190,15 @@ type SerializedJob = {
   id: string;
   type: AiJobType;
   status: AiJobStatus;
+  input: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
   error: string;
   attempts: number;
+  createdBy: string | null;
+  creatorName: string;
+  creatorEmail: string;
+  relatedPostIds: string[];
+  relatedPostTitle: string;
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
@@ -220,6 +227,8 @@ export const aiJobStatusValues = [
 ] as const satisfies AiJobStatus[];
 
 const activeJobIds = new Set<string>();
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const postDraftCreateStepDefinitions: Array<{
   key: PostDraftCreateStepKey;
@@ -275,20 +284,33 @@ function serializeJob(row: {
   id: string;
   type: string;
   status: string;
+  input?: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
   errorMessage: string | null;
   attempts: number;
+  createdBy?: string | null;
+  creatorName?: string | null;
+  creatorEmail?: string | null;
   createdAt: Date;
   startedAt: Date | null;
   finishedAt: Date | null;
 }): SerializedJob {
+  const input = row.input ?? null;
+  const output = row.output ?? null;
+
   return {
     id: row.id,
     type: row.type as AiJobType,
     status: row.status as AiJobStatus,
-    output: row.output,
+    input,
+    output,
     error: row.errorMessage ?? "",
     attempts: row.attempts,
+    createdBy: row.createdBy ?? null,
+    creatorName: row.creatorName ?? "",
+    creatorEmail: row.creatorEmail ?? "",
+    relatedPostIds: relatedPostIdsFromJob(input, output),
+    relatedPostTitle: relatedPostTitleFromJob(input, output),
     createdAt: row.createdAt.toISOString(),
     startedAt: serializeDate(row.startedAt),
     finishedAt: serializeDate(row.finishedAt)
@@ -311,6 +333,60 @@ function serializeJobDetail(row: {
     ...serializeJob(row),
     input: row.input
   };
+}
+
+function stringList(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (item): item is string => typeof item === "string" && item.length > 0
+  );
+}
+
+function relatedPostIdsFromJob(
+  input: Record<string, unknown> | null,
+  output: Record<string, unknown> | null
+) {
+  const ids = new Set<string>();
+  const inputRecord = toRecord(input);
+  const outputRecord = toRecord(output);
+
+  for (const id of stringList(inputRecord.postIds)) ids.add(id);
+  if (typeof inputRecord.postId === "string") ids.add(inputRecord.postId);
+  if (typeof outputRecord.postId === "string") ids.add(outputRecord.postId);
+
+  const items = Array.isArray(outputRecord.items) ? outputRecord.items : [];
+  for (const item of items) {
+    const itemRecord = toRecord(item);
+    if (typeof itemRecord.postId === "string") ids.add(itemRecord.postId);
+  }
+
+  return Array.from(ids);
+}
+
+function relatedPostTitleFromJob(
+  input: Record<string, unknown> | null,
+  output: Record<string, unknown> | null
+) {
+  const inputRecord = toRecord(input);
+  const outputRecord = toRecord(output);
+  const zh = toRecord(outputRecord.zh);
+  const en = toRecord(outputRecord.en);
+  const metadata = toRecord(outputRecord.metadata);
+
+  return (
+    [
+      outputRecord.currentTitle,
+      zh.title,
+      en.title,
+      metadata.slug,
+      inputRecord.zhTitle,
+      inputRecord.title,
+      inputRecord.sourceTitle
+    ].find(
+      (value): value is string =>
+        typeof value === "string" && value.trim().length > 0
+    ) ?? ""
+  );
 }
 
 function normalizePostDraftCreateOutput(
@@ -1487,12 +1563,16 @@ export async function listAiJobsForUser({
   user,
   type = "all",
   status = "all",
+  query = "",
+  creatorId = "all",
   page = 1,
   pageSize = 20
 }: {
   user: CurrentUser;
   type?: AiJobType | "all";
   status?: AiJobStatus | "all";
+  query?: string;
+  creatorId?: string | "all";
   page?: number;
   pageSize?: number;
 }) {
@@ -1500,10 +1580,22 @@ export async function listAiJobsForUser({
   const safePageSize = Number.isFinite(pageSize)
     ? Math.min(Math.max(pageSize, 1), 100)
     : 20;
+  const normalizedQuery = query.trim();
   const filters = [
     type === "all" ? undefined : eq(aiJobs.type, type),
     status === "all" ? undefined : eq(aiJobs.status, status),
-    user.role !== "admin" ? eq(aiJobs.createdBy, user.id) : undefined
+    user.role !== "admin" ? eq(aiJobs.createdBy, user.id) : undefined,
+    user.role === "admin" && creatorId !== "all" && uuidPattern.test(creatorId)
+      ? eq(aiJobs.createdBy, creatorId)
+      : undefined,
+    normalizedQuery
+      ? or(
+          ilike(sql`${aiJobs.input}::text`, `%${normalizedQuery}%`),
+          ilike(sql`${aiJobs.output}::text`, `%${normalizedQuery}%`),
+          ilike(aiJobs.errorMessage, `%${normalizedQuery}%`),
+          ilike(sql`${aiJobs.id}::text`, `%${normalizedQuery}%`)
+        )
+      : undefined
   ].filter(Boolean);
   const where = filters.length ? and(...filters) : undefined;
 
@@ -1512,14 +1604,19 @@ export async function listAiJobsForUser({
       id: aiJobs.id,
       type: aiJobs.type,
       status: aiJobs.status,
+      input: aiJobs.input,
       output: aiJobs.output,
       errorMessage: aiJobs.errorMessage,
       attempts: aiJobs.attempts,
+      createdBy: aiJobs.createdBy,
+      creatorName: users.name,
+      creatorEmail: users.email,
       createdAt: aiJobs.createdAt,
       startedAt: aiJobs.startedAt,
       finishedAt: aiJobs.finishedAt
     })
     .from(aiJobs)
+    .leftJoin(users, eq(aiJobs.createdBy, users.id))
     .where(where)
     .orderBy(desc(aiJobs.createdAt))
     .limit(safePageSize)
@@ -1542,6 +1639,28 @@ export async function listAiJobsForUser({
     page: safePage,
     pageSize: safePageSize
   };
+}
+
+export async function listAiJobCreatorsForUser(user: CurrentUser) {
+  if (user.role !== "admin") {
+    return [
+      {
+        id: user.id,
+        name: user.name,
+        email: user.email
+      }
+    ];
+  }
+
+  return db
+    .selectDistinct({
+      id: users.id,
+      name: users.name,
+      email: users.email
+    })
+    .from(aiJobs)
+    .innerJoin(users, eq(aiJobs.createdBy, users.id))
+    .orderBy(users.name, users.email);
 }
 
 export async function listRecentCoverImageJobsForUser(

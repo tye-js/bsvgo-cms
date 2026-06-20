@@ -25,10 +25,23 @@ export function friendlyDatabaseError(error: unknown) {
   }
 
   const message = messages.join("\n");
+  const uniqueViolation = codes.includes("23505") || message.includes("duplicate key value");
+  const constraintText = constraints.join(" ");
+
+  if (uniqueViolation && constraintText.includes("users_email")) {
+    return "已存在相同邮箱的用户。请更换邮箱后重试。";
+  }
+
+  if (uniqueViolation && constraintText.includes("media_assets_url")) {
+    return "媒体库已存在相同 URL 的图片。请直接使用已有图片，或更换 URL。";
+  }
+
+  if (uniqueViolation && constraintText.includes("name")) {
+    return "已存在相同名称的记录。请调整名称后重试。";
+  }
 
   if (
-    codes.includes("23505") ||
-    message.includes("duplicate key value") ||
+    uniqueViolation ||
     constraints.some((constraint) => constraint.includes("slug"))
   ) {
     return "已存在相同 slug 的记录。请使用唯一 slug 后重试。";

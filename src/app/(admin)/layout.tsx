@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { LogOut } from "lucide-react";
 
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
+import { AdminToast } from "@/components/admin/AdminToast";
 import { logoutAction } from "@/server/auth/actions";
 import { requireUser } from "@/server/auth/session";
 import { getInitials, roleLabel } from "@/lib/utils";
@@ -61,6 +62,7 @@ export default async function AdminLayout({
         <main className="w-full px-3 py-6 sm:px-4 lg:px-5">
           {children}
         </main>
+        <AdminToast />
       </div>
     </div>
   );

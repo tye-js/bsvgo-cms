@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import {
@@ -16,6 +15,7 @@ import {
   userSchema
 } from "@/lib/validators";
 import { createAiJob } from "@/server/ai/jobs";
+import { redirectWithToast } from "@/server/admin/toast";
 import { generateEnglishPost } from "@/server/ai/openai";
 import { requireContentEditor, requireRole } from "@/server/auth/session";
 import { hashPassword } from "@/server/auth/password";
@@ -61,6 +61,13 @@ type ActionState = {
 };
 
 const POST_WRITE_TIMEOUT = sql`set local statement_timeout = '15s'`;
+
+class UserFacingActionError extends Error {}
+
+function friendlyActionError(error: unknown) {
+  if (error instanceof UserFacingActionError) return error.message;
+  return friendlyDatabaseError(error);
+}
 
 function structuredDataString(value: string | undefined) {
   const trimmed = value?.trim() ?? "";
@@ -195,7 +202,10 @@ export async function createPostAction(
   }
 
   revalidatePath("/posts");
-  redirect(`/posts/${createdId}/edit`);
+  redirectWithToast({
+    path: `/posts/${createdId}/edit`,
+    message: "文章已创建。"
+  });
 }
 
 export async function updatePostAction(
@@ -316,7 +326,7 @@ export async function updatePostPlacementsAction(
         .limit(1);
 
       if (!post) {
-        throw new Error("Post not found");
+        throw new UserFacingActionError("文章不存在或已删除。");
       }
 
       await replacePostPlacements(tx, data.postId, post.categoryId, data.placements);
@@ -331,7 +341,7 @@ export async function updatePostPlacementsAction(
         .where(and(eq(posts.id, data.postId), isNull(posts.deletedAt)));
     });
   } catch (error) {
-    return { error: friendlyDatabaseError(error) };
+    return { error: friendlyActionError(error) };
   }
 
   revalidatePath("/placements");
@@ -370,7 +380,7 @@ export async function addTopicCollectionPostAction(
         )
         .limit(1);
 
-      if (!collection) throw new Error("专题不存在");
+      if (!collection) throw new UserFacingActionError("专题不存在或已删除。");
 
       const [post] = await tx
         .select({ id: posts.id })
@@ -378,7 +388,7 @@ export async function addTopicCollectionPostAction(
         .where(and(eq(posts.id, data.postId), isNull(posts.deletedAt)))
         .limit(1);
 
-      if (!post) throw new Error("文章不存在");
+      if (!post) throw new UserFacingActionError("文章不存在或已删除。");
 
       const [maxSortRow] = await tx
         .select({
@@ -411,7 +421,7 @@ export async function addTopicCollectionPostAction(
         .where(eq(topicCollections.id, data.collectionId));
     });
   } catch (error) {
-    return { error: friendlyDatabaseError(error) };
+    return { error: friendlyActionError(error) };
   }
 
   revalidatePath("/collections");
@@ -475,40 +485,88 @@ export async function removeTopicCollectionPostAction(formData: FormData) {
     postId: stringValue(formData, "postId")
   });
 
-  if (!parsed.success) return;
+  if (!parsed.success) {
+    redirectWithToast({
+      path: "/collections",
+      type: "error",
+      message: parsed.error.issues[0]?.message ?? "专题文章数据无效。"
+    });
+  }
 
-  await db.transaction(async (tx) => {
-    await tx
-      .delete(topicCollectionPosts)
-      .where(
-        and(
-          eq(topicCollectionPosts.collectionId, parsed.data.collectionId),
-          eq(topicCollectionPosts.postId, parsed.data.postId)
-        )
-      );
-    await tx
-      .update(topicCollections)
-      .set({ updatedAt: new Date() })
-      .where(eq(topicCollections.id, parsed.data.collectionId));
-  });
+  try {
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(topicCollectionPosts)
+        .where(
+          and(
+            eq(topicCollectionPosts.collectionId, parsed.data.collectionId),
+            eq(topicCollectionPosts.postId, parsed.data.postId)
+          )
+        );
+      await tx
+        .update(topicCollections)
+        .set({ updatedAt: new Date() })
+        .where(eq(topicCollections.id, parsed.data.collectionId));
+    });
+  } catch (error) {
+    redirectWithToast({
+      path: `/collections/${parsed.data.collectionId}`,
+      type: "error",
+      message: friendlyDatabaseError(error)
+    });
+  }
 
   revalidatePath("/collections");
   revalidatePath(`/collections/${parsed.data.collectionId}`);
+  redirectWithToast({
+    path: `/collections/${parsed.data.collectionId}`,
+    message: "文章已从专题中移除。"
+  });
 }
 
 export async function deletePostAction(formData: FormData) {
   await requireContentEditor();
   const id = stringValue(formData, "id");
-  await db.transaction(async (tx) => {
-    await tx.delete(postPlacements).where(eq(postPlacements.postId, id));
-    await tx
-      .update(posts)
-      .set({ deletedAt: new Date(), updatedAt: new Date() })
-      .where(eq(posts.id, id));
-  });
+  if (!id) {
+    redirectWithToast({
+      path: "/posts",
+      type: "error",
+      message: "缺少文章 ID，无法删除。"
+    });
+  }
+
+  try {
+    await db.transaction(async (tx) => {
+      const [post] = await tx
+        .select({ id: posts.id })
+        .from(posts)
+        .where(and(eq(posts.id, id), isNull(posts.deletedAt)))
+        .limit(1);
+
+      if (!post) throw new UserFacingActionError("文章不存在或已删除。");
+
+      await tx.delete(postPlacements).where(eq(postPlacements.postId, id));
+      await tx
+        .update(posts)
+        .set({ deletedAt: new Date(), updatedAt: new Date() })
+        .where(eq(posts.id, id));
+    });
+  } catch (error) {
+    redirectWithToast({
+      path: "/posts",
+      type: "error",
+      message: friendlyActionError(error)
+    });
+  }
+
   revalidatePath("/posts");
   revalidatePath("/placements");
   revalidatePath("/seo");
+  revalidatePath("/collections");
+  redirectWithToast({
+    path: "/posts",
+    message: "文章已删除。"
+  });
 }
 
 export async function setPostStatusAction(formData: FormData) {
@@ -516,20 +574,57 @@ export async function setPostStatusAction(formData: FormData) {
   const id = stringValue(formData, "id");
   const status = stringValue(formData, "status");
 
-  if (!["draft", "published", "archived"].includes(status)) return;
+  if (!id) {
+    redirectWithToast({
+      path: "/posts",
+      type: "error",
+      message: "缺少文章 ID，无法更新状态。"
+    });
+  }
 
-  await db
-    .update(posts)
-    .set({
-      status: status as "draft" | "published" | "archived",
-      publishedAt: status === "published" ? new Date() : null,
-      updatedAt: new Date()
-    })
-    .where(eq(posts.id, id));
+  if (!["draft", "published", "archived"].includes(status)) {
+    redirectWithToast({
+      path: "/posts",
+      type: "error",
+      message: "文章状态无效。"
+    });
+  }
+
+  let updatedPostId: string | null = null;
+  try {
+    const [post] = await db
+      .update(posts)
+      .set({
+        status: status as "draft" | "published" | "archived",
+        publishedAt: status === "published" ? new Date() : null,
+        updatedAt: new Date()
+      })
+      .where(and(eq(posts.id, id), isNull(posts.deletedAt)))
+      .returning({ id: posts.id });
+    updatedPostId = post?.id ?? null;
+  } catch (error) {
+    redirectWithToast({
+      path: "/posts",
+      type: "error",
+      message: friendlyDatabaseError(error)
+    });
+  }
+
+  if (!updatedPostId) {
+    redirectWithToast({
+      path: "/posts",
+      type: "error",
+      message: "文章不存在或已删除。"
+    });
+  }
 
   revalidatePath("/posts");
   revalidatePath("/placements");
   revalidatePath("/seo");
+  redirectWithToast({
+    path: "/posts",
+    message: status === "published" ? "文章已发布。" : "文章已下架为草稿。"
+  });
 }
 
 export async function bulkGeneratePostSeoAction(
@@ -590,39 +685,28 @@ export async function updateCategoryAction(
 
   const data = parsed.data;
 
-  await db.transaction(async (tx) => {
-    await tx
-      .update(categories)
-      .set({
-        seoTitle: toNullable(data.enSeoTitle),
-        seoDescription: toNullable(data.enSeoDescription),
-        updatedAt: new Date()
-      })
-      .where(eq(categories.id, id));
-
-    for (const locale of ["en", "zh"] as const) {
-      await tx
-        .insert(categoryTranslations)
-        .values({
-          categoryId: id,
-          locale,
-          name: locale === "en" ? data.enName : data.zhName,
-          description:
-            locale === "en"
-              ? toRequiredText(data.enDescription)
-              : toRequiredText(data.zhDescription),
-          seoTitle:
-            locale === "en"
-              ? toRequiredText(data.enSeoTitle)
-              : toRequiredText(data.zhSeoTitle),
-          seoDescription:
-            locale === "en"
-              ? toRequiredText(data.enSeoDescription)
-              : toRequiredText(data.zhSeoDescription)
+  try {
+    await db.transaction(async (tx) => {
+      const [category] = await tx
+        .update(categories)
+        .set({
+          seoTitle: toNullable(data.enSeoTitle),
+          seoDescription: toNullable(data.enSeoDescription),
+          updatedAt: new Date()
         })
-        .onConflictDoUpdate({
-          target: [categoryTranslations.categoryId, categoryTranslations.locale],
-          set: {
+        .where(and(eq(categories.id, id), isNull(categories.deletedAt)))
+        .returning({ id: categories.id });
+
+      if (!category) {
+        throw new UserFacingActionError("分类不存在或已删除。");
+      }
+
+      for (const locale of ["en", "zh"] as const) {
+        await tx
+          .insert(categoryTranslations)
+          .values({
+            categoryId: id,
+            locale,
             name: locale === "en" ? data.enName : data.zhName,
             description:
               locale === "en"
@@ -635,12 +719,32 @@ export async function updateCategoryAction(
             seoDescription:
               locale === "en"
                 ? toRequiredText(data.enSeoDescription)
-                : toRequiredText(data.zhSeoDescription),
-            updatedAt: new Date()
-          }
-        });
-    }
-  });
+                : toRequiredText(data.zhSeoDescription)
+          })
+          .onConflictDoUpdate({
+            target: [categoryTranslations.categoryId, categoryTranslations.locale],
+            set: {
+              name: locale === "en" ? data.enName : data.zhName,
+              description:
+                locale === "en"
+                  ? toRequiredText(data.enDescription)
+                  : toRequiredText(data.zhDescription),
+              seoTitle:
+                locale === "en"
+                  ? toRequiredText(data.enSeoTitle)
+                  : toRequiredText(data.zhSeoTitle),
+              seoDescription:
+                locale === "en"
+                  ? toRequiredText(data.enSeoDescription)
+                  : toRequiredText(data.zhSeoDescription),
+              updatedAt: new Date()
+            }
+          });
+      }
+    });
+  } catch (error) {
+    return { error: friendlyActionError(error) };
+  }
 
   revalidatePath("/categories");
   revalidatePath(`/categories/${id}/edit`);
@@ -669,41 +773,52 @@ export async function createTagAction(
   }
 
   const data = parsed.data;
+  let createdId: string;
 
-  const [created] = await db.transaction(async (tx) => {
-    const [tag] = await tx
-      .insert(tags)
-      .values({
-        name: data.enName,
-        slug: data.slug,
-        seoTitle: toNullable(data.enSeoTitle),
-        seoDescription: toNullable(data.enSeoDescription)
-      })
-      .returning({ id: tags.id });
+  try {
+    const [created] = await db.transaction(async (tx) => {
+      const [tag] = await tx
+        .insert(tags)
+        .values({
+          name: data.enName,
+          slug: data.slug,
+          seoTitle: toNullable(data.enSeoTitle),
+          seoDescription: toNullable(data.enSeoDescription)
+        })
+        .returning({ id: tags.id });
 
-    await tx.insert(tagTranslations).values({
-      tagId: tag.id,
-      locale: "en",
-      name: data.enName,
-      description: toRequiredText(data.enDescription),
-      seoTitle: toRequiredText(data.enSeoTitle),
-      seoDescription: toRequiredText(data.enSeoDescription)
+      await tx
+        .insert(tagTranslations)
+        .values({
+          tagId: tag.id,
+          locale: "en",
+          name: data.enName,
+          description: toRequiredText(data.enDescription),
+          seoTitle: toRequiredText(data.enSeoTitle),
+          seoDescription: toRequiredText(data.enSeoDescription)
+        });
+
+      await tx.insert(tagTranslations).values({
+        tagId: tag.id,
+        locale: "zh",
+        name: data.zhName,
+        description: toRequiredText(data.zhDescription),
+        seoTitle: toRequiredText(data.zhSeoTitle),
+        seoDescription: toRequiredText(data.zhSeoDescription)
+      });
+
+      return [tag];
     });
-
-    await tx.insert(tagTranslations).values({
-      tagId: tag.id,
-      locale: "zh",
-      name: data.zhName,
-      description: toRequiredText(data.zhDescription),
-      seoTitle: toRequiredText(data.zhSeoTitle),
-      seoDescription: toRequiredText(data.zhSeoDescription)
-    });
-
-    return [tag];
-  });
+    createdId = created.id;
+  } catch (error) {
+    return { error: friendlyDatabaseError(error) };
+  }
 
   revalidatePath("/tags");
-  redirect(`/tags/${created.id}/edit`);
+  redirectWithToast({
+    path: `/tags/${createdId}/edit`,
+    message: "标签已创建。"
+  });
 }
 
 export async function updateTagAction(
@@ -730,58 +845,67 @@ export async function updateTagAction(
 
   const data = parsed.data;
 
-  await db.transaction(async (tx) => {
-    await tx
-      .update(tags)
-      .set({
-        slug: data.slug,
-        name: data.enName,
-        seoTitle: toNullable(data.enSeoTitle),
-        seoDescription: toNullable(data.enSeoDescription),
-        updatedAt: new Date()
-      })
-      .where(eq(tags.id, id));
+  try {
+    await db.transaction(async (tx) => {
+      const [tag] = await tx
+        .update(tags)
+        .set({
+          slug: data.slug,
+          name: data.enName,
+          seoTitle: toNullable(data.enSeoTitle),
+          seoDescription: toNullable(data.enSeoDescription),
+          updatedAt: new Date()
+        })
+        .where(and(eq(tags.id, id), isNull(tags.deletedAt)))
+        .returning({ id: tags.id });
 
-    await tx
-      .insert(tagTranslations)
-      .values({
-        tagId: id,
-        locale: "en",
-        name: data.enName,
-        description: toRequiredText(data.enDescription),
-        seoTitle: toRequiredText(data.enSeoTitle),
-        seoDescription: toRequiredText(data.enSeoDescription)
-      })
-      .onConflictDoUpdate({
-        target: [tagTranslations.tagId, tagTranslations.locale],
-        set: {
+      if (!tag) {
+        throw new UserFacingActionError("标签不存在或已删除。");
+      }
+
+      await tx
+        .insert(tagTranslations)
+        .values({
+          tagId: id,
+          locale: "en",
           name: data.enName,
           description: toRequiredText(data.enDescription),
           seoTitle: toRequiredText(data.enSeoTitle),
           seoDescription: toRequiredText(data.enSeoDescription)
-        }
-      });
+        })
+        .onConflictDoUpdate({
+          target: [tagTranslations.tagId, tagTranslations.locale],
+          set: {
+            name: data.enName,
+            description: toRequiredText(data.enDescription),
+            seoTitle: toRequiredText(data.enSeoTitle),
+            seoDescription: toRequiredText(data.enSeoDescription)
+          }
+        });
 
-    await tx
-      .insert(tagTranslations)
-      .values({
-        tagId: id,
-        locale: "zh",
-        name: data.zhName,
-        description: toRequiredText(data.zhDescription),
-        seoTitle: toRequiredText(data.zhSeoTitle),
-        seoDescription: toRequiredText(data.zhSeoDescription)
-      })
-      .onConflictDoUpdate({
-        target: [tagTranslations.tagId, tagTranslations.locale],
-        set: {
+      await tx
+        .insert(tagTranslations)
+        .values({
+          tagId: id,
+          locale: "zh",
           name: data.zhName,
           description: toRequiredText(data.zhDescription),
           seoTitle: toRequiredText(data.zhSeoTitle),
           seoDescription: toRequiredText(data.zhSeoDescription)
-        }
-      });
-  });
+        })
+        .onConflictDoUpdate({
+          target: [tagTranslations.tagId, tagTranslations.locale],
+          set: {
+            name: data.zhName,
+            description: toRequiredText(data.zhDescription),
+            seoTitle: toRequiredText(data.zhSeoTitle),
+            seoDescription: toRequiredText(data.zhSeoDescription)
+          }
+        });
+    });
+  } catch (error) {
+    return { error: friendlyActionError(error) };
+  }
 
   revalidatePath("/tags");
   revalidatePath(`/tags/${id}/edit`);
@@ -791,14 +915,43 @@ export async function updateTagAction(
 export async function deleteTagAction(formData: FormData) {
   await requireContentEditor();
   const id = stringValue(formData, "id");
-  await db.transaction(async (tx) => {
-    await tx.delete(postTags).where(eq(postTags.tagId, id));
-    await tx
-      .update(tags)
-      .set({ deletedAt: new Date(), updatedAt: new Date() })
-      .where(eq(tags.id, id));
-  });
+  if (!id) {
+    redirectWithToast({
+      path: "/tags",
+      type: "error",
+      message: "缺少标签 ID，无法删除。"
+    });
+  }
+
+  try {
+    await db.transaction(async (tx) => {
+      const [tag] = await tx
+        .select({ id: tags.id })
+        .from(tags)
+        .where(and(eq(tags.id, id), isNull(tags.deletedAt)))
+        .limit(1);
+
+      if (!tag) throw new UserFacingActionError("标签不存在或已删除。");
+
+      await tx.delete(postTags).where(eq(postTags.tagId, id));
+      await tx
+        .update(tags)
+        .set({ deletedAt: new Date(), updatedAt: new Date() })
+        .where(eq(tags.id, id));
+    });
+  } catch (error) {
+    redirectWithToast({
+      path: "/tags",
+      type: "error",
+      message: friendlyActionError(error)
+    });
+  }
+
   revalidatePath("/tags");
+  redirectWithToast({
+    path: "/tags",
+    message: "标签已删除。"
+  });
 }
 
 export async function createUserAction(
@@ -817,26 +970,66 @@ export async function createUserAction(
     return { error: parsed.error.issues[0]?.message ?? "用户数据无效" };
   }
 
-  await db.insert(users).values({
-    email: parsed.data.email.toLowerCase(),
-    name: parsed.data.name,
-    role: parsed.data.role,
-    isAdmin: parsed.data.role === "admin",
-    password: await hashPassword(parsed.data.password)
-  });
+  try {
+    await db.insert(users).values({
+      email: parsed.data.email.toLowerCase(),
+      name: parsed.data.name,
+      role: parsed.data.role,
+      isAdmin: parsed.data.role === "admin",
+      password: await hashPassword(parsed.data.password)
+    });
+  } catch (error) {
+    return { error: friendlyDatabaseError(error) };
+  }
 
   revalidatePath("/users");
-  redirect("/users");
+  redirectWithToast({
+    path: "/users",
+    message: "用户已创建。"
+  });
 }
 
 export async function deleteUserAction(formData: FormData) {
   const currentUser = await requireRole(["admin"]);
   const id = stringValue(formData, "id");
-  if (id === currentUser.id) return;
+  if (!id) {
+    redirectWithToast({
+      path: "/users",
+      type: "error",
+      message: "缺少用户 ID，无法移除。"
+    });
+  }
+  if (id === currentUser.id) {
+    redirectWithToast({
+      path: "/users",
+      type: "error",
+      message: "不能移除当前登录用户。"
+    });
+  }
 
-  await db
+  const [user] = await db
     .update(users)
     .set({ deletedAt: new Date(), updatedAt: new Date() })
-    .where(and(eq(users.id, id), inArray(users.role, ["admin", "editor"])));
+    .where(
+      and(
+        eq(users.id, id),
+        inArray(users.role, ["admin", "editor"]),
+        isNull(users.deletedAt)
+      )
+    )
+    .returning({ id: users.id });
+
+  if (!user) {
+    redirectWithToast({
+      path: "/users",
+      type: "error",
+      message: "用户不存在或已被移除。"
+    });
+  }
+
   revalidatePath("/users");
+  redirectWithToast({
+    path: "/users",
+    message: "用户已移除。"
+  });
 }
