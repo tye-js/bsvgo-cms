@@ -87,6 +87,29 @@ export const appSettings = pgTable("app_settings", {
   updatedAt: timestamp("updated_at").defaultNow().notNull()
 });
 
+export const appSettingAuditLogs = pgTable(
+  "app_setting_audit_logs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    settingKey: varchar("setting_key", { length: 120 }).notNull(),
+    oldValueSummary: text("old_value_summary").notNull().default(""),
+    newValueSummary: text("new_value_summary").notNull().default(""),
+    changedBy: uuid("changed_by").references(() => users.id, {
+      onDelete: "set null"
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull()
+  },
+  (table) => ({
+    settingCreatedAtIdx: index("app_setting_audit_logs_setting_created_at_idx").on(
+      table.settingKey,
+      table.createdAt
+    ),
+    changedByCreatedAtIdx: index(
+      "app_setting_audit_logs_changed_by_created_at_idx"
+    ).on(table.changedBy, table.createdAt)
+  })
+);
+
 export const sessions = pgTable(
   "sessions",
   {
@@ -451,8 +474,19 @@ export const usersRelations = relations(users, ({ many }) => ({
   sessions: many(sessions),
   posts: many(posts),
   mediaAssets: many(mediaAssets),
-  aiJobs: many(aiJobs)
+  aiJobs: many(aiJobs),
+  settingAuditLogs: many(appSettingAuditLogs)
 }));
+
+export const appSettingAuditLogsRelations = relations(
+  appSettingAuditLogs,
+  ({ one }) => ({
+    changedByUser: one(users, {
+      fields: [appSettingAuditLogs.changedBy],
+      references: [users.id]
+    })
+  })
+);
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
   user: one(users, {

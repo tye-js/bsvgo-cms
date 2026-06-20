@@ -7,6 +7,7 @@ import {
   desc,
   eq,
   gte,
+  isNull,
   lt,
   sql,
   type SQL
@@ -15,6 +16,11 @@ import {
 import { db } from "@/server/db";
 import {
   analyticsEvents,
+  categories,
+  categoryTranslations,
+  postPlacements,
+  posts,
+  postTranslations,
   type AnalyticsEventName,
   type Locale
 } from "@/server/db/schema";
@@ -39,6 +45,17 @@ export const analyticsEventNames = [
 ] as const satisfies AnalyticsEventName[];
 
 const analyticsEventNameSet = new Set<string>(analyticsEventNames);
+
+export const contentOptimizationIssueTypes = [
+  "high_click_low_engagement",
+  "low_click_high_value",
+  "stale_content",
+  "seo_gap",
+  "cover_gap"
+] as const;
+
+export type ContentOptimizationIssueType =
+  (typeof contentOptimizationIssueTypes)[number];
 
 export class AnalyticsQueryError extends Error {
   status = 400;
@@ -169,6 +186,339 @@ function nonEmptyCategorySlug() {
 
 function nonEmptyTagSlug() {
   return sql`${analyticsEvents.tagSlug} is not null and ${analyticsEvents.tagSlug} <> ''`;
+}
+
+function percentile(values: number[], ratio: number) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((left, right) => left - right);
+  const index = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.floor((sorted.length - 1) * ratio))
+  );
+  return sorted[index] ?? 0;
+}
+
+function daysSince(date: Date | null) {
+  if (!date) return null;
+  return Math.floor((Date.now() - date.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+function hasText(value: string | null | undefined) {
+  return Boolean(value?.trim());
+}
+
+function contentOptimizationTypeLabel(type: ContentOptimizationIssueType) {
+  const labels: Record<ContentOptimizationIssueType, string> = {
+    high_click_low_engagement: "高点击低停留",
+    low_click_high_value: "低点击高价值",
+    stale_content: "过期内容",
+    seo_gap: "SEO 缺口",
+    cover_gap: "封面缺口"
+  };
+
+  return labels[type];
+}
+
+function contentOptimizationAction(type: ContentOptimizationIssueType) {
+  const actions: Record<
+    ContentOptimizationIssueType,
+    { label: string; recommendation: string }
+  > = {
+    high_click_low_engagement: {
+      label: "改标题与开头",
+      recommendation:
+        "检查标题承诺、摘要和首屏内容是否一致，重写开头段落，补强小标题，让读者更快看到文章价值。"
+    },
+    low_click_high_value: {
+      label: "改标题与换封面",
+      recommendation:
+        "优化列表标题、SEO title 和封面主视觉，把推荐位价值点提前表达，提升首页或分类页点击率。"
+    },
+    stale_content: {
+      label: "更新内容",
+      recommendation:
+        "补充最新事实、版本、链接和上下文，清理过期描述，必要时重新生成 SEO 摘要和封面。"
+    },
+    seo_gap: {
+      label: "补 SEO",
+      recommendation:
+        "补全中英文 SEO title 和 description，让搜索入口、分享卡片和文章页元信息保持完整。"
+    },
+    cover_gap: {
+      label: "换封面",
+      recommendation:
+        "生成或上传主封面图，并补齐双语替换文本和图片 SEO 信息，提升列表识别度。"
+    }
+  };
+
+  return actions[type];
+}
+
+export async function getContentOptimizationOpportunities({
+  days = 30,
+  type = "all",
+  limit = 80
+}: {
+  days?: number;
+  type?: ContentOptimizationIssueType | "all";
+  limit?: number;
+} = {}) {
+  const safeDays = Math.min(Math.max(days, 7), 365);
+  const safeLimit = Math.min(Math.max(limit, 1), 200);
+  const to = new Date();
+  const from = new Date(to.getTime() - safeDays * 24 * 60 * 60 * 1000);
+
+  const metricsRows = await db
+    .select({
+      articleSlug: analyticsEvents.articleSlug,
+      views: sql<number>`count(*) filter (where ${analyticsEvents.eventName} = 'article_view')`,
+      clicks: sql<number>`count(*) filter (where ${analyticsEvents.eventName} = 'article_click')`,
+      visitors: sql<number>`count(distinct ${analyticsEvents.visitorId}) filter (where ${analyticsEvents.eventName} in ('article_view', 'article_click'))`,
+      sectionViews: sql<number>`count(*) filter (where ${analyticsEvents.eventName} = 'section_view')`,
+      outboundClicks: sql<number>`count(*) filter (where ${analyticsEvents.eventName} = 'outbound_click')`,
+      depthEvents: sql<number>`count(*) filter (where ${analyticsEvents.eventName} = 'article_depth')`,
+      avgDepth: sql<number>`coalesce(avg(${analyticsEvents.value}) filter (where ${analyticsEvents.eventName} = 'article_depth' and ${analyticsEvents.value} is not null), 0)`,
+      maxDepth: sql<number>`coalesce(max(${analyticsEvents.value}) filter (where ${analyticsEvents.eventName} = 'article_depth' and ${analyticsEvents.value} is not null), 0)`
+    })
+    .from(analyticsEvents)
+    .where(
+      analyticsWhere(
+        { from, to, limit: 500, offset: 0 },
+        nonEmptyArticleSlug()
+      )
+    )
+    .groupBy(analyticsEvents.articleSlug);
+
+  const metricsBySlug = new Map(
+    metricsRows.map((row) => [
+      row.articleSlug ?? "",
+      {
+        views: toNumber(row.views),
+        clicks: toNumber(row.clicks),
+        visitors: toNumber(row.visitors),
+        sectionViews: toNumber(row.sectionViews),
+        outboundClicks: toNumber(row.outboundClicks),
+        depthEvents: toNumber(row.depthEvents),
+        avgDepth: Math.round(toNumber(row.avgDepth)),
+        maxDepth: toNumber(row.maxDepth)
+      }
+    ])
+  );
+
+  const postRows = await db
+    .select({
+      id: posts.id,
+      slug: posts.slug,
+      featured: posts.featured,
+      pinned: posts.pinned,
+      mark: posts.mark,
+      coverImage: posts.coverImage,
+      coverImageId: posts.coverImageId,
+      publishedAt: posts.publishedAt,
+      updatedAt: posts.updatedAt,
+      title: sql<string>`coalesce(nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'zh'), ''), nullif(max(${postTranslations.title}) filter (where ${postTranslations.locale} = 'en'), ''), ${posts.slug})`,
+      excerpt: sql<string>`coalesce(nullif(max(${postTranslations.excerpt}) filter (where ${postTranslations.locale} = 'zh'), ''), nullif(max(${postTranslations.excerpt}) filter (where ${postTranslations.locale} = 'en'), ''), '')`,
+      zhSeoTitle: sql<string>`coalesce(max(${postTranslations.seoTitle}) filter (where ${postTranslations.locale} = 'zh'), '')`,
+      zhSeoDescription: sql<string>`coalesce(max(${postTranslations.seoDescription}) filter (where ${postTranslations.locale} = 'zh'), '')`,
+      enSeoTitle: sql<string>`coalesce(max(${postTranslations.seoTitle}) filter (where ${postTranslations.locale} = 'en'), '')`,
+      enSeoDescription: sql<string>`coalesce(max(${postTranslations.seoDescription}) filter (where ${postTranslations.locale} = 'en'), '')`,
+      categorySlug: categories.slug,
+      categoryName: sql<string>`coalesce(nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'zh'), ''), nullif(max(${categoryTranslations.name}) filter (where ${categoryTranslations.locale} = 'en'), ''), ${categories.slug})`,
+      homeFeatured: sql<number>`count(distinct ${postPlacements.id}) filter (where ${postPlacements.scope} = 'home' and ${postPlacements.slot} = 'featured' and ${postPlacements.enabled} = true)`,
+      homePromoted: sql<number>`count(distinct ${postPlacements.id}) filter (where ${postPlacements.scope} = 'home' and ${postPlacements.slot} = 'promoted' and ${postPlacements.enabled} = true)`,
+      categoryFeatured: sql<number>`count(distinct ${postPlacements.id}) filter (where ${postPlacements.scope} = 'category' and ${postPlacements.slot} = 'featured' and ${postPlacements.enabled} = true)`,
+      categoryPromoted: sql<number>`count(distinct ${postPlacements.id}) filter (where ${postPlacements.scope} = 'category' and ${postPlacements.slot} = 'promoted' and ${postPlacements.enabled} = true)`
+    })
+    .from(posts)
+    .innerJoin(categories, eq(categories.id, posts.categoryId))
+    .leftJoin(categoryTranslations, eq(categoryTranslations.categoryId, categories.id))
+    .leftJoin(postTranslations, eq(postTranslations.postId, posts.id))
+    .leftJoin(postPlacements, eq(postPlacements.postId, posts.id))
+    .where(and(isNull(posts.deletedAt), eq(posts.status, "published")))
+    .groupBy(posts.id, categories.id)
+    .orderBy(desc(posts.updatedAt))
+    .limit(500);
+
+  const attentionValues = postRows
+    .map((post) => {
+      const metrics = metricsBySlug.get(post.slug);
+      return (metrics?.views ?? 0) + (metrics?.clicks ?? 0);
+    })
+    .filter((value) => value > 0);
+  const clickValues = postRows
+    .map((post) => metricsBySlug.get(post.slug)?.clicks ?? 0)
+    .filter((value) => value > 0);
+  const highAttentionThreshold = Math.max(10, percentile(attentionValues, 0.75));
+  const lowClickThreshold = Math.max(2, percentile(clickValues, 0.25));
+
+  const opportunities = postRows.flatMap((post) => {
+    const metrics = metricsBySlug.get(post.slug) ?? {
+      views: 0,
+      clicks: 0,
+      visitors: 0,
+      sectionViews: 0,
+      outboundClicks: 0,
+      depthEvents: 0,
+      avgDepth: 0,
+      maxDepth: 0
+    };
+    const attention = metrics.views + metrics.clicks;
+    const seoMissing =
+      !hasText(post.zhSeoTitle) ||
+      !hasText(post.zhSeoDescription) ||
+      !hasText(post.enSeoTitle) ||
+      !hasText(post.enSeoDescription);
+    const coverMissing = !hasText(post.coverImage) && !post.coverImageId;
+    const placementScore =
+      toNumber(post.homeFeatured) * 5 +
+      toNumber(post.homePromoted) * 4 +
+      toNumber(post.categoryFeatured) * 3 +
+      toNumber(post.categoryPromoted) * 2;
+    const highValue =
+      post.pinned ||
+      post.featured ||
+      Boolean(post.mark) ||
+      placementScore > 0 ||
+      (!seoMissing && !coverMissing);
+    const updatedDays = daysSince(post.updatedAt);
+    const publishedDays = daysSince(post.publishedAt);
+    const staleDays = updatedDays ?? publishedDays ?? 0;
+    const rows: Array<{
+      id: string;
+      type: ContentOptimizationIssueType;
+      typeLabel: string;
+      actionLabel: string;
+      recommendation: string;
+      reason: string;
+      score: number;
+      post: {
+        id: string;
+        slug: string;
+        title: string;
+        excerpt: string;
+        categorySlug: string;
+        categoryName: string;
+        publishedAt: Date | null;
+        updatedAt: Date;
+        hasCover: boolean;
+        seoComplete: boolean;
+        placementScore: number;
+        pinned: boolean;
+        featured: boolean;
+        mark: string;
+      };
+      metrics: typeof metrics;
+    }> = [];
+
+    const addOpportunity = (
+      issueType: ContentOptimizationIssueType,
+      reason: string,
+      score: number
+    ) => {
+      const action = contentOptimizationAction(issueType);
+      rows.push({
+        id: `${post.id}-${issueType}`,
+        type: issueType,
+        typeLabel: contentOptimizationTypeLabel(issueType),
+        actionLabel: action.label,
+        recommendation: action.recommendation,
+        reason,
+        score,
+        post: {
+          id: post.id,
+          slug: post.slug,
+          title: post.title,
+          excerpt: post.excerpt,
+          categorySlug: post.categorySlug,
+          categoryName: post.categoryName,
+          publishedAt: post.publishedAt,
+          updatedAt: post.updatedAt,
+          hasCover: !coverMissing,
+          seoComplete: !seoMissing,
+          placementScore,
+          pinned: post.pinned,
+          featured: post.featured,
+          mark: post.mark ?? ""
+        },
+        metrics
+      });
+    };
+
+    const lowDepth =
+      metrics.depthEvents > 0
+        ? metrics.avgDepth > 0 && metrics.avgDepth < 45
+        : metrics.sectionViews <= Math.max(1, Math.floor(metrics.views * 0.15));
+    if (attention >= highAttentionThreshold && lowDepth) {
+      addOpportunity(
+        "high_click_low_engagement",
+        `近 ${safeDays} 天获得 ${attention} 次文章访问/点击，但平均阅读深度约 ${metrics.avgDepth || 0}%，互动信号偏弱。`,
+        attention * 3 + (45 - Math.min(metrics.avgDepth, 45))
+      );
+    }
+
+    if (highValue && metrics.clicks <= lowClickThreshold && metrics.views <= 10) {
+      addOpportunity(
+        "low_click_high_value",
+        `文章具备推荐价值或完整基础信息，但近 ${safeDays} 天只有 ${metrics.clicks} 次点击、${metrics.views} 次阅读。`,
+        120 + placementScore * 10 - metrics.clicks * 3
+      );
+    }
+
+    if (staleDays >= 180 && (attention > 0 || highValue)) {
+      addOpportunity(
+        "stale_content",
+        `距离最近更新约 ${staleDays} 天，仍有访问或处于重要内容位置，建议补充最新上下文。`,
+        staleDays + attention
+      );
+    }
+
+    if (seoMissing) {
+      addOpportunity(
+        "seo_gap",
+        "中英文 SEO title 或 description 未完整填写，搜索入口和分享卡片信息不稳定。",
+        80 + attention
+      );
+    }
+
+    if (coverMissing) {
+      addOpportunity(
+        "cover_gap",
+        "文章缺少受管理封面图，列表页、推荐位和社媒分享的视觉识别度不足。",
+        70 + attention
+      );
+    }
+
+    return rows;
+  });
+
+  const counts = Object.fromEntries(
+    contentOptimizationIssueTypes.map((issueType) => [
+      issueType,
+      opportunities.filter((item) => item.type === issueType).length
+    ])
+  ) as Record<ContentOptimizationIssueType, number>;
+
+  const filtered =
+    type === "all"
+      ? opportunities
+      : opportunities.filter((item) => item.type === type);
+
+  filtered.sort((left, right) => right.score - left.score);
+
+  return {
+    range: {
+      from: from.toISOString(),
+      to: to.toISOString(),
+      days: safeDays
+    },
+    thresholds: {
+      highAttention: highAttentionThreshold,
+      lowClick: lowClickThreshold
+    },
+    counts,
+    totalPosts: postRows.length,
+    opportunities: filtered.slice(0, safeLimit)
+  };
 }
 
 export async function getAnalyticsOverview(filters: AnalyticsFilters) {

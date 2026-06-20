@@ -1,6 +1,7 @@
 import "server-only";
 
-import { inArray } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 
 import {
   DEFAULT_AI_EN_SEO_STYLE,
@@ -17,7 +18,7 @@ import {
 } from "@/lib/image-generation";
 import { decryptSettingValue, encryptSettingValue } from "@/server/settings/crypto";
 import { db } from "@/server/db";
-import { appSettings } from "@/server/db/schema";
+import { appSettingAuditLogs, appSettings, users } from "@/server/db/schema";
 
 export const AI_SETTING_KEYS = {
   apiKey: "ai.openai.api_key",
@@ -102,6 +103,11 @@ function roleStyleSettingKey(roleId: AiWritingRoleId) {
 }
 
 type SettingRow = typeof appSettings.$inferSelect;
+type SettingValue = {
+  key: string;
+  value: string;
+  encrypted: boolean;
+};
 
 function decryptIfNeeded(row: SettingRow | undefined) {
   if (!row) return "";
@@ -113,6 +119,145 @@ async function getSettings(keys: string[]) {
     .select()
     .from(appSettings)
     .where(inArray(appSettings.key, keys));
+}
+
+function plainTextSummary(value: string) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized) return "未配置";
+  if (normalized.length <= 160) return normalized;
+  return `${normalized.slice(0, 160)}...（共 ${normalized.length} 字符）`;
+}
+
+function secretSummary(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "未配置";
+  const fingerprint = createHash("sha256").update(trimmed).digest("hex").slice(0, 8);
+  return `已配置（指纹 ${fingerprint}）`;
+}
+
+function settingSummary(key: string, value: string) {
+  if (key === AI_SETTING_KEYS.apiKey || key === IMAGE_GENERATION_SETTING_KEYS.apiKey) {
+    return secretSummary(value);
+  }
+
+  return plainTextSummary(value);
+}
+
+function safeDecryptSetting(row: SettingRow | undefined) {
+  if (!row) return "";
+
+  try {
+    return decryptIfNeeded(row);
+  } catch {
+    return "";
+  }
+}
+
+async function upsertSettingsWithAudit({
+  values,
+  userId,
+  now
+}: {
+  values: SettingValue[];
+  userId: string;
+  now: Date;
+}) {
+  if (!values.length) return;
+
+  await db.transaction(async (tx) => {
+    const previousRows = await tx
+      .select()
+      .from(appSettings)
+      .where(inArray(appSettings.key, values.map((value) => value.key)));
+    const previousByKey = new Map(previousRows.map((row) => [row.key, row]));
+    const auditValues: Array<typeof appSettingAuditLogs.$inferInsert> = [];
+
+    for (const value of values) {
+      const previous = previousByKey.get(value.key);
+      const previousPlainValue = safeDecryptSetting(previous);
+      const nextPlainValue = value.encrypted
+        ? decryptSettingValue(value.value)
+        : value.value;
+      const changed =
+        !previous ||
+        previous.encrypted !== value.encrypted ||
+        previousPlainValue !== nextPlainValue;
+
+      await tx
+        .insert(appSettings)
+        .values({
+          key: value.key,
+          value: value.value,
+          encrypted: value.encrypted,
+          updatedBy: userId,
+          updatedAt: now
+        })
+        .onConflictDoUpdate({
+          target: appSettings.key,
+          set: {
+            value: value.value,
+            encrypted: value.encrypted,
+            updatedBy: userId,
+            updatedAt: now
+          }
+        });
+
+      if (changed) {
+        auditValues.push({
+          settingKey: value.key,
+          oldValueSummary: settingSummary(value.key, previousPlainValue),
+          newValueSummary: settingSummary(value.key, nextPlainValue),
+          changedBy: userId,
+          createdAt: now
+        });
+      }
+    }
+
+    if (auditValues.length) {
+      await tx.insert(appSettingAuditLogs).values(auditValues);
+    }
+  });
+}
+
+export async function listSettingAuditLogs({
+  page = 1,
+  pageSize = 30
+}: {
+  page?: number;
+  pageSize?: number;
+} = {}) {
+  const safePage = Math.max(page, 1);
+  const safePageSize = Math.min(Math.max(pageSize, 1), 100);
+
+  const [totalRow] = await db
+    .select({
+      total: sql<number>`count(*)`
+    })
+    .from(appSettingAuditLogs);
+
+  const rows = await db
+    .select({
+      id: appSettingAuditLogs.id,
+      settingKey: appSettingAuditLogs.settingKey,
+      oldValueSummary: appSettingAuditLogs.oldValueSummary,
+      newValueSummary: appSettingAuditLogs.newValueSummary,
+      createdAt: appSettingAuditLogs.createdAt,
+      changedBy: appSettingAuditLogs.changedBy,
+      changedByName: users.name,
+      changedByEmail: users.email
+    })
+    .from(appSettingAuditLogs)
+    .leftJoin(users, eq(appSettingAuditLogs.changedBy, users.id))
+    .orderBy(desc(appSettingAuditLogs.createdAt))
+    .limit(safePageSize)
+    .offset((safePage - 1) * safePageSize);
+
+  return {
+    rows,
+    total: Number(totalRow?.total ?? 0),
+    page: safePage,
+    pageSize: safePageSize
+  };
 }
 
 function homepageSeoSettingKeys() {
@@ -529,27 +674,10 @@ export async function saveHomepageSeoSettings({
     }
   ];
 
-  await db.transaction(async (tx) => {
-    for (const value of values) {
-      await tx
-        .insert(appSettings)
-        .values({
-          key: value.key,
-          value: value.value,
-          encrypted: false,
-          updatedBy: userId,
-          updatedAt: now
-        })
-        .onConflictDoUpdate({
-          target: appSettings.key,
-          set: {
-            value: value.value,
-            encrypted: false,
-            updatedBy: userId,
-            updatedAt: now
-          }
-        });
-    }
+  await upsertSettingsWithAudit({
+    values: values.map((value) => ({ ...value, encrypted: false })),
+    userId,
+    now
   });
 }
 
@@ -638,27 +766,10 @@ export async function saveAiSettings({
     });
   }
 
-  await db.transaction(async (tx) => {
-    for (const value of values) {
-      await tx
-        .insert(appSettings)
-        .values({
-          key: value.key,
-          value: value.value,
-          encrypted: value.encrypted,
-          updatedBy: userId,
-          updatedAt: now
-        })
-        .onConflictDoUpdate({
-          target: appSettings.key,
-          set: {
-            value: value.value,
-            encrypted: value.encrypted,
-            updatedBy: userId,
-            updatedAt: now
-          }
-        });
-    }
+  await upsertSettingsWithAudit({
+    values,
+    userId,
+    now
   });
 }
 
@@ -752,26 +863,9 @@ export async function saveImageGenerationSettings({
     });
   }
 
-  await db.transaction(async (tx) => {
-    for (const value of values) {
-      await tx
-        .insert(appSettings)
-        .values({
-          key: value.key,
-          value: value.value,
-          encrypted: value.encrypted,
-          updatedBy: userId,
-          updatedAt: now
-        })
-        .onConflictDoUpdate({
-          target: appSettings.key,
-          set: {
-            value: value.value,
-            encrypted: value.encrypted,
-            updatedBy: userId,
-            updatedAt: now
-          }
-        });
-    }
+  await upsertSettingsWithAudit({
+    values,
+    userId,
+    now
   });
 }

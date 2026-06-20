@@ -79,6 +79,7 @@ const navGroups: NavGroup[] = [
     match: ["/seo", "/placements"],
     children: [
       { href: "/seo", label: "SEO 总览" },
+      { href: "/seo/opportunities", label: "内容优化" },
       { href: "/placements", label: "展示位" }
     ]
   },
@@ -90,7 +91,8 @@ const navGroups: NavGroup[] = [
     children: [
       { href: "/users", label: "管理员" },
       { href: "/users/new", label: "新增管理员" },
-      { href: "/settings", label: "系统设置" }
+      { href: "/settings", label: "系统设置" },
+      { href: "/settings/audit", label: "设置审计" }
     ]
   }
 ];
