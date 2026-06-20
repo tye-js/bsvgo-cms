@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import {
+  aiJobSettingsSchema,
   aiSeoStyleSettingsSchema,
   aiSettingsSchema,
   homepageSeoSchema,
@@ -17,6 +18,7 @@ import {
   saveAiSettings,
   getSavedAiProviderSecret,
   getSavedImageGenerationSecret,
+  saveAiJobSettings,
   saveImageGenerationSettings,
   saveHomepageSeoSettings
 } from "@/server/settings/service";
@@ -66,6 +68,13 @@ export type ImageGenerationSettingsInput = {
   blockchainPromptStyle?: string;
   aiPromptStyle?: string;
   infrastructurePromptStyle?: string;
+};
+
+export type AiJobSettingsInput = {
+  succeededSingleRetentionDays: string;
+  succeededBulkRetentionDays: string;
+  failedRetentionDays: string;
+  defaultRecentDays: string;
 };
 
 type DiagnosticActionState = ActionState & {
@@ -608,6 +617,27 @@ export async function updateImageGenerationSettingsAction(
 
   revalidatePath("/settings");
   return { success: "AI 图片生成设置已保存。" };
+}
+
+export async function updateAiJobSettingsAction(
+  input: AiJobSettingsInput
+): Promise<ActionState> {
+  const user = await requireRole(["admin"]);
+  const parsed = aiJobSettingsSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      error: parsed.error.issues[0]?.message ?? "AI 任务保留设置无效"
+    };
+  }
+
+  await saveAiJobSettings({
+    ...parsed.data,
+    userId: user.id
+  });
+
+  revalidatePath("/settings");
+  revalidatePath("/ai/jobs");
+  return { success: "AI 任务保留策略已保存。" };
 }
 
 export async function saveHomepageSeoSettingsAction(

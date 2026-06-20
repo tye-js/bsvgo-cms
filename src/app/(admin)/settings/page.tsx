@@ -1,5 +1,8 @@
 import { Bot, Database, Image as ImageIcon, Search, ShieldCheck } from "lucide-react";
 
+import { buttonClassName } from "@/components/admin/Button";
+import { DetailDrawer, InfoList } from "@/components/admin/DataLayout";
+import { PageHeader } from "@/components/admin/PageHeader";
 import { AiSettingsForm } from "@/components/forms/AiSettingsForm";
 import { HomepageSeoForm } from "@/components/forms/HomepageSeoForm";
 import {
@@ -7,6 +10,7 @@ import {
   saveHomepageSeoSettingsAction,
   testAiProviderSettingsAction,
   testImageGenerationSettingsAction,
+  updateAiJobSettingsAction,
   updateAiProviderSettingsAction,
   updateAiSeoStyleSettingsAction,
   updateAiWritingSettingsAction,
@@ -22,45 +26,89 @@ export default async function SettingsPage() {
 
   return (
     <div className="grid gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-950">设置</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          管理 AI 生成、数据库访问和媒体策略等运行配置。
-        </p>
-      </div>
+      <PageHeader
+        title="系统设置"
+        description="集中维护 AI 文本模型、图片模型、写作策略、SEO、首页元信息和审计入口。"
+        icon={<Bot size={20} />}
+        actions={
+          <a href="/settings/audit" className={buttonClassName("secondary")}>
+            设置审计
+          </a>
+        }
+      />
 
       {canManageAiSettings ? (
-        <section className="grid gap-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-100 text-slate-600">
-              <Bot size={20} />
+        <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="grid gap-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-100 text-slate-600">
+                <Bot size={20} />
+              </div>
+              <div>
+                <h2 className="font-semibold text-slate-950">AI 内容与 SEO 生成</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  用于从中文草稿创建英文内容，也用于生成中英文 SEO 建议。仅管理员可以修改此配置。
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="font-semibold text-slate-950">AI 内容与 SEO 生成</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                用于从中文草稿创建英文内容，也用于生成中英文 SEO 建议。仅管理员可以修改此配置。
-              </p>
-            </div>
+            <AiSettingsForm
+              providerAction={updateAiProviderSettingsAction}
+              providerTestAction={testAiProviderSettingsAction}
+              writingAction={updateAiWritingSettingsAction}
+              seoStyleAction={updateAiSeoStyleSettingsAction}
+              imageGenerationAction={updateImageGenerationSettingsAction}
+              imageGenerationTestAction={testImageGenerationSettingsAction}
+              jobSettingsAction={updateAiJobSettingsAction}
+              hasApiKey={settings.ai.hasApiKey}
+              apiKeyPreview={settings.ai.apiKeyPreview}
+              apiBaseUrl={settings.ai.apiBaseUrl}
+              model={settings.ai.model}
+              timeoutMs={settings.ai.timeoutMs}
+              writingStyle={settings.ai.writingStyle}
+              defaultWritingRole={settings.ai.defaultWritingRole}
+              writingRoles={settings.ai.writingRoles}
+              zhSeoStyle={settings.ai.zhSeoStyle}
+              enSeoStyle={settings.ai.enSeoStyle}
+              imageGeneration={settings.imageGeneration}
+              aiJobs={settings.aiJobs}
+            />
           </div>
-          <AiSettingsForm
-            providerAction={updateAiProviderSettingsAction}
-            providerTestAction={testAiProviderSettingsAction}
-            writingAction={updateAiWritingSettingsAction}
-            seoStyleAction={updateAiSeoStyleSettingsAction}
-            imageGenerationAction={updateImageGenerationSettingsAction}
-            imageGenerationTestAction={testImageGenerationSettingsAction}
-            hasApiKey={settings.ai.hasApiKey}
-            apiKeyPreview={settings.ai.apiKeyPreview}
-            apiBaseUrl={settings.ai.apiBaseUrl}
-            model={settings.ai.model}
-            timeoutMs={settings.ai.timeoutMs}
-            writingStyle={settings.ai.writingStyle}
-            defaultWritingRole={settings.ai.defaultWritingRole}
-            writingRoles={settings.ai.writingRoles}
-            zhSeoStyle={settings.ai.zhSeoStyle}
-            enSeoStyle={settings.ai.enSeoStyle}
-            imageGeneration={settings.imageGeneration}
-          />
+          <DetailDrawer
+            title="配置诊断"
+            description="保存前可直接测试当前表单值，失败时查看真实响应。"
+            actions={
+              <a href="/settings/audit" className={buttonClassName("secondary", "min-h-9")}>
+                查看审计
+              </a>
+            }
+          >
+            <InfoList
+              items={[
+                {
+                  label: "文本模型",
+                  value: `${settings.ai.model} · ${settings.ai.apiBaseUrl}`
+                },
+                {
+                  label: "文本 Key",
+                  value: settings.ai.hasApiKey
+                    ? `已配置（${settings.ai.apiKeyPreview}）`
+                    : "未配置"
+                },
+                {
+                  label: "图片模型",
+                  value: `${settings.imageGeneration.model} · ${settings.imageGeneration.apiBaseUrl}`
+                },
+                {
+                  label: "图片 Key",
+                  value: settings.imageGeneration.hasApiKey
+                    ? `已配置（${settings.imageGeneration.apiKeyPreview}）`
+                    : settings.imageGeneration.canReuseTextApiKey
+                      ? "复用文本 Key"
+                      : "未配置"
+                }
+              ]}
+            />
+          </DetailDrawer>
         </section>
       ) : null}
 

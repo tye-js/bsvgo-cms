@@ -7,10 +7,13 @@ import {
   ImagePlus,
   Loader2,
   SearchCheck,
+  Sparkles,
   XCircle
 } from "lucide-react";
 
 import { buttonClassName } from "@/components/admin/Button";
+import { DetailDrawer, FilterBar, InfoList, WideTable } from "@/components/admin/DataLayout";
+import { MetricStrip, MetricTile, PageHeader } from "@/components/admin/PageHeader";
 import { AiJobRetryButton } from "@/components/forms/AiJobRetryButton";
 import {
   aiJobStatusClassName,
@@ -21,11 +24,13 @@ import { formatDate } from "@/lib/utils";
 import {
   aiJobStatusValues,
   aiJobTypeValues,
+  cleanupExpiredAiJobsIfDue,
   listAiJobCreatorsForUser,
   listAiJobsForUser
 } from "@/server/ai/jobs";
 import { requireContentEditor } from "@/server/auth/session";
 import type { AiJobStatus, AiJobType } from "@/server/db/schema";
+import { getAiJobSettings } from "@/server/settings/service";
 
 type DraftStepStatus =
   | "pending"
@@ -233,16 +238,21 @@ function JobProgress({
 export default async function AiJobsPage({
   searchParams
 }: {
-  searchParams: Promise<{
+ searchParams: Promise<{
     type?: string;
     status?: string;
     creator?: string;
     q?: string;
+    range?: string;
     page?: string;
   }>;
 }) {
   const params = await searchParams;
   const user = await requireContentEditor();
+  const [settings] = await Promise.all([
+    getAiJobSettings(),
+    cleanupExpiredAiJobsIfDue()
+  ]);
   const type = aiJobTypeValues.includes(params.type as AiJobType)
     ? (params.type as AiJobType)
     : "all";
@@ -251,6 +261,11 @@ export default async function AiJobsPage({
     : "all";
   const rawCreatorId = user.role === "admin" && params.creator ? params.creator : "all";
   const query = (params.q ?? "").trim();
+  const range = params.range === "all" ? "all" : "recent";
+  const createdAfter =
+    range === "recent"
+      ? new Date(Date.now() - settings.defaultRecentDays * 24 * 60 * 60 * 1000)
+      : undefined;
   const requestedPage = Number(params.page ?? "1");
   const page = Number.isFinite(requestedPage) ? Math.max(requestedPage, 1) : 1;
   const creators = await listAiJobCreatorsForUser(user);
@@ -264,6 +279,7 @@ export default async function AiJobsPage({
     status,
     query,
     creatorId,
+    createdAfter,
     page
   });
   const pageCount = Math.max(Math.ceil(total / pageSize), 1);
@@ -271,6 +287,7 @@ export default async function AiJobsPage({
     ["queued", "running"].includes(job.status)
   ).length;
   const failedCount = rows.filter((job) => job.status === "failed").length;
+  const selectedJob = rows[0] ?? null;
 
   const preserveParams = (nextPage: number) => {
     const search = new URLSearchParams();
@@ -278,22 +295,19 @@ export default async function AiJobsPage({
     if (status !== "all") search.set("status", status);
     if (user.role === "admin" && creatorId !== "all") search.set("creator", creatorId);
     if (query) search.set("q", query);
+    if (range !== "recent") search.set("range", range);
     search.set("page", String(nextPage));
     return `/ai/jobs?${search.toString()}`;
   };
 
   return (
     <div className="grid gap-6">
-      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
-            AI 任务中心
-          </h1>
-          <p className="mt-1 text-sm leading-6 text-slate-500">
-            统一查看文章改写、SEO、媒体 SEO、封面生成等后台 AI 任务，失败任务可继续生成。
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+      <PageHeader
+        title="AI 任务中心"
+        description="统一查看文章改写、SEO、媒体 SEO、封面生成等后台 AI 任务，失败任务可继续生成。"
+        icon={<Sparkles size={20} />}
+        actions={
+          <>
           <Link href="/posts/new" className={buttonClassName("primary")}>
             <FileText size={16} />
             AI 改写
@@ -302,25 +316,41 @@ export default async function AiJobsPage({
             <ImagePlus size={16} />
             封面生成
           </Link>
-        </div>
-      </div>
+          </>
+        }
+        metrics={
+          <MetricStrip>
+            <MetricTile
+              label="筛选结果"
+              value={total}
+              note={
+                range === "recent"
+                  ? `最近 ${settings.defaultRecentDays} 天 + 进行中`
+                  : "全部历史"
+              }
+            />
+            <MetricTile
+              label="当前页进行中"
+              value={activeCount}
+              note="排队或运行"
+              tone="active"
+            />
+            <MetricTile
+              label="当前页失败"
+              value={failedCount}
+              note="可在列表直接重试"
+              tone="warning"
+            />
+            <MetricTile
+              label="当前页任务"
+              value={rows.length}
+              note="列表密度优化"
+            />
+          </MetricStrip>
+        }
+      />
 
-      <section className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-sm text-slate-500">筛选结果</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-950">{total}</p>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-sm text-slate-500">当前页进行中</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-950">{activeCount}</p>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-sm text-slate-500">当前页失败</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-950">{failedCount}</p>
-        </div>
-      </section>
-
-      <form className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[200px_160px_220px_minmax(0,1fr)_auto]">
+      <FilterBar className="grid gap-3 lg:grid-cols-[180px_150px_170px_220px_minmax(0,1fr)_auto]">
         <select
           name="type"
           defaultValue={type}
@@ -344,6 +374,14 @@ export default async function AiJobsPage({
               {aiJobStatusLabel(value)}
             </option>
           ))}
+        </select>
+        <select
+          name="range"
+          defaultValue={range}
+          className="min-h-10 rounded-md border border-slate-300 bg-white px-3 text-sm"
+        >
+          <option value="recent">最近 {settings.defaultRecentDays} 天 + 进行中</option>
+          <option value="all">全部历史</option>
         </select>
         {user.role === "admin" ? (
           <select
@@ -372,11 +410,39 @@ export default async function AiJobsPage({
           <SearchCheck size={16} />
           筛选
         </button>
-      </form>
+      </FilterBar>
 
-      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1280px] table-fixed text-left text-sm">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <WideTable
+          minWidth="1280px"
+          footer={
+            <div className="flex items-center justify-between text-sm text-slate-500">
+              <span>
+                第 {page} / {pageCount} 页，共 {total} 条
+              </span>
+              <div className="flex gap-2">
+                <Link
+                  className={buttonClassName(
+                    "secondary",
+                    page <= 1 ? "pointer-events-none opacity-50" : ""
+                  )}
+                  href={preserveParams(Math.max(page - 1, 1))}
+                >
+                  上一页
+                </Link>
+                <Link
+                  className={buttonClassName(
+                    "secondary",
+                    page >= pageCount ? "pointer-events-none opacity-50" : ""
+                  )}
+                  href={preserveParams(Math.min(page + 1, pageCount))}
+                >
+                  下一页
+                </Link>
+              </div>
+            </div>
+          }
+        >
             <colgroup>
               <col className="w-[260px]" />
               <col className="w-[150px]" />
@@ -492,39 +558,67 @@ export default async function AiJobsPage({
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
-                    暂无 AI 任务。
+                    {range === "recent"
+                      ? `最近 ${settings.defaultRecentDays} 天没有已创建任务，也没有进行中任务。可切换到全部历史查看未清理记录。`
+                      : "暂无 AI 任务。"}
                   </td>
                 </tr>
               ) : null}
             </tbody>
-          </table>
-        </div>
-      </section>
+        </WideTable>
 
-      <div className="flex items-center justify-between text-sm text-slate-500">
-        <span>
-          第 {page} / {pageCount} 页，共 {total} 条
-        </span>
-        <div className="flex gap-2">
-          <Link
-            className={buttonClassName(
-              "secondary",
-              page <= 1 ? "pointer-events-none opacity-50" : ""
-            )}
-            href={preserveParams(Math.max(page - 1, 1))}
-          >
-            上一页
-          </Link>
-          <Link
-            className={buttonClassName(
-              "secondary",
-              page >= pageCount ? "pointer-events-none opacity-50" : ""
-            )}
-            href={preserveParams(Math.min(page + 1, pageCount))}
-          >
-            下一页
-          </Link>
-        </div>
+        <DetailDrawer
+          title="当前任务摘要"
+          description="默认展示当前筛选结果第一条任务，详情页可查看完整输入输出。"
+          actions={
+            selectedJob ? (
+              <Link
+                href={`/ai/jobs/${selectedJob.id}`}
+                className={buttonClassName("secondary", "min-h-9")}
+              >
+                打开详情
+              </Link>
+            ) : null
+          }
+        >
+          {selectedJob ? (
+            <>
+              <InfoList
+                items={[
+                  { label: "任务类型", value: aiJobTypeLabel(selectedJob.type) },
+                  { label: "状态", value: aiJobStatusLabel(selectedJob.status) },
+                  { label: "文章", value: titleFromJob(selectedJob) },
+                  {
+                    label: "创建人",
+                    value: selectedJob.creatorName || selectedJob.creatorEmail || "未知"
+                  },
+                  { label: "创建时间", value: formatDate(selectedJob.createdAt) }
+                ]}
+              />
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                <JobProgress
+                  type={selectedJob.type}
+                  status={selectedJob.status}
+                  output={selectedJob.output}
+                />
+              </div>
+              {selectedJob.error ? (
+                <p className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm leading-6 text-rose-700">
+                  {selectedJob.error}
+                </p>
+              ) : (
+                <p className="text-sm leading-6 text-slate-500">
+                  {outputSummary(selectedJob.output)}
+                </p>
+              )}
+              {selectedJob.status === "failed" ? (
+                <AiJobRetryButton jobId={selectedJob.id} />
+              ) : null}
+            </>
+          ) : (
+            <p className="text-sm text-slate-500">当前筛选下暂无任务。</p>
+          )}
+        </DetailDrawer>
       </div>
     </div>
   );

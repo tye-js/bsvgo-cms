@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { buttonClassName } from "@/components/admin/Button";
+import { PageHeader } from "@/components/admin/PageHeader";
 import { AiJobRetryButton } from "@/components/forms/AiJobRetryButton";
 import {
   aiJobStatusClassName,
@@ -232,23 +233,12 @@ export default async function DashboardPage({
 
   return (
     <div className="grid gap-6">
-      <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-900 text-white">
-              <Sparkles size={20} />
-            </div>
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
-                AI 工作台
-              </h1>
-              <p className="mt-1 text-sm leading-6 text-slate-500">
-                优先处理 AI 改写、SEO、媒体补全、封面生成和内容优化任务。
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
+      <PageHeader
+        title="AI 工作台"
+        description="优先处理 AI 改写、SEO、媒体补全、封面生成和内容优化任务。"
+        icon={<Sparkles size={20} />}
+        actions={
+          <>
           {periodOptions.map((option) => (
             <Link
               key={option.days}
@@ -263,8 +253,9 @@ export default async function DashboardPage({
               {option.label}
             </Link>
           ))}
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <QuickAction

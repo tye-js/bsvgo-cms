@@ -102,13 +102,11 @@ export function AddTopicCollectionPostForm({
 export function TopicCollectionSortForm({
   collectionId,
   posts,
-  action,
-  removeFormId
+  action
 }: {
   collectionId: string;
   posts: CollectionPost[];
   action: (previousState: ActionState, formData: FormData) => Promise<ActionState>;
-  removeFormId: (postId: string) => string;
 }) {
   const [state, formAction] = useActionState(action, {});
   const initialRows = useMemo(
@@ -308,7 +306,7 @@ export function TopicCollectionSortForm({
                 </td>
                 <td className="px-4 py-4">
                   <ConfirmSubmitButton
-                    form={removeFormId(post.postId)}
+                    form={`remove-topic-post-${post.postId}`}
                     message="确定从专题中移除这篇文章吗？文章本身不会被删除。"
                     className="min-h-8 px-2"
                   >

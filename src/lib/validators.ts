@@ -221,6 +221,29 @@ export const aiSeoStyleSettingsSchema = z.object({
     .optional()
 });
 
+export const aiJobSettingsSchema = z.object({
+  succeededSingleRetentionDays: z.coerce
+    .number()
+    .int()
+    .min(1, "成功单篇任务至少保留 1 天")
+    .max(365, "成功单篇任务最多保留 365 天"),
+  succeededBulkRetentionDays: z.coerce
+    .number()
+    .int()
+    .min(1, "成功批量任务至少保留 1 天")
+    .max(365, "成功批量任务最多保留 365 天"),
+  failedRetentionDays: z.coerce
+    .number()
+    .int()
+    .min(1, "失败任务至少保留 1 天")
+    .max(365, "失败任务最多保留 365 天"),
+  defaultRecentDays: z.coerce
+    .number()
+    .int()
+    .min(1, "任务中心默认范围至少 1 天")
+    .max(90, "任务中心默认范围最多 90 天")
+});
+
 export const aiDraftRewriteSchema = z
   .object({
     writingRole: z.enum(aiWritingRoleIds).optional(),

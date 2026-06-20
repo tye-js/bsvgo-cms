@@ -1,6 +1,18 @@
 import "server-only";
 
-import { and, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  gte,
+  ilike,
+  inArray,
+  isNull,
+  lt,
+  or,
+  sql
+} from "drizzle-orm";
 
 import {
   generateDraftMetadata,
@@ -51,6 +63,7 @@ import {
   regenerateMediaAssetVariants,
   saveGeneratedCoverImage
 } from "@/server/media/upload";
+import { getAiJobSettings } from "@/server/settings/service";
 
 type MediaMetadataJobInput = {
   mediaAssetId: string;
@@ -226,6 +239,20 @@ export const aiJobStatusValues = [
   "failed"
 ] as const satisfies AiJobStatus[];
 
+const singleAiJobCleanupTypes = [
+  "post_draft_rewrite",
+  "post_draft_translate",
+  "post_draft_metadata",
+  "post_draft_create",
+  "media_metadata"
+] as const satisfies AiJobType[];
+
+const bulkAiJobCleanupTypes = [
+  "bulk_media_metadata",
+  "bulk_post_seo",
+  "bulk_post_cover_images"
+] as const satisfies AiJobType[];
+
 const activeJobIds = new Set<string>();
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -258,6 +285,30 @@ function mediaSeoDescription(title: string, excerpt: string, fallback: string) {
   return source.slice(0, 500);
 }
 const STALE_RUNNING_JOB_MS = 15 * 60 * 1000;
+const AI_JOB_CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+let lastExpiredAiJobCleanupAt = 0;
+let expiredAiJobCleanupPromise: Promise<AiJobCleanupResult> | null = null;
+
+export type AiJobCleanupResult = {
+  skipped: boolean;
+  succeededSingleDeleted: number;
+  succeededBulkDeleted: number;
+  failedDeleted: number;
+};
+
+function emptyAiJobCleanupResult(skipped: boolean): AiJobCleanupResult {
+  return {
+    skipped,
+    succeededSingleDeleted: 0,
+    succeededBulkDeleted: 0,
+    failedDeleted: 0
+  };
+}
+
+function daysBeforeNow(days: number) {
+  return new Date(Date.now() - days * DAY_MS);
+}
 
 function defaultPostDraftCreateOutput(): PostDraftCreateJobOutput {
   return {
@@ -1559,12 +1610,87 @@ export async function getAiJobDetailForUser(jobId: string, user: CurrentUser) {
   return serializeJobDetail(job);
 }
 
+async function deleteExpiredAiJobs() {
+  const settings = await getAiJobSettings();
+  const now = new Date();
+  const singleSucceededCutoff = daysBeforeNow(
+    settings.succeededSingleRetentionDays
+  );
+  const bulkSucceededCutoff = daysBeforeNow(settings.succeededBulkRetentionDays);
+  const failedCutoff = daysBeforeNow(settings.failedRetentionDays);
+  const [singleSucceededDeleted, bulkSucceededDeleted, failedDeleted] =
+    await db.transaction(async (tx) => {
+      const singleRows = await tx
+        .delete(aiJobs)
+        .where(
+          and(
+            eq(aiJobs.status, "succeeded"),
+            inArray(aiJobs.type, singleAiJobCleanupTypes),
+            lt(aiJobs.finishedAt, singleSucceededCutoff)
+          )
+        )
+        .returning({ id: aiJobs.id });
+      const bulkRows = await tx
+        .delete(aiJobs)
+        .where(
+          and(
+            eq(aiJobs.status, "succeeded"),
+            inArray(aiJobs.type, bulkAiJobCleanupTypes),
+            lt(aiJobs.finishedAt, bulkSucceededCutoff)
+          )
+        )
+        .returning({ id: aiJobs.id });
+      const failedRows = await tx
+        .delete(aiJobs)
+        .where(and(eq(aiJobs.status, "failed"), lt(aiJobs.finishedAt, failedCutoff)))
+        .returning({ id: aiJobs.id });
+
+      return [singleRows.length, bulkRows.length, failedRows.length];
+    });
+
+  lastExpiredAiJobCleanupAt = now.getTime();
+
+  return {
+    skipped: false,
+    succeededSingleDeleted: singleSucceededDeleted,
+    succeededBulkDeleted: bulkSucceededDeleted,
+    failedDeleted
+  };
+}
+
+export async function cleanupExpiredAiJobsIfDue({
+  force = false
+}: {
+  force?: boolean;
+} = {}) {
+  const now = Date.now();
+  if (!force && now - lastExpiredAiJobCleanupAt < AI_JOB_CLEANUP_INTERVAL_MS) {
+    return emptyAiJobCleanupResult(true);
+  }
+
+  if (expiredAiJobCleanupPromise) {
+    return expiredAiJobCleanupPromise;
+  }
+
+  expiredAiJobCleanupPromise = deleteExpiredAiJobs()
+    .catch((error) => {
+      console.error("AI job cleanup failed", error);
+      return emptyAiJobCleanupResult(false);
+    })
+    .finally(() => {
+      expiredAiJobCleanupPromise = null;
+    });
+
+  return expiredAiJobCleanupPromise;
+}
+
 export async function listAiJobsForUser({
   user,
   type = "all",
   status = "all",
   query = "",
   creatorId = "all",
+  createdAfter,
   page = 1,
   pageSize = 20
 }: {
@@ -1573,6 +1699,7 @@ export async function listAiJobsForUser({
   status?: AiJobStatus | "all";
   query?: string;
   creatorId?: string | "all";
+  createdAfter?: Date;
   page?: number;
   pageSize?: number;
 }) {
@@ -1587,6 +1714,12 @@ export async function listAiJobsForUser({
     user.role !== "admin" ? eq(aiJobs.createdBy, user.id) : undefined,
     user.role === "admin" && creatorId !== "all" && uuidPattern.test(creatorId)
       ? eq(aiJobs.createdBy, creatorId)
+      : undefined,
+    createdAfter
+      ? or(
+          gte(aiJobs.createdAt, createdAfter),
+          inArray(aiJobs.status, ["queued", "running"])
+        )
       : undefined,
     normalizedQuery
       ? or(

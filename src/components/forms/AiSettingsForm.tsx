@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import {
   BookOpen,
   CheckCircle2,
+  Clock3,
   ImageIcon,
   KeyRound,
   Search,
@@ -19,6 +20,7 @@ import { MAIN_COVER_IMAGE_SPEC } from "@/lib/image-generation";
 import { cn } from "@/lib/utils";
 import type {
   AiProviderSettingsInput,
+  AiJobSettingsInput,
   AiSettingsDiagnostic,
   AiSeoStyleSettingsInput,
   AiWritingSettingsInput,
@@ -60,11 +62,18 @@ type ImageGenerationValue = {
   };
 };
 
+type AiJobSettingsValue = {
+  succeededSingleRetentionDays: number;
+  succeededBulkRetentionDays: number;
+  failedRetentionDays: number;
+  defaultRecentDays: number;
+};
+
 type SectionState = ActionState & {
   key?: string;
 };
 
-type SettingsSectionId = "provider" | "writing" | "seo" | "image";
+type SettingsSectionId = "provider" | "writing" | "seo" | "image" | "jobs";
 
 const deepSeekBaseUrl = "https://api.deepseek.com";
 const deepSeekModel = "deepseek-v4-pro";
@@ -188,6 +197,7 @@ export function AiSettingsForm({
   seoStyleAction,
   imageGenerationAction,
   imageGenerationTestAction,
+  jobSettingsAction,
   hasApiKey,
   apiKeyPreview,
   apiBaseUrl,
@@ -198,7 +208,8 @@ export function AiSettingsForm({
   writingRoles,
   zhSeoStyle,
   enSeoStyle,
-  imageGeneration
+  imageGeneration,
+  aiJobs
 }: {
   providerAction: AiSettingsAction<AiProviderSettingsInput>;
   providerTestAction: AiSettingsAction<AiProviderSettingsInput>;
@@ -206,6 +217,7 @@ export function AiSettingsForm({
   seoStyleAction: AiSettingsAction<AiSeoStyleSettingsInput>;
   imageGenerationAction: AiSettingsAction<ImageGenerationSettingsInput>;
   imageGenerationTestAction: AiSettingsAction<ImageGenerationSettingsInput>;
+  jobSettingsAction: AiSettingsAction<AiJobSettingsInput>;
   hasApiKey: boolean;
   apiKeyPreview: string;
   apiBaseUrl: string;
@@ -217,6 +229,7 @@ export function AiSettingsForm({
   zhSeoStyle: string;
   enSeoStyle: string;
   imageGeneration: ImageGenerationValue;
+  aiJobs: AiJobSettingsValue;
 }) {
   const [state, setState] = useState<SectionState>({});
   const [activeSection, setActiveSection] =
@@ -265,6 +278,18 @@ export function AiSettingsForm({
     imageInfrastructurePromptStyleValue,
     setImageInfrastructurePromptStyleValue
   ] = useState(imageGeneration.promptStyles.infrastructure);
+  const [
+    succeededSingleRetentionDaysValue,
+    setSucceededSingleRetentionDaysValue
+  ] = useState(String(aiJobs.succeededSingleRetentionDays));
+  const [succeededBulkRetentionDaysValue, setSucceededBulkRetentionDaysValue] =
+    useState(String(aiJobs.succeededBulkRetentionDays));
+  const [failedRetentionDaysValue, setFailedRetentionDaysValue] = useState(
+    String(aiJobs.failedRetentionDays)
+  );
+  const [defaultRecentDaysValue, setDefaultRecentDaysValue] = useState(
+    String(aiJobs.defaultRecentDays)
+  );
 
   const providerSubmit = useSettingsSubmit(
     providerAction,
@@ -289,6 +314,11 @@ export function AiSettingsForm({
     "imageTest",
     setState,
     { refreshOnSuccess: false }
+  );
+  const jobSettingsSubmit = useSettingsSubmit(
+    jobSettingsAction,
+    "jobs",
+    setState
   );
 
   const editingRole =
@@ -335,6 +365,13 @@ export function AiSettingsForm({
       description: "图片模型、规格、三类封面风格",
       icon: <ImageIcon size={16} />,
       status: `${imageModelValue} · ${imageKeyStatus}`
+    },
+    {
+      id: "jobs",
+      title: "任务保留",
+      description: "自动清理和默认列表范围",
+      icon: <Clock3 size={16} />,
+      status: `成功 ${succeededSingleRetentionDaysValue}/${succeededBulkRetentionDaysValue} 天 · 失败 ${failedRetentionDaysValue} 天`
     }
   ];
 
@@ -877,6 +914,96 @@ export function AiSettingsForm({
           {state.key === "imageTest" ? (
             <DiagnosticPanel diagnostic={state.diagnostic} />
           ) : null}
+          </div>
+        ) : null}
+
+        {activeSection === "jobs" ? (
+          <div className="grid gap-5">
+            <PanelHeader
+              icon={<Clock3 size={16} />}
+              title="AI 任务保留"
+              description="控制任务中心默认展示范围，以及成功和失败任务在数据库中的自动保留时间。运行中和排队任务不会被清理。"
+              state={state.key === "jobs" ? state : {}}
+            />
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-600">
+              任务中心页面加载时会轻量触发一次清理，服务端会节流执行，避免频繁刷新造成数据库压力。
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field
+                label="成功单篇任务保留天数"
+                hint="适用于单篇 AI 改写、翻译、文章元信息和单张图片 SEO。"
+              >
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  step={1}
+                  value={succeededSingleRetentionDaysValue}
+                  onChange={(event) =>
+                    setSucceededSingleRetentionDaysValue(event.target.value)
+                  }
+                  className={inputClassName}
+                />
+              </Field>
+              <Field
+                label="成功批量任务保留天数"
+                hint="适用于批量封面、批量媒体补全和批量文章 SEO。"
+              >
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  step={1}
+                  value={succeededBulkRetentionDaysValue}
+                  onChange={(event) =>
+                    setSucceededBulkRetentionDaysValue(event.target.value)
+                  }
+                  className={inputClassName}
+                />
+              </Field>
+              <Field label="失败任务保留天数" hint="失败任务保留用于排障和重试。">
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  step={1}
+                  value={failedRetentionDaysValue}
+                  onChange={(event) => setFailedRetentionDaysValue(event.target.value)}
+                  className={inputClassName}
+                />
+              </Field>
+              <Field
+                label="任务中心默认最近天数"
+                hint="默认只展示最近任务；切换到全部历史后仍可查看未清理记录。"
+              >
+                <input
+                  type="number"
+                  min={1}
+                  max={90}
+                  step={1}
+                  value={defaultRecentDaysValue}
+                  onChange={(event) => setDefaultRecentDaysValue(event.target.value)}
+                  className={inputClassName}
+                />
+              </Field>
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                disabled={jobSettingsSubmit.isPending}
+                onClick={() =>
+                  jobSettingsSubmit.submit({
+                    succeededSingleRetentionDays: succeededSingleRetentionDaysValue,
+                    succeededBulkRetentionDays: succeededBulkRetentionDaysValue,
+                    failedRetentionDays: failedRetentionDaysValue,
+                    defaultRecentDays: defaultRecentDaysValue
+                  })
+                }
+                className={buttonClassName("primary")}
+              >
+                {jobSettingsSubmit.isPending ? "保存中..." : "保存任务保留策略"}
+              </button>
+            </div>
           </div>
         ) : null}
       </section>

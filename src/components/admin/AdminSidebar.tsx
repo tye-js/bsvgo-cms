@@ -127,7 +127,7 @@ function childIcon(label: string) {
   return Gauge;
 }
 
-export function AdminSidebar() {
+export function AdminSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const pathname = usePathname();
 
   return (
@@ -142,17 +142,21 @@ export function AdminSidebar() {
             <Link
               href={group.href}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-semibold transition",
+                "flex items-center rounded-md py-2.5 text-sm font-semibold transition",
+                collapsed ? "justify-center px-2" : "gap-3 px-3",
                 groupActive
                   ? "bg-slate-100 text-slate-950"
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
               )}
+              title={collapsed ? group.label : undefined}
             >
               <Icon size={18} />
-              <span className="min-w-0 truncate">{group.label}</span>
+              {!collapsed ? (
+                <span className="min-w-0 truncate">{group.label}</span>
+              ) : null}
             </Link>
 
-            {group.children?.length ? (
+            {group.children?.length && !collapsed ? (
               <div className="ml-5 grid gap-0.5 border-l border-slate-200 pl-3">
                 {group.children.map((child) => {
                   const ChildIcon = childIcon(child.label);

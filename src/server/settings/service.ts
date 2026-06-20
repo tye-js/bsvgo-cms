@@ -64,6 +64,13 @@ export const HOMEPAGE_SEO_SETTING_KEYS = {
   canonicalUrl: "seo.home.canonical_url"
 } as const;
 
+export const AI_JOB_SETTING_KEYS = {
+  succeededSingleRetentionDays: "ai.jobs.retention.succeeded_single_days",
+  succeededBulkRetentionDays: "ai.jobs.retention.succeeded_bulk_days",
+  failedRetentionDays: "ai.jobs.retention.failed_days",
+  defaultRecentDays: "ai.jobs.default_recent_days"
+} as const;
+
 const LEGACY_HOMEPAGE_SEO_SETTING_KEYS = {
   title: "seo.home.title",
   description: "seo.home.description",
@@ -80,6 +87,10 @@ export const DEFAULT_IMAGE_MODEL = "gpt-image-2";
 export const DEFAULT_IMAGE_SIZE = "1536x1024";
 export const DEFAULT_IMAGE_QUALITY = "auto";
 export const DEFAULT_IMAGE_OUTPUT_FORMAT = "png";
+export const DEFAULT_AI_JOB_SUCCEEDED_SINGLE_RETENTION_DAYS = 7;
+export const DEFAULT_AI_JOB_SUCCEEDED_BULK_RETENTION_DAYS = 10;
+export const DEFAULT_AI_JOB_FAILED_RETENTION_DAYS = 10;
+export const DEFAULT_AI_JOB_RECENT_DAYS = 7;
 export const DEFAULT_AI_WRITING_STYLE =
   "面向 BSVgo 技术读者，语言清晰、克制、可信。优先使用结构化小标题、短段落和 Markdown 正文，不输出 HTML。所有事实、数据、人物、时间、链接、代码、产品能力和因果判断必须来自素材或明确标注为推断；素材不足时要保守表达，不编造细节。允许适度营销，但必须具体、可验证、不过度承诺。中文正文自然专业，英文正文面向全球技术读者，避免中式直译。Slug 使用小写英文、数字和连字符，简短表达核心主题。SEO 要分别服务中文入口和英文入口，提炼真实关键词，不堆砌。";
 const LEGACY_IMAGE_PROMPT_STYLE =
@@ -281,6 +292,23 @@ function imageGenerationSettingKeys() {
   return Object.values(IMAGE_GENERATION_SETTING_KEYS);
 }
 
+function aiJobSettingKeys() {
+  return Object.values(AI_JOB_SETTING_KEYS);
+}
+
+function settingIntValue(
+  byKey: Map<string, SettingRow>,
+  key: string,
+  fallback: number,
+  options: { min?: number; max?: number } = {}
+) {
+  const value = Number(decryptIfNeeded(byKey.get(key)).trim());
+  const min = options.min ?? 1;
+  const max = options.max ?? 365;
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(Math.max(Math.round(value), min), max);
+}
+
 function imagePromptStyleFallback(byKey: Map<string, SettingRow>) {
   const value = decryptIfNeeded(
     byKey.get(IMAGE_GENERATION_SETTING_KEYS.promptStyle)
@@ -477,10 +505,39 @@ export async function getImageGenerationSettings() {
   };
 }
 
+export async function getAiJobSettings() {
+  const rows = await getSettings(aiJobSettingKeys());
+  const byKey = new Map(rows.map((row) => [row.key, row]));
+
+  return {
+    succeededSingleRetentionDays: settingIntValue(
+      byKey,
+      AI_JOB_SETTING_KEYS.succeededSingleRetentionDays,
+      DEFAULT_AI_JOB_SUCCEEDED_SINGLE_RETENTION_DAYS
+    ),
+    succeededBulkRetentionDays: settingIntValue(
+      byKey,
+      AI_JOB_SETTING_KEYS.succeededBulkRetentionDays,
+      DEFAULT_AI_JOB_SUCCEEDED_BULK_RETENTION_DAYS
+    ),
+    failedRetentionDays: settingIntValue(
+      byKey,
+      AI_JOB_SETTING_KEYS.failedRetentionDays,
+      DEFAULT_AI_JOB_FAILED_RETENTION_DAYS
+    ),
+    defaultRecentDays: settingIntValue(
+      byKey,
+      AI_JOB_SETTING_KEYS.defaultRecentDays,
+      DEFAULT_AI_JOB_RECENT_DAYS
+    )
+  };
+}
+
 export async function getSettingsPageData() {
   const rows = await getSettings([
     ...aiSettingKeys(),
     ...imageGenerationSettingKeys(),
+    ...aiJobSettingKeys(),
     ...homepageSeoSettingKeys()
   ]);
   const byKey = new Map(rows.map((row) => [row.key, row]));
@@ -537,6 +594,28 @@ export async function getSettingsPageData() {
     DEFAULT_IMAGE_OUTPUT_FORMAT;
   const promptStyles = imagePromptStyles(byKey);
   const canReuseTextApiKey = canReuseApiKey(apiBaseUrl, imageApiBaseUrl);
+  const aiJobs = {
+    succeededSingleRetentionDays: settingIntValue(
+      byKey,
+      AI_JOB_SETTING_KEYS.succeededSingleRetentionDays,
+      DEFAULT_AI_JOB_SUCCEEDED_SINGLE_RETENTION_DAYS
+    ),
+    succeededBulkRetentionDays: settingIntValue(
+      byKey,
+      AI_JOB_SETTING_KEYS.succeededBulkRetentionDays,
+      DEFAULT_AI_JOB_SUCCEEDED_BULK_RETENTION_DAYS
+    ),
+    failedRetentionDays: settingIntValue(
+      byKey,
+      AI_JOB_SETTING_KEYS.failedRetentionDays,
+      DEFAULT_AI_JOB_FAILED_RETENTION_DAYS
+    ),
+    defaultRecentDays: settingIntValue(
+      byKey,
+      AI_JOB_SETTING_KEYS.defaultRecentDays,
+      DEFAULT_AI_JOB_RECENT_DAYS
+    )
+  };
 
   const homepageSeo = {
     enTitle: (
@@ -607,8 +686,49 @@ export async function getSettingsPageData() {
       outputFormat: imageOutputFormat,
       promptStyles
     },
+    aiJobs,
     homepageSeo
   };
+}
+
+export async function saveAiJobSettings({
+  succeededSingleRetentionDays,
+  succeededBulkRetentionDays,
+  failedRetentionDays,
+  defaultRecentDays,
+  userId
+}: {
+  succeededSingleRetentionDays: number;
+  succeededBulkRetentionDays: number;
+  failedRetentionDays: number;
+  defaultRecentDays: number;
+  userId: string;
+}) {
+  const now = new Date();
+  const values = [
+    {
+      key: AI_JOB_SETTING_KEYS.succeededSingleRetentionDays,
+      value: String(succeededSingleRetentionDays)
+    },
+    {
+      key: AI_JOB_SETTING_KEYS.succeededBulkRetentionDays,
+      value: String(succeededBulkRetentionDays)
+    },
+    {
+      key: AI_JOB_SETTING_KEYS.failedRetentionDays,
+      value: String(failedRetentionDays)
+    },
+    {
+      key: AI_JOB_SETTING_KEYS.defaultRecentDays,
+      value: String(defaultRecentDays)
+    }
+  ];
+
+  await upsertSettingsWithAudit({
+    values: values.map((value) => ({ ...value, encrypted: false })),
+    userId,
+    now
+  });
 }
 
 export async function saveHomepageSeoSettings({

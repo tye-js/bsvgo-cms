@@ -141,6 +141,13 @@
       "when": 1781925454000,
       "tag": "0019_topic_collections",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1782000000000,
+      "tag": "0020_ai_job_retention_settings",
+      "breakpoints": true
     }
   ]
 }
