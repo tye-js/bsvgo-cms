@@ -413,36 +413,37 @@ export default async function AiJobsPage({
       </FilterBar>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <WideTable
-          minWidth="1280px"
-          footer={
-            <div className="flex items-center justify-between text-sm text-slate-500">
-              <span>
-                第 {page} / {pageCount} 页，共 {total} 条
-              </span>
-              <div className="flex gap-2">
-                <Link
-                  className={buttonClassName(
-                    "secondary",
-                    page <= 1 ? "pointer-events-none opacity-50" : ""
-                  )}
-                  href={preserveParams(Math.max(page - 1, 1))}
-                >
-                  上一页
-                </Link>
-                <Link
-                  className={buttonClassName(
-                    "secondary",
-                    page >= pageCount ? "pointer-events-none opacity-50" : ""
-                  )}
-                  href={preserveParams(Math.min(page + 1, pageCount))}
-                >
-                  下一页
-                </Link>
+        <div className="min-w-0">
+          <WideTable
+            minWidth="1280px"
+            footer={
+              <div className="flex items-center justify-between text-sm text-slate-500">
+                <span>
+                  第 {page} / {pageCount} 页，共 {total} 条
+                </span>
+                <div className="flex gap-2">
+                  <Link
+                    className={buttonClassName(
+                      "secondary",
+                      page <= 1 ? "pointer-events-none opacity-50" : ""
+                    )}
+                    href={preserveParams(Math.max(page - 1, 1))}
+                  >
+                    上一页
+                  </Link>
+                  <Link
+                    className={buttonClassName(
+                      "secondary",
+                      page >= pageCount ? "pointer-events-none opacity-50" : ""
+                    )}
+                    href={preserveParams(Math.min(page + 1, pageCount))}
+                  >
+                    下一页
+                  </Link>
+                </div>
               </div>
-            </div>
-          }
-        >
+            }
+          >
             <colgroup>
               <col className="w-[260px]" />
               <col className="w-[150px]" />
@@ -565,7 +566,8 @@ export default async function AiJobsPage({
                 </tr>
               ) : null}
             </tbody>
-        </WideTable>
+          </WideTable>
+        </div>
 
         <DetailDrawer
           title="当前任务摘要"
