@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
 
 import { Badge } from "@/components/admin/Badge";
 import { SubmitButton } from "@/components/forms/SubmitButton";
@@ -179,10 +179,6 @@ function PlacementRow({
   const [enabledState, setEnabledState] = useState(initialEnabledState);
   const enabledCount = Object.values(enabledState).filter(Boolean).length;
 
-  useEffect(() => {
-    setEnabledState(initialEnabledState);
-  }, [initialEnabledState]);
-
   return (
     <form
       action={formAction}
@@ -297,7 +293,11 @@ export function PostPlacementsForm({
         </div>
 
         {posts.map((post) => (
-          <PlacementRow key={post.id} post={post} action={action} />
+          <PlacementRow
+            key={`${post.id}:${post.updatedAt?.toString() ?? ""}`}
+            post={post}
+            action={action}
+          />
         ))}
       </div>
     </section>

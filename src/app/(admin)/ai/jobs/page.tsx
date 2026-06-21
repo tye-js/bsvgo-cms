@@ -262,10 +262,6 @@ export default async function AiJobsPage({
   const rawCreatorId = user.role === "admin" && params.creator ? params.creator : "all";
   const query = (params.q ?? "").trim();
   const range = params.range === "all" ? "all" : "recent";
-  const createdAfter =
-    range === "recent"
-      ? new Date(Date.now() - settings.defaultRecentDays * 24 * 60 * 60 * 1000)
-      : undefined;
   const requestedPage = Number(params.page ?? "1");
   const page = Number.isFinite(requestedPage) ? Math.max(requestedPage, 1) : 1;
   const creators = await listAiJobCreatorsForUser(user);
@@ -279,7 +275,7 @@ export default async function AiJobsPage({
     status,
     query,
     creatorId,
-    createdAfter,
+    recentDays: range === "recent" ? settings.defaultRecentDays : undefined,
     page
   });
   const pageCount = Math.max(Math.ceil(total / pageSize), 1);

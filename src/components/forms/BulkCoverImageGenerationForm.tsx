@@ -130,23 +130,25 @@ export function BulkCoverImageGenerationForm({
     () => new Set(batchSelectablePostIds),
     [batchSelectablePostIds]
   );
+  const selectedEligiblePostIds = useMemo(
+    () => selectedPostIds.filter((id) => eligiblePostIdSet.has(id)),
+    [eligiblePostIdSet, selectedPostIds]
+  );
+  const selectedEligiblePostIdSet = useMemo(
+    () => new Set(selectedEligiblePostIds),
+    [selectedEligiblePostIds]
+  );
   const availableCount = eligiblePostIds.length;
-  const selectedEligibleCount = selectedPostIds.filter((id) =>
-    eligiblePostIdSet.has(id)
-  ).length;
+  const selectedEligibleCount = selectedEligiblePostIds.length;
   const batchSelectableCount = batchSelectablePostIds.length;
-  const selectedBatchCount = selectedPostIds.filter((id) =>
+  const selectedBatchCount = selectedEligiblePostIds.filter((id) =>
     batchSelectablePostIdSet.has(id)
   ).length;
   const allVisibleSelected =
     batchSelectableCount > 0 &&
-    batchSelectablePostIds.every((id) => selectedPostIds.includes(id));
+    batchSelectablePostIds.every((id) => selectedEligiblePostIdSet.has(id));
   const someVisibleSelected =
     selectedBatchCount > 0 && selectedBatchCount < batchSelectableCount;
-
-  useEffect(() => {
-    setSelectedPostIds((current) => current.filter((id) => eligiblePostIdSet.has(id)));
-  }, [eligiblePostIdSet]);
 
   useEffect(() => {
     if (!state.jobId) return;
@@ -225,8 +227,9 @@ export function BulkCoverImageGenerationForm({
   function togglePostSelection(postId: string, checked: boolean) {
     setSelectedPostIds((current) => {
       if (checked) {
-        if (current.includes(postId)) return current;
-        return [...current, postId].slice(0, 10);
+        const currentEligible = current.filter((id) => eligiblePostIdSet.has(id));
+        if (currentEligible.includes(postId)) return currentEligible;
+        return [...currentEligible, postId].slice(0, 10);
       }
 
       return current.filter((id) => id !== postId);
@@ -242,6 +245,9 @@ export function BulkCoverImageGenerationForm({
 
   return (
     <form action={formAction} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      {selectedEligiblePostIds.map((postId) => (
+        <input key={postId} type="hidden" name="postIds" value={postId} />
+      ))}
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
         <div>
           <h2 className="font-semibold text-slate-950">文章封面生成</h2>
@@ -329,7 +335,7 @@ export function BulkCoverImageGenerationForm({
               <tbody className="divide-y divide-slate-100 bg-white">
                 {posts.map((post) => {
                   const isDisabled = !overwriteExisting && Boolean(post.coverImage);
-                  const isSelected = selectedPostIds.includes(post.id);
+                  const isSelected = selectedEligiblePostIdSet.has(post.id);
 
                   return (
                     <tr
@@ -343,7 +349,6 @@ export function BulkCoverImageGenerationForm({
                       <td className="px-3 py-3">
                         <input
                           type="checkbox"
-                          name="postIds"
                           value={post.id}
                           checked={isSelected}
                           onChange={(event) =>

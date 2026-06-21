@@ -37,8 +37,8 @@ function uploadRoot() {
 }
 
 function safeUploadPath(storageKey: string) {
-  const root = path.resolve(uploadRoot());
-  const targetPath = path.resolve(root, storageKey);
+  const root = path.resolve(/* turbopackIgnore: true */ uploadRoot());
+  const targetPath = path.resolve(/* turbopackIgnore: true */ root, storageKey);
 
   if (!targetPath.startsWith(`${root}${path.sep}`)) {
     throw new Error("图片存储路径无效。");
@@ -99,6 +99,10 @@ function publicUrl(storageKey: string, publicOrigin?: string) {
 
 function safeOriginalName(name: string) {
   return path.basename(name).replace(/[^\w.\- ]+/g, "").slice(0, 255);
+}
+
+function boundedText(value: string | undefined, maxLength: number) {
+  return value?.trim().slice(0, maxLength) ?? "";
 }
 
 function extensionForMimeType(mimeType: string) {
@@ -195,7 +199,9 @@ export async function generateImageVariants({
     for (const format of VARIANT_FORMATS) {
       const outputKey = variantStorageKey(storageKey, outputWidth, format);
       const outputPath = safeUploadPath(outputKey);
-      await mkdir(path.dirname(outputPath), { recursive: true });
+      await mkdir(path.dirname(/* turbopackIgnore: true */ outputPath), {
+        recursive: true
+      });
 
       const pipeline = sharp(buffer).resize({
         width: outputWidth,
@@ -206,7 +212,7 @@ export async function generateImageVariants({
           ? await pipeline.webp({ quality: 82 }).toBuffer()
           : await pipeline.avif({ quality: 50 }).toBuffer();
 
-      await writeFile(outputPath, outputBuffer);
+      await writeFile(/* turbopackIgnore: true */ outputPath, outputBuffer);
       variants.push({
         url: publicUrl(outputKey, publicOrigin),
         storageKey: outputKey,
@@ -228,7 +234,9 @@ export async function regenerateMediaAssetVariants({
   storageKey: string;
   publicOrigin?: string;
 }) {
-  const buffer = await readFile(safeUploadPath(storageKey));
+  const buffer = await readFile(
+    /* turbopackIgnore: true */ safeUploadPath(storageKey)
+  );
   const metadata = await sharp(buffer).metadata();
   return generateImageVariants({
     buffer,
@@ -287,8 +295,10 @@ export async function saveUploadedCoverImage({
   const storageKey = `covers/${year}/${month}/${randomUUID()}.${extension}`;
   const targetPath = safeUploadPath(storageKey);
 
-  await mkdir(path.dirname(targetPath), { recursive: true });
-  await writeFile(targetPath, buffer, { flag: "wx" });
+  await mkdir(path.dirname(/* turbopackIgnore: true */ targetPath), {
+    recursive: true
+  });
+  await writeFile(/* turbopackIgnore: true */ targetPath, buffer, { flag: "wx" });
 
   const metadata = await sharp(buffer).metadata();
   const imageSize = {
@@ -296,9 +306,11 @@ export async function saveUploadedCoverImage({
     height: metadata.height ?? null
   };
   const url = publicUrl(storageKey, publicOrigin);
-  const normalizedZhAltText = zhAltText?.trim() || altText.trim();
-  const normalizedEnAltText = enAltText?.trim() ?? "";
-  const normalizedAltText = altText.trim() || normalizedZhAltText || normalizedEnAltText;
+  const trimmedAltText = boundedText(altText, 255);
+  const normalizedZhAltText = boundedText(zhAltText, 255) || trimmedAltText;
+  const normalizedEnAltText = boundedText(enAltText, 255);
+  const normalizedAltText =
+    trimmedAltText || normalizedZhAltText || normalizedEnAltText;
   const variants = await generateImageVariants({
     buffer,
     storageKey,
@@ -315,10 +327,10 @@ export async function saveUploadedCoverImage({
       caption: caption?.trim() ?? "",
       zhAltText: normalizedZhAltText,
       enAltText: normalizedEnAltText,
-      zhSeoTitle: zhSeoTitle?.trim() ?? "",
-      zhSeoDescription: zhSeoDescription?.trim() ?? "",
-      enSeoTitle: enSeoTitle?.trim() ?? "",
-      enSeoDescription: enSeoDescription?.trim() ?? "",
+      zhSeoTitle: boundedText(zhSeoTitle, 255),
+      zhSeoDescription: boundedText(zhSeoDescription, 500),
+      enSeoTitle: boundedText(enSeoTitle, 255),
+      enSeoDescription: boundedText(enSeoDescription, 500),
       storageProvider: "local",
       storageKey,
       originalFilename: safeOriginalName(file.name),
@@ -395,8 +407,12 @@ export async function saveGeneratedCoverImage({
   const storageKey = `covers/${year}/${month}/${randomUUID()}.${extension}`;
   const targetPath = safeUploadPath(storageKey);
 
-  await mkdir(path.dirname(targetPath), { recursive: true });
-  await writeFile(targetPath, outputBuffer, { flag: "wx" });
+  await mkdir(path.dirname(/* turbopackIgnore: true */ targetPath), {
+    recursive: true
+  });
+  await writeFile(/* turbopackIgnore: true */ targetPath, outputBuffer, {
+    flag: "wx"
+  });
 
   const imageMetadata = await sharp(outputBuffer).metadata();
   const imageSize = {
@@ -404,9 +420,11 @@ export async function saveGeneratedCoverImage({
     height: normalizedImage.height ?? imageMetadata.height ?? null
   };
   const url = publicUrl(storageKey, publicOrigin);
-  const normalizedZhAltText = zhAltText?.trim() || altText.trim();
-  const normalizedEnAltText = enAltText?.trim() ?? "";
-  const normalizedAltText = altText.trim() || normalizedZhAltText || normalizedEnAltText;
+  const trimmedAltText = boundedText(altText, 255);
+  const normalizedZhAltText = boundedText(zhAltText, 255) || trimmedAltText;
+  const normalizedEnAltText = boundedText(enAltText, 255);
+  const normalizedAltText =
+    trimmedAltText || normalizedZhAltText || normalizedEnAltText;
   const variants = await generateImageVariants({
     buffer: outputBuffer,
     storageKey,
@@ -423,10 +441,10 @@ export async function saveGeneratedCoverImage({
       caption: caption?.trim() ?? "",
       zhAltText: normalizedZhAltText,
       enAltText: normalizedEnAltText,
-      zhSeoTitle: zhSeoTitle?.trim() ?? "",
-      zhSeoDescription: zhSeoDescription?.trim() ?? "",
-      enSeoTitle: enSeoTitle?.trim() ?? "",
-      enSeoDescription: enSeoDescription?.trim() ?? "",
+      zhSeoTitle: boundedText(zhSeoTitle, 255),
+      zhSeoDescription: boundedText(zhSeoDescription, 500),
+      enSeoTitle: boundedText(enSeoTitle, 255),
+      enSeoDescription: boundedText(enSeoDescription, 500),
       storageProvider: "local",
       storageKey,
       originalFilename: safeOriginalName(originalFilename),

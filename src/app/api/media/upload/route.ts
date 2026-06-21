@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { mediaAssetSchema } from "@/lib/validators";
 import { requireContentEditor } from "@/server/auth/session";
 import { saveUploadedCoverImage } from "@/server/media/upload";
 
@@ -43,9 +44,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "请选择图片文件。" }, { status: 400 });
   }
 
-  if (altText.length > 255) {
+  const parsedMetadata = mediaAssetSchema.omit({ url: true }).safeParse({
+    altText,
+    caption,
+    zhAltText,
+    enAltText,
+    zhSeoTitle,
+    zhSeoDescription,
+    enSeoTitle,
+    enSeoDescription
+  });
+
+  if (!parsedMetadata.success) {
     return NextResponse.json(
-      { error: "替代文本不能超过 255 个字符。" },
+      { error: parsedMetadata.error.issues[0]?.message ?? "媒体信息无效。" },
       { status: 400 }
     );
   }
@@ -53,14 +65,14 @@ export async function POST(request: Request) {
   try {
     const asset = await saveUploadedCoverImage({
       file,
-      altText,
-      caption,
-      zhAltText,
-      enAltText,
-      zhSeoTitle,
-      zhSeoDescription,
-      enSeoTitle,
-      enSeoDescription,
+      altText: parsedMetadata.data.altText ?? "",
+      caption: parsedMetadata.data.caption,
+      zhAltText: parsedMetadata.data.zhAltText,
+      enAltText: parsedMetadata.data.enAltText,
+      zhSeoTitle: parsedMetadata.data.zhSeoTitle,
+      zhSeoDescription: parsedMetadata.data.zhSeoDescription,
+      enSeoTitle: parsedMetadata.data.enSeoTitle,
+      enSeoDescription: parsedMetadata.data.enSeoDescription,
       userId: user.id,
       publicOrigin: requestOrigin(request)
     });

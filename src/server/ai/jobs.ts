@@ -674,7 +674,7 @@ async function executeBulkMediaMetadataJob({
     };
   });
   let updated = 0;
-  let skipped = items.filter((item) => item.status === "skipped").length;
+  const skipped = items.filter((item) => item.status === "skipped").length;
   let failed = 0;
   let processed = skipped;
 
@@ -1237,7 +1237,7 @@ async function executeBulkPostCoverImagesJob({
           : undefined
     }));
   let generated = 0;
-  let skipped = items.filter((item) => item.status === "skipped").length;
+  const skipped = items.filter((item) => item.status === "skipped").length;
   let processed = skipped;
 
   const writeProgress = async (
@@ -1268,7 +1268,7 @@ async function executeBulkPostCoverImagesJob({
   await writeProgress("pending");
 
   for (const candidate of candidates) {
-    const { postId, translations, first, zh, en, source } = candidate;
+    const { postId, first, zh, en, source } = candidate;
     const item = items.find((value) => value.postId === postId);
     if (!item) continue;
     if (!overwriteExisting && first.coverImage) continue;
@@ -1691,6 +1691,7 @@ export async function listAiJobsForUser({
   query = "",
   creatorId = "all",
   createdAfter,
+  recentDays,
   page = 1,
   pageSize = 20
 }: {
@@ -1700,6 +1701,7 @@ export async function listAiJobsForUser({
   query?: string;
   creatorId?: string | "all";
   createdAfter?: Date;
+  recentDays?: number;
   page?: number;
   pageSize?: number;
 }) {
@@ -1708,6 +1710,11 @@ export async function listAiJobsForUser({
     ? Math.min(Math.max(pageSize, 1), 100)
     : 20;
   const normalizedQuery = query.trim();
+  const recentCreatedAfter =
+    !createdAfter && Number.isFinite(recentDays)
+      ? daysBeforeNow(Math.max(Number(recentDays), 1))
+      : undefined;
+  const effectiveCreatedAfter = createdAfter ?? recentCreatedAfter;
   const filters = [
     type === "all" ? undefined : eq(aiJobs.type, type),
     status === "all" ? undefined : eq(aiJobs.status, status),
@@ -1715,9 +1722,9 @@ export async function listAiJobsForUser({
     user.role === "admin" && creatorId !== "all" && uuidPattern.test(creatorId)
       ? eq(aiJobs.createdBy, creatorId)
       : undefined,
-    createdAfter
+    effectiveCreatedAfter
       ? or(
-          gte(aiJobs.createdAt, createdAfter),
+          gte(aiJobs.createdAt, effectiveCreatedAfter),
           inArray(aiJobs.status, ["queued", "running"])
         )
       : undefined,
